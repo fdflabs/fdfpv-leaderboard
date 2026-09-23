@@ -94,7 +94,7 @@ export function guessSimOrigin(location, here) {
  *   a /board mount the landing page is what the mount hangs off, which is the
  *                  production layout: fdfpv.example/board sits under fdfpv.example.
  */
-export const PRODUCTION_LANDING_ORIGIN = 'https://fdfpv.example';
+export const PRODUCTION_LANDING_ORIGIN = 'https://fdflabs.github.io/fdfpv';
 export const LOCAL_LANDING_PORT = 8080;
 
 export function landingOrigin(location, here) {
