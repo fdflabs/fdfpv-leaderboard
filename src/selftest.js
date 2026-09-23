@@ -1597,8 +1597,8 @@ function testOrigins() {
     landingOrigin(...at('https://fdfpv.example/board/bugs')) === 'https://fdfpv.example');
   check('a board on its own host names the front door rather than declining',
     landingOrigin(...at('https://fdfpv-board.onrender.com/'))
-      === 'https://fdfpv.example');
-  check('a missing location still answers', landingOrigin(null, null) === 'https://fdfpv.example');
+      === 'https://fdflabs.github.io/fdfpv');
+  check('a missing location still answers', landingOrigin(null, null) === 'https://fdflabs.github.io/fdfpv');
 
   check('loopback set covers the hosts a checkout uses',
     isLoopback('127.0.0.1') && isLoopback('localhost') && isLoopback('::1')
