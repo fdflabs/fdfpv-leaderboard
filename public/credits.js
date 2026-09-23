@@ -42,6 +42,8 @@
  * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { str } from './strings/index.js';
+
 /*
  * The beta roll. Slot numbers are a start list's: the order they turned
  * up, not a ranking.
@@ -62,12 +64,12 @@
  * so it cannot go stale when a ninth arrives.
  */
 const RACEGOW = [
-  { designer: 'AyyyKayyy', tracks: ['Track 8'] },
-  { designer: 'Cumber and Hotspur', tracks: ['Track 5'] },
-  { designer: 'Skittles', tracks: ['Track 1', 'Track 2'] },
-  { designer: 'the Lego Dans', tracks: ['Track 3', 'Track 4'] },
-  { designer: 'MrE', tracks: ['Track 6'] },
-  { designer: 'FPVBean', tracks: ['Track 7'] },
+  { designer: 'AyyyKayyy', tracks: [str('credits.track_8')] },
+  { designer: str('credits.cumber_and_hotspur'), tracks: [str('credits.track_5')] },
+  { designer: 'Skittles', tracks: [str('credits.track_1'), str('credits.track_2')] },
+  { designer: str('credits.the_lego_dans'), tracks: [str('credits.track_3'), str('credits.track_4')] },
+  { designer: 'MrE', tracks: [str('credits.track_6')] },
+  { designer: 'FPVBean', tracks: [str('credits.track_7')] },
 ];
 
 export const RACEGOW_CREDITS = RACEGOW;
@@ -315,24 +317,24 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   const src = (name) => new URL(`${assetBase}/${name}`, document.baseURI).href;
   host.textContent = '';
 
-  const lede = el('p', 'credits-lede', 'A browser FPV racing simulator. The controller is Betaflight. The track language comes from Track Draw. The rest is one pilot and the people who flew it until it felt right.');
+  const lede = el('p', 'credits-lede', str('credits.a_browser_fpv_racing_simulator_the'));
   host.append(lede);
 
-  const made = section('Made by', '');
+  const made = section(str('credits.made_by'), '');
   const makerMark = el('span', 'maker-mark');
-  makerMark.append(document.createTextNode('andAgain'), el('span', 'fpv', 'FPV'));
+  makerMark.append(document.createTextNode(str('credits.andagain')), el('span', 'fpv', 'FPV'));
   made.append(personCard({
     cls: 'maker',
     src: src('andagain.jpg'),
     name: 'andAgainFPV',
     nameNode: makerMark,
-    note: 'Built this simulator, the track builder, and the public board. Orchestrated a horde of Grok and Claude along the way.',
+    note: str('credits.built_this_simulator_the_track_builder'),
     channel: 'https://www.youtube.com/@andAgainFPV',
     handle: 'youtube.com/@andAgainFPV',
   }));
   host.append(made);
 
-  const pilots = section('Beta test pilots', 'They flew it until it felt like a quad.');
+  const pilots = section(str('credits.beta_test_pilots'), str('credits.they_flew_it_until_it_felt'));
   const row = el('div', 'credit-row pilots');
   for (const p of PILOTS) {
     row.append(personCard({
@@ -347,12 +349,12 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   pilots.append(row);
   host.append(pilots);
 
-  const controller = section('The controller', '');
+  const controller = section(str('credits.the_controller'), '');
   const bfBody = el('p');
   bfBody.append(
-    document.createTextNode('The rates, the PID loop, the filters, feedforward, TPA, iterm relax, airmode, anti-gravity. Compiled into this page, not rewritten. '),
+    document.createTextNode(str('credits.the_rates_the_pid_loop_the')),
     link('https://github.com/betaflight/betaflight', 'Betaflight'),
-    document.createTextNode(' is GPLv3, so this is too.'),
+    document.createTextNode(str('credits.is_gplv3_so_this_is_too')),
   );
   controller.append(projectCard({
     src: src('betaflight.svg'),
@@ -363,19 +365,19 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   }));
   host.append(controller);
 
-  const tracks = section('The track language', '');
+  const tracks = section(str('credits.the_track_language'), '');
   const tdBody = el('p');
   tdBody.append(
-    document.createTextNode('The track builder is inspired by '),
-    link('https://trackdraw.app/', 'Track Draw'),
-    document.createTextNode(', from the Dutch drone gods at '),
-    link('https://dutchdronesquad.nl/', 'Dutch Drone Squad'),
-    document.createTextNode('. Real field scale, real obstacles, a plan you can hand to a crew.'),
+    document.createTextNode(str('credits.the_track_builder_is_inspired_by')),
+    link('https://trackdraw.app/', str('credits.track_draw')),
+    document.createTextNode(str('credits.from_the_dutch_drone_gods_at')),
+    link('https://dutchdronesquad.nl/', str('credits.dutch_drone_squad')),
+    document.createTextNode(str('credits.real_field_scale_real_obstacles_a')),
   );
   tracks.append(projectCard({
     src: src('trackdraw.svg'),
     alt: 'TrackDraw',
-    title: 'Track Draw',
+    title: str('credits.track_draw'),
     href: 'https://trackdraw.app/',
     body: tdBody,
   }));
@@ -386,45 +388,45 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
    * A track is somebody's afternoon with a pipe cutter; the reconstruction
    * is not the design.
    */
-  const rooms = section('The RaceGOW5 rooms', 'Eight tracks, six builders, read off the official animations.');
+  const rooms = section(str('credits.the_racegow5_rooms'), str('credits.eight_tracks_six_builders_read_off'));
   const roomList = el('div', 'credit-rooms');
   for (const r of RACEGOW) {
     const line = el('p', 'credit-room');
     line.append(el('b', null, r.designer));
-    line.append(document.createTextNode(` \u00b7 ${r.tracks.join(', ')}`));
+    line.append(document.createTextNode(str('credits.text', { v1: r.tracks.join(', ') })));
     roomList.append(line);
   }
   const roomNote = el('p', 'credit-room-note');
-  roomNote.append(document.createTextNode('Series and animations by '));
+  roomNote.append(document.createTextNode(str('credits.series_and_animations_by')));
   roomNote.append(link('https://racegow.com/tracks', 'RaceGOW'));
-  roomNote.append(document.createTextNode('. Brought into this simulator by andAgainFPV.'));
+  roomNote.append(document.createTextNode(str('credits.brought_into_this_simulator_by_andagainfpv')));
   roomList.append(roomNote);
   rooms.append(roomList);
   host.append(rooms);
 
-  const horde = section('The horde', 'Written with Grok. Built with Claude.');
+  const horde = section(str('credits.the_horde'), str('credits.written_with_grok_built_with_claude'));
   const ai = el('div', 'credit-row pair');
   const grokBody = el('p');
   grokBody.append(
-    document.createTextNode('xAI\'s Grok. A lot of the lines, a lot of the arguments, and a lot of the stubbornness about flight feel.'),
+    document.createTextNode(str('credits.xai_s_grok_a_lot_of')),
   );
   const claudeBody = el('p');
   claudeBody.append(
-    document.createTextNode('Anthropic\'s Claude. The other half of the horde. Same human holding the sticks.'),
+    document.createTextNode(str('credits.anthropic_s_claude_the_other_half')),
   );
   ai.append(
     projectCard({
       src: src('grok.svg'),
       alt: 'Grok',
       well: 'light',
-      title: 'Grok',
+      title: str('credits.grok'),
       href: 'https://grok.com',
       body: grokBody,
     }),
     projectCard({
       src: src('claude.svg'),
       alt: 'Claude',
-      title: 'Claude',
+      title: str('credits.claude'),
       wordmark: false,
       href: 'https://claude.ai',
       body: claudeBody,
@@ -435,7 +437,7 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
 
   const legal = el('p', 'credits-legal');
   legal.append(
-    document.createTextNode('Betaflight, Track Draw, Grok, Claude, Dutch Drone Squad, and their marks belong to their owners. The channel pictures belong to the pilots. Using them here is credit, not a claim they endorse this page. FDFPV is free software under '),
+    document.createTextNode(str('credits.betaflight_track_draw_grok_claude_dutch')),
     link('https://www.gnu.org/licenses/gpl-3.0.html', 'GPLv3'),
     document.createTextNode('.'),
   );

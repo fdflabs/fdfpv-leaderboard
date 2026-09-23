@@ -13,6 +13,7 @@
     "test": "node src/selftest.js",
     "lint:licence": "node scripts/licence-lint.js",
     "lint:nouns": "node scripts/noun-lint.js",
+    "lint:copy": "node scripts/copy-lint.js",
     "admin:hash": "node scripts/admin-hash.js"
   },
   "dependencies": {

@@ -53,6 +53,8 @@
  * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { str } from './strings/index.js';
+
 /* ------------------------------------------------------------------ */
 /* The client half. Mirrored in the simulator's src/share/stats.js.    */
 /* ------------------------------------------------------------------ */
@@ -450,9 +452,9 @@ function barChart({
       const r = Math.min(4, barW / 2, height);
       const y = base - height;
       node.append(svg('path', {
-        d: `M${x} ${base} L${x} ${y + r} Q${x} ${y} ${x + r} ${y}`
-          + ` L${x + barW - r} ${y} Q${x + barW} ${y} ${x + barW} ${y + r}`
-          + ` L${x + barW} ${base} Z`,
+        d: str('stats.m_l_q', { x, base, x2: x, v4: y + r, x3: x, y, v7: x + r, y2: y })
+          + str('stats.l_q', { v1: x + barW - r, y, v3: x + barW, y2: y, v5: x + barW, v6: y + r })
+          + str('stats.l_z', { v1: x + barW, base }),
         fill: isToday ? '#f3ead4' : '#9db3c8',
       }));
       if (value === best && best > 0) {
@@ -513,7 +515,7 @@ function barChart({
 function dayTip(row) {
   const lines = [
     ['Pilots', count(row.visits)],
-    ['New, returning', `${count(row.newVisitors)} / ${count(row.returningVisitors)}`],
+    [str('stats.new_returning'), `${count(row.newVisitors)} / ${count(row.returningVisitors)}`],
     ['Sessions', count(row.sessions)],
     ['Laps', count(row.laps)],
     ['Flown', flightTime(row.flightS)],
@@ -594,7 +596,7 @@ function chartTable(rows) {
   box.addEventListener('toggle', () => {
     view.tableOpen = box.open;
   });
-  box.append(el('summary', null, 'As a table'));
+  box.append(el('summary', null, str('stats.as_a_table')));
   const scroll = el('div', 'scroll');
   const table = el('table');
   const head = el('tr');
@@ -657,7 +659,7 @@ function rankList({
   if (known.length > shown.length) {
     const rest = known.length - shown.length;
     const word = rest === 1 ? (moreWord || '') : (moreWords || moreWord || '');
-    list.append(el('li', 'rank-rest', `and ${count(rest)} more${word ? ` ${word}` : ''}`));
+    list.append(el('li', 'rank-rest', str('stats.and_more', { count: count(rest), v2: word ? ` ${word}` : '' })));
   }
   if (unknown && (unknown.visits || unknown.sessions || unknown.laps)) {
     list.append(row(unknown, true));
@@ -665,7 +667,7 @@ function rankList({
   const box = el('div');
   box.append(list);
   if (!shown.length && !unknown) {
-    box.append(el('p', 'rank-more', 'Nothing counted yet.'));
+    box.append(el('p', 'rank-more', str('stats.nothing_counted_yet')));
   }
   return box;
 }
@@ -692,10 +694,10 @@ function countryName(code) {
   }
 }
 
-const CRAFT_NAMES = { '5inch': 'Five inch', whoop65: '65 mm whoop' };
-const MAP_NAMES = { custom: 'Track', city: 'Freestyle city', other: 'Other' };
+const CRAFT_NAMES = { '5inch': str('app.five_inch'), whoop65: '65 mm whoop' };
+const MAP_NAMES = { custom: 'Track', city: str('stats.freestyle_city'), other: 'Other' };
 const INPUT_NAMES = {
-  gamepad: 'Radio or controller', keyboard: 'Keyboard', touch: 'Touch', other: 'Other',
+  gamepad: str('stats.radio_or_controller'), keyboard: 'Keyboard', touch: 'Touch', other: 'Other',
 };
 
 /* ------------------------------------------------------------------ */
@@ -717,8 +719,8 @@ function paintFresh() {
       section.classList.add('stale');
     }
     node.textContent = view.data
-      ? `Could not reach the board. Showing what it said ${agoText(age)}.`
-      : 'Could not reach the board.';
+      ? str('stats.could_not_reach_the_board_showing', { agoText: agoText(age) })
+      : str('stats.could_not_reach_the_board');
     return;
   }
   node.classList.remove('stale');
@@ -729,7 +731,7 @@ function paintFresh() {
     node.textContent = '';
     return;
   }
-  node.textContent = `Updated ${agoText(age)}. Days are UTC.`;
+  node.textContent = str('stats.updated_days_are_utc', { agoText: agoText(age) });
 }
 
 function tile({
@@ -751,25 +753,25 @@ function paintTiles() {
   const t = d.today;
   box.textContent = '';
   box.append(tile({
-    label: 'Flying now',
+    label: str('stats.flying_now'),
     value: count(d.live ? d.live.flying : 0),
-    note: 'Tabs that reported a lap or a heartbeat in the last three minutes.',
+    note: str('stats.tabs_that_reported_a_lap_or'),
     live: true,
   }));
   box.append(tile({
-    label: 'Pilots today',
+    label: str('stats.pilots_today'),
     value: count(t.visits),
-    note: `${count(t.newVisitors)} new, ${count(t.returningVisitors)} returning.`,
+    note: str('stats.new_returning_2', { count: count(t.newVisitors), count2: count(t.returningVisitors) }),
   }));
   box.append(tile({
-    label: 'Sessions today',
+    label: str('stats.sessions_today'),
     value: count(t.sessions),
-    note: 'A session is a page load where the quad left the stand.',
+    note: str('stats.a_session_is_a_page_load'),
   }));
   box.append(tile({
-    label: 'Laps today',
+    label: str('stats.laps_today'),
     value: count(t.laps),
-    note: `${flightTime(t.flightS)} flown.`,
+    note: str('stats.flown', { flightTime: flightTime(t.flightS) }),
   }));
 }
 
@@ -795,12 +797,12 @@ function paintTrend() {
     : null;
   plate.hidden = false;
   plate.textContent = '';
-  plate.append(el('div', 'kicker', `The last ${d.window.days} days`));
-  plate.append(el('h3', null, 'Pilots and laps, by day'));
+  plate.append(el('div', 'kicker', str('stats.the_last_days', { days: d.window.days })));
+  plate.append(el('h3', null, str('stats.pilots_and_laps_by_day')));
   plate.append(el('p', 'plate-note',
     `${plural(d.window.visits, 'pilot', 'pilots')}, ${plural(d.window.sessions, 'session', 'sessions')}, `
-    + `${plural(d.window.laps, 'lap', 'laps')} and ${flightTime(d.window.flightS)} flown. `
-    + 'Today is the pale bar; the mint tick is the best day.'));
+    + str('stats.and_flown', { plural: plural(d.window.laps, 'lap', 'laps'), flightTime: flightTime(d.window.flightS) })
+    + str('stats.today_is_the_pale_bar_the')));
   /* The drawing width, measured off the plate that is already on screen
    * rather than off the wrap that is not in the document yet. clientWidth
    * includes the padding, so the padding comes back off. */
@@ -810,18 +812,18 @@ function paintTrend() {
     plate.clientWidth - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0),
   );
   plate.append(chartBlock({
-    title: 'Pilots per day',
+    title: str('stats.pilots_per_day'),
     rows,
     width,
     pick: (r) => r.visits,
-    label: `Pilots per day over the last ${rows.length} days. The table below carries every value.`,
+    label: str('stats.pilots_per_day_over_the_last', { length: rows.length }),
   }));
   plate.append(chartBlock({
-    title: 'Laps per day',
+    title: str('stats.laps_per_day'),
     rows,
     width,
     pick: (r) => r.laps,
-    label: `Laps flown per day over the last ${rows.length} days. The table below carries every value.`,
+    label: str('stats.laps_flown_per_day_over_the', { length: rows.length }),
   }));
   plate.append(chartTable(rows));
   if (held && held.chart >= 0) {
@@ -843,10 +845,10 @@ function paintRanks() {
 
   const countries = byId('stats-countries');
   countries.textContent = '';
-  countries.append(el('div', 'kicker', 'Where from'));
-  countries.append(el('h3', null, 'Countries'));
+  countries.append(el('div', 'kicker', str('stats.where_from')));
+  countries.append(el('h3', null, str('stats.countries')));
   countries.append(el('p', 'plate-note',
-    'Named by the edge in front of the site from an address this board never stores.'));
+    str('stats.named_by_the_edge_in_front')));
   /* The bar is sessions, the same number the rows are ranked by. It used to
    * fall back to pilots on a row with no sessions, which put a country of
    * five hundred visitors above one of three flights on a list whose
@@ -860,14 +862,14 @@ function paintRanks() {
     moreWord: 'country',
     moreWords: 'countries',
   }));
-  countries.append(el('p', 'rank-more', 'Sessions / pilots.'));
+  countries.append(el('p', 'rank-more', str('stats.sessions_pilots')));
 
   const sources = byId('stats-sources');
   sources.textContent = '';
-  sources.append(el('div', 'kicker', 'How they arrived'));
-  sources.append(el('h3', null, 'Direct and sponsors'));
+  sources.append(el('div', 'kicker', str('stats.how_they_arrived')));
+  sources.append(el('h3', null, str('stats.direct_and_sponsors')));
   sources.append(el('p', 'plate-note',
-    'A sponsor link carries one word. Anything this board does not recognise is counted as Other.'));
+    str('stats.a_sponsor_link_carries_one_word')));
   /* Ranked, barred and printed by PILOTS, which is the number a sponsor
    * is owed: how many people their poster brought. The board ranks every
    * dimension by sessions, so the order is redone here to match the bar. */
@@ -880,13 +882,13 @@ function paintRanks() {
     value: (r) => r.visits,
     note: (r) => `${count(r.visits)} / ${count(r.laps)}`,
   }));
-  sources.append(el('p', 'rank-more', 'Pilots / laps.'));
+  sources.append(el('p', 'rank-more', str('stats.pilots_laps')));
 
   const how = byId('stats-how');
   how.textContent = '';
-  how.append(el('div', 'kicker', 'On what'));
-  how.append(el('h3', null, 'How they fly'));
-  how.append(el('p', 'plate-note', 'Of the sessions counted in the window.'));
+  how.append(el('div', 'kicker', str('stats.on_what')));
+  how.append(el('h3', null, str('stats.how_they_fly')));
+  how.append(el('p', 'plate-note', str('stats.of_the_sessions_counted_in_the')));
   const groups = [
     ['Aircraft', d.craft, (k) => CRAFT_NAMES[k] || k],
     ['Input', d.inputs, (k) => INPUT_NAMES[k] || k],
@@ -915,28 +917,28 @@ function paintAllTime() {
   const d = view.data;
   plate.hidden = false;
   plate.textContent = '';
-  plate.append(el('div', 'kicker', 'All time'));
-  plate.append(el('h3', null, 'Since this page started counting'));
+  plate.append(el('div', 'kicker', str('stats.all_time')));
+  plate.append(el('h3', null, str('stats.since_this_page_started_counting')));
   plate.append(el('p', 'plate-note',
     d.firstDay
-      ? `Counting began on ${longDay(d.firstDay)}. The four on the right are the board's own tables rather than counters.`
-      : "The four on the right are the board's own tables rather than counters."));
+      ? str('stats.counting_began_on_the_four_on', { longDay: longDay(d.firstDay) })
+      : str('stats.the_four_on_the_right_are')));
   const strip = el('div', 'alltime');
   const heroBox = el('div', 'hero-box');
   const hero = el('div', 'hero', count(d.allTime.laps));
   heroBox.append(hero);
-  heroBox.append(el('span', 'hero-label', 'Laps flown'));
+  heroBox.append(el('span', 'hero-label', str('stats.laps_flown')));
   strip.append(heroBox);
   const facts = el('div', 'facts');
   const rows = [
     [count(d.allTime.sessions), 'Sessions'],
-    [count(d.allTime.visits), 'Pilot days'],
-    [flightTime(d.allTime.flightS), 'Flight time'],
+    [count(d.allTime.visits), str('stats.pilot_days')],
+    [flightTime(d.allTime.flightS), str('stats.flight_time')],
     [count(d.allTime.countries), 'Countries'],
     [count(d.board.tracks), 'Tracks'],
-    [count(d.board.times), 'Times posted'],
-    [count(d.board.pilots), 'Named pilots'],
-    [count(d.board.pilotsOnMoreThanOneDay), 'Back another day'],
+    [count(d.board.times), str('app.times_posted')],
+    [count(d.board.pilots), str('stats.named_pilots')],
+    [count(d.board.pilotsOnMoreThanOneDay), str('stats.back_another_day')],
   ];
   for (const [value, label] of rows) {
     const fact = el('div', 'fact');
@@ -956,7 +958,7 @@ function paintOptOut() {
   box.textContent = '';
   if (privacyRefused()) {
     box.append(el('p', 'optout-said',
-      'Your browser asked not to be counted, and it is not.'));
+      str('stats.your_browser_asked_not_to_be')));
     return;
   }
   const row = el('div', 'optout-row');
@@ -964,19 +966,19 @@ function paintOptOut() {
   input.type = 'checkbox';
   input.id = 'stats-count-me';
   input.checked = !optedOut();
-  const label = el('label', null, 'Count this browser');
+  const label = el('label', null, str('stats.count_this_browser'));
   label.setAttribute('for', 'stats-count-me');
   row.append(input);
   row.append(label);
   box.append(row);
   const note = el('p', 'optout-note',
-    'Off means this browser sends nothing at all. The choice is kept in this browser, which is the only place it could be kept.');
+    str('stats.off_means_this_browser_sends_nothing'));
   box.append(note);
   input.addEventListener('change', () => {
     setOptedOut(!input.checked);
     note.textContent = input.checked
-      ? 'Counted. Nothing that identifies you is sent or stored.'
-      : 'Not counted. This browser sends nothing at all.';
+      ? str('stats.counted_nothing_that_identifies_you_is')
+      : str('stats.not_counted_this_browser_sends_nothing');
   });
 }
 
@@ -991,10 +993,10 @@ function paintEmpty() {
     return;
   }
   const box = el('div', 'empty panel');
-  box.append(el('h2', null, 'Nothing counted yet'));
+  box.append(el('h2', null, str('stats.nothing_counted_yet_2')));
   box.append(el('p', null, d.firstDay
-    ? `Counting started on ${longDay(d.firstDay)}. The first flight will show here.`
-    : 'Counting starts with the first visit after this page was deployed. Fly something and it will show here.'));
+    ? str('stats.counting_started_on_the_first_flight', { longDay: longDay(d.firstDay) })
+    : str('stats.counting_starts_with_the_first_visit')));
   notice.append(box);
 }
 
@@ -1023,7 +1025,7 @@ async function refresh() {
     const res = await fetch(view.url);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(body.error || `The board answered ${res.status}.`);
+      throw new Error(body.error || str('app.the_board_answered', { status: res.status }));
     }
     view.data = body;
     view.error = '';
@@ -1031,7 +1033,7 @@ async function refresh() {
     /* The previous numbers stay on screen. A skeleton here would throw away
      * a good answer and jump the layout for a failure that is usually one
      * missed poll. */
-    view.error = e.message || 'The board could not be reached.';
+    view.error = e.message || str('stats.the_board_could_not_be_reached');
   } finally {
     view.fetching = false;
   }

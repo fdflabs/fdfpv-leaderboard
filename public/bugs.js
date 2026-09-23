@@ -9,6 +9,14 @@
  * your option) any later version.
  */
 
+import { str } from './strings/index.js';
+
+/* Static sentences in the markup carry data-str keys; filled here so the
+ * page stays greppable and the copy lives in one table. */
+for (const node of document.querySelectorAll('[data-str]')) {
+  node.textContent = str(node.dataset.str);
+}
+
 const TOKEN_KEY = 'webfpv.bugs.token';
 
 function el(tag, cls, text) {
@@ -64,7 +72,7 @@ function headers() {
   const t = token() || adminToken();
   const h = { 'content-type': 'application/json' };
   if (t) {
-    h.authorization = `Bearer ${t}`;
+    h.authorization = str('bugs.bearer', { t });
   }
   return h;
 }
@@ -78,7 +86,7 @@ async function readJson(res) {
     body = null;
   }
   if (!res.ok) {
-    throw new Error((body && body.error) || text || `The board answered ${res.status}.`);
+    throw new Error((body && body.error) || text || str('app.the_board_answered', { status: res.status }));
   }
   return body;
 }
@@ -109,17 +117,17 @@ function paintList() {
   const host = document.getElementById('list');
   host.textContent = '';
   if (!state.bugs.length) {
-    host.append(el('div', 'empty', 'No tickets in this filter.'));
+    host.append(el('div', 'empty', str('bugs.no_tickets_in_this_filter')));
     return;
   }
   for (const b of state.bugs) {
-    const row = el('button', state.current && state.current.id === b.id ? 'ticket on' : 'ticket');
+    const row = el('button', state.current && state.current.id === b.id ? str('bugs.ticket_on') : 'ticket');
     row.type = 'button';
     row.append(el('div', 'id', b.id));
     row.append(el('div', 'title', b.title));
     const meta = el('div', 'meta');
     meta.append(el('span', b.kind === 'feel' ? 'kind feel' : 'kind', kindLabel(b.kind)));
-    meta.append(document.createTextNode(` · ${b.reporter}${b.map ? ` · ${b.map}` : ''}`));
+    meta.append(document.createTextNode(str('bugs.text', { reporter: b.reporter, v2: b.map ? ` · ${b.map}` : '' })));
     row.append(meta);
     row.addEventListener('click', () => openTicket(b.id));
     host.append(row);
@@ -140,7 +148,7 @@ function paintSheet() {
   host.textContent = '';
   const t = state.current;
   if (!t) {
-    host.append(el('div', 'empty', 'Pick a ticket.'));
+    host.append(el('div', 'empty', str('bugs.pick_a_ticket')));
     return;
   }
   const badges = el('div', 'badges');
@@ -152,24 +160,24 @@ function paintSheet() {
   host.append(el('div', 'kicker', t.id));
   host.append(el('h2', null, t.title));
   host.append(badges);
-  host.append(el('p', 'meta', `${t.reporter} · ${when(t.submittedUtc)}`));
-  host.append(block('What happened', t.what));
+  host.append(el('p', 'meta', str('bugs.text_2', { reporter: t.reporter, when: when(t.submittedUtc) })));
+  host.append(block(str('bugs.what_happened'), t.what));
   host.append(block('Expected', t.expected));
   host.append(block('Steps', t.steps));
   host.append(block('Resolution', t.resolution));
   const ctx = el('div', 'block');
-  ctx.append(el('h3', null, 'Context'));
+  ctx.append(el('h3', null, str('bugs.context')));
   const pre = el('pre', 'ctx', JSON.stringify(t.context || {}, null, 2));
   ctx.append(pre);
   host.append(ctx);
   const resolution = document.createElement('textarea');
-  resolution.placeholder = 'What you did, for the next person.';
+  resolution.placeholder = str('bugs.what_you_did_for_the_next');
   resolution.value = t.resolution || '';
   const actions = el('div', 'actions');
   const statuses = [
-    ['in_progress', 'In progress'],
+    ['in_progress', str('bugs.in_progress')],
     ['fixed', 'Fixed'],
-    ['wontfix', "Won't fix"],
+    ['wontfix', str('bugs.won_t_fix')],
     ['duplicate', 'Duplicate'],
     ['open', 'Reopen'],
   ];
@@ -179,7 +187,7 @@ function paintSheet() {
     b.addEventListener('click', () => saveTicket(id, resolution.value));
     actions.append(b);
   }
-  host.append(el('h3', null, 'Update'));
+  host.append(el('h3', null, str('bugs.update')));
   host.append(resolution);
   host.append(actions);
 }

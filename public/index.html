@@ -2210,7 +2210,7 @@
     </style>
   </head>
   <body>
-    <a class="skip" href="#tracks">Skip to the tracks</a>
+    <a class="skip" href="#tracks"><span data-str="html.skip_to_the_tracks">Skip to the tracks</span></a>
     <div class="chequer" aria-hidden="true"></div>
 
     <header class="mast">
@@ -2234,10 +2234,10 @@
           leaving open behind it is not one.
         -->
         <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a></h1>
-        <div class="eyebrow">Tracks and statistics</div>
+        <div class="eyebrow"><span data-str="html.tracks_and_statistics">Tracks and statistics</span></div>
         <p class="invite">
-          Every published track, and the times flown on it. Open one, fly it in
-          the browser, and post a lap under your name.
+          <span data-str="html.every_published_track_and_the_times">Every published track, and the times flown on it. Open one, fly it in
+          the browser, and post a lap under your name.</span>
         </p>
       </div>
       <div class="mast-side">
@@ -2255,8 +2255,8 @@
              each click to a fresh tab. See src/share/windows.js in the
              simulator. -->
         <nav class="links">
-          <a class="btn" id="builder-link" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
-          <a class="text" id="sim-link" target="fdfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
+          <a class="btn" id="builder-link" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
+          <a class="text" id="sim-link" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
           <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
           <!--
             ADMIN, AND IT IS THE QUIETEST THING IN THE MASTHEAD ON PURPOSE.
@@ -2283,7 +2283,7 @@
         <a class="spine-mark" id="spine-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a>
         <span class="spine-stats" id="spine-stats"></span>
         <nav class="links">
-          <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
+          <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
           <a class="text" href="#stats">Statistics</a>
           <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
         </nav>
@@ -2339,24 +2339,24 @@
       <nav class="tabs" id="tabs" role="tablist" aria-label="What this page shows">
         <a class="tab is-on" id="tab-tracks" role="tab" href="#tracks"
            aria-selected="true" aria-controls="view-tracks">
-          <span class="tab-name">Tracks and times</span>
-          <span class="tab-note">Every published track, and the times flown on it</span>
+          <span class="tab-name"><span data-str="html.tracks_and_times">Tracks and times</span></span>
+          <span class="tab-note"><span data-str="html.every_published_track_and_the_times_2">Every published track, and the times flown on it</span></span>
         </a>
         <a class="tab" id="tab-stats" role="tab" href="#stats"
            aria-selected="false" aria-controls="view-stats" tabindex="-1">
-          <span class="tab-name">Site statistics</span>
-          <span class="tab-note">Who is flying, where from, and on what</span>
+          <span class="tab-name"><span data-str="html.site_statistics">Site statistics</span></span>
+          <span class="tab-note"><span data-str="html.who_is_flying_where_from_and">Who is flying, where from, and on what</span></span>
         </a>
       </nav>
       <nav class="switch switch-craft" id="craftswitch" aria-label="Which aircraft">
         <button type="button" class="switch-btn is-on" id="craft-full" aria-pressed="true">
-          <span class="switch-kicker">Five inch</span>
-          <span class="switch-name">Sixty metre field</span>
+          <span class="switch-kicker"><span data-str="app.five_inch">Five inch</span></span>
+          <span class="switch-name"><span data-str="html.sixty_metre_field">Sixty metre field</span></span>
           <span class="switch-count" id="craft-full-count"></span>
         </button>
         <button type="button" class="switch-btn" id="craft-micro" aria-pressed="false">
-          <span class="switch-kicker">65 mm whoop</span>
-          <span class="switch-name">Whoop Micro Tracks</span>
+          <span class="switch-kicker"><span data-str="html.65_mm_whoop">65 mm whoop</span></span>
+          <span class="switch-name"><span data-str="html.whoop_micro_tracks">Whoop Micro Tracks</span></span>
           <span class="switch-count" id="craft-micro-count"></span>
         </button>
       </nav>
@@ -2374,7 +2374,7 @@
                 <kbd>/</kbd>
               </div>
               <div class="sort">
-                <label for="by">Built by</label>
+                <label for="by"><span data-str="html.built_by">Built by</span></label>
                 <select id="by"><option value="">Anyone</option></select>
               </div>
               <div class="sort">
@@ -2414,11 +2414,11 @@
       <section id="view-stats" aria-label="Site statistics" hidden>
         <div class="stats-head">
           <div>
-            <div class="kicker">The site</div>
-            <h2 class="rule-after" id="stats-title">Site statistics</h2>
+            <div class="kicker"><span data-str="html.the_site">The site</span></div>
+            <h2 class="rule-after" id="stats-title"><span data-str="html.site_statistics">Site statistics</span></h2>
             <p class="stats-lede">
-              Counted from the simulator, the track builder and this page.
-              Every number here is a total.
+              <span data-str="html.counted_from_the_simulator_the_track">Counted from the simulator, the track builder and this page.
+              Every number here is a total.</span>
             </p>
           </div>
           <!-- role="status" rather than role="alert": it changes every
@@ -2435,22 +2435,22 @@
         </div>
         <div class="panel stats-plate" id="stats-alltime" hidden></div>
         <div class="panel stats-plate stats-privacy">
-          <div class="kicker">What this counts</div>
-          <h3>Nothing here is about you</h3>
+          <div class="kicker"><span data-str="html.what_this_counts">What this counts</span></div>
+          <h3><span data-str="html.nothing_here_is_about_you">Nothing here is about you</span></h3>
           <p>
-            Every number on this page is a count. The simulator tells this
+            <span data-str="html.every_number_on_this_page_is">Every number on this page is a count. The simulator tells this
             board that a session started, that laps were flown, and which
             aircraft and input were used. The board adds one to a daily total
-            and keeps nothing else.
+            and keeps nothing else.</span>
           </p>
           <p>
-            No cookie is set. No address is stored: the edge in front of the
+            <span data-str="html.no_cookie_is_set_no_address">No cookie is set. No address is stored: the edge in front of the
             site names a country from it, and only the two letter code
             arrives here. New or returning is worked out by your browser from
             a date it keeps for itself, and no identifier ever leaves it. A
             sponsor link is remembered as one word for thirty days, so the
             board can say which poster somebody walked past, never who they
-            are. Days are UTC.
+            are. Days are UTC.</span>
           </p>
           <div class="stats-optout" id="stats-optout"></div>
         </div>
@@ -2461,14 +2461,14 @@
 
     <footer>
       <p>
-        FDFPV Tracks and Statistics. Every published track and every named
+        <span data-str="html.fdfpv_tracks_and_statistics_every_published">FDFPV Tracks and Statistics. Every published track and every named
         time lives here. The simulator itself keeps nothing: a track you build stays
-        in your browser until you publish it. Free software under GPLv3.
+        in your browser until you publish it. Free software under GPLv3.</span>
       </p>
       <nav>
-        <a id="foot-sim" target="fdfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
-        <a href="#stats">Site statistics</a>
-        <a href="bugs.html">Bugs and feedback</a>
+        <a id="foot-sim" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
+        <a href="#stats"><span data-str="html.site_statistics">Site statistics</span></a>
+        <a href="bugs.html"><span data-str="html.bugs_and_feedback">Bugs and feedback</span></a>
         <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
       </nav>
     </footer>
@@ -2523,7 +2523,7 @@
       <div class="sheet-inner admin-inner">
         <div class="sheet-top">
           <div>
-            <div class="kicker">This board</div>
+            <div class="kicker"><span data-str="html.this_board">This board</span></div>
             <h2 id="admin-title" class="rule-after">Admin</h2>
           </div>
           <button type="button" class="btn" id="admin-close">Close</button>
@@ -2531,9 +2531,9 @@
 
         <form class="admin-panel panel" id="admin-signin">
           <p class="admin-lede">
-            This is for whoever looks after the board. It is a short list of
+            <span data-str="html.this_is_for_whoever_looks_after">This is for whoever looks after the board. It is a short list of
             email addresses held on the server, and an address that is not on
-            it is refused whatever password it arrives with.
+            it is refused whatever password it arrives with.</span>
           </p>
           <div class="admin-field">
             <label for="admin-email">Email</label>
@@ -2547,7 +2547,7 @@
                    autocomplete="current-password" maxlength="200" required />
           </div>
           <div class="admin-actions">
-            <button type="submit" class="btn primary" id="admin-submit">Sign in</button>
+            <button type="submit" class="btn primary" id="admin-submit"><span data-str="html.sign_in">Sign in</span></button>
             <span class="admin-busy" id="admin-busy" hidden>Checking</span>
           </div>
           <!-- role="alert" so a refusal is announced. It is the same sentence
@@ -2557,14 +2557,14 @@
         </form>
 
         <div class="admin-panel panel" id="admin-signed" hidden>
-          <p class="admin-who">Signed in as <b id="admin-who"></b>.</p>
+          <p class="admin-who"><span data-str="html.signed_in_as">Signed in as</span> <b id="admin-who"></b>.</p>
           <p class="admin-lede" id="admin-until"></p>
           <ul class="admin-can">
-            <li>Open any track and take it off the board, with every time flown on it.</li>
-            <li>Read the <a href="bugs.html">bugs and feedback</a> inbox.</li>
+            <li><span data-str="html.open_any_track_and_take_it">Open any track and take it off the board, with every time flown on it.</span></li>
+            <li><span data-str="html.read_the">Read the</span> <a href="bugs.html"><span data-str="html.bugs_and_feedback_2">bugs and feedback</span></a> inbox.</li>
           </ul>
           <p class="admin-warn">
-            Removing a track cannot be undone. The times go with it.
+            <span data-str="html.removing_a_track_cannot_be_undone">Removing a track cannot be undone. The times go with it.</span>
           </p>
           <!-- The sponsors and their links. Filled by app.js from the
                signed in response, which is the only place the list travels:
@@ -2574,7 +2574,7 @@
                numbers on the statistics tab are public on purpose. -->
           <div class="admin-sponsors" id="admin-sponsors"></div>
           <div class="admin-actions">
-            <button type="button" class="btn" id="admin-signout">Sign out</button>
+            <button type="button" class="btn" id="admin-signout"><span data-str="html.sign_out">Sign out</span></button>
           </div>
         </div>
       </div>

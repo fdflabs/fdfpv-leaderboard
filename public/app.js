@@ -37,6 +37,13 @@
 import { guessSimOrigin as guess, landingOrigin as frontDoor } from './origins.js';
 import { mountStats, pingVisit, showStats } from './stats.js';
 import { fillCredits } from './credits.js';
+import { str } from './strings/index.js';
+
+/* Static sentences in the markup carry data-str keys; filled here so the
+ * page stays greppable and the copy lives in one table. */
+for (const node of document.querySelectorAll('[data-str]')) {
+  node.textContent = str(node.dataset.str);
+}
 import {
   fieldSize, paintPlans, planCanvas, planLabel,
 } from './plan.js';
@@ -220,12 +227,12 @@ function formatUntil(iso) {
       - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000,
   );
   if (days <= 0) {
-    return `at ${clock}`;
+    return str('app.at', { clock });
   }
   if (days === 1) {
-    return `tomorrow at ${clock}`;
+    return str('app.tomorrow_at', { clock });
   }
-  return `${formatWhen(iso)} at ${clock}`;
+  return str('app.at_2', { formatWhen: formatWhen(iso), clock });
 }
 
 function plural(n, one, many) {
@@ -309,7 +316,7 @@ function chaseLink(config, trackId, row) {
   const a = el('a', 'chase', 'chase');
   a.href = flyHref(config, trackId, row.id);
   a.target = SIM_WINDOW;
-  a.title = `Fly against ${row.name}'s recorded lap`;
+  a.title = str('app.fly_against_s_recorded_lap', { name: row.name });
   return a;
 }
 
@@ -499,7 +506,7 @@ function classOf(track) {
 /* What a pilot calls it. The board says the aircraft, not the class, because
  * "micro" is a word about the document and "65 mm whoop" is a word about the
  * thing you fly. */
-const CRAFT_LABEL = { full: 'Five inch', micro: '65 mm whoop' };
+const CRAFT_LABEL = { full: str('app.five_inch'), micro: '65 mm whoop' };
 
 function craftLabel(track) {
   return CRAFT_LABEL[classOf(track)];
@@ -619,7 +626,7 @@ function gifLabel(track) {
   const w = Math.round(Number(plan.width) || 0);
   const d = Math.round(Number(plan.depth) || 0);
   const gates = track.gates === 1 ? '1 gate' : `${track.gates} gates`;
-  return `A lap of ${track.name}, ${gates} in a ${w} by ${d} metre room.`;
+  return str('app.a_lap_of_in_a_by', { name: track.name, gates, w, d });
 }
 
 function cardFor(track, config) {
@@ -628,7 +635,7 @@ function cardFor(track, config) {
 
   const tile = el('a', 'tile');
   tile.href = courseHref(track.id);
-  tile.setAttribute('aria-label', `${track.name}, ${track.hasGif ? 'a lap' : 'plan'} and times`);
+  tile.setAttribute('aria-label', str('app.and_times', { name: track.name, v2: track.hasGif ? str('app.a_lap') : 'plan' }));
   tile.append(cardArt(track));
   const size = fieldSize(track);
   if (size) {
@@ -656,12 +663,12 @@ function cardFor(track, config) {
    */
   const by = el('p', 'by');
   if (track.designer) {
-    by.append('designed by ');
+    by.append(str('app.designed_by'));
     by.append(el('b', null, track.designer));
     if (track.series) {
-      by.append(` for ${track.series}`);
+      by.append(str('app.for', { series: track.series }));
     }
-    by.append(`, published by ${track.author}`);
+    by.append(str('app.published_by', { author: track.author }));
   } else {
     by.append('by ');
     by.append(el('b', null, track.author));
@@ -674,7 +681,7 @@ function cardFor(track, config) {
    * form. The single quiet line below says the same thing once. */
   const record = el('div', 'record');
   record.hidden = !track.best;
-  record.append(el('span', 'record-label', 'Record'));
+  record.append(el('span', 'record-label', str('app.record')));
   record.append(timeNode(track.best ? track.best.lapMs : null, 'record-time'));
   record.append(el('div', 'record-holder', track.best ? track.best.name : ''));
   head.append(record);
@@ -693,18 +700,18 @@ function cardFor(track, config) {
   podium.hidden = true;
   body.append(podium);
 
-  const none = el('p', 'none', 'No time posted yet');
+  const none = el('p', 'none', str('app.no_time_posted_yet'));
   none.hidden = Boolean(track.best);
   body.append(none);
 
   const actions = el('div', 'actions');
-  const fly = el('a', 'btn primary small', 'Fly this track');
+  const fly = el('a', 'btn primary small', str('app.fly_this_track'));
   fly.href = flyHref(config, track.id);
   fly.target = SIM_WINDOW;
-  fly.setAttribute('aria-label', `Fly ${track.name}, opens it in the simulator tab`);
+  fly.setAttribute('aria-label', str('app.fly_opens_it_in_the_simulator', { name: track.name }));
   const more = el('a', 'text more');
   more.href = courseHref(track.id);
-  more.textContent = track.times > 3 ? `All ${plural(track.times, 'time', 'times')}` : 'Track detail';
+  more.textContent = track.times > 3 ? str('app.all', { plural: plural(track.times, 'time', 'times') }) : str('app.track_detail');
   actions.append(fly, more);
   body.append(actions);
 
@@ -769,8 +776,8 @@ function paintPodium(card, times) {
   });
   if (more) {
     more.textContent = times.length > 3
-      ? `All ${plural(times.length, 'time', 'times')}`
-      : 'Track detail';
+      ? str('app.all', { plural: plural(times.length, 'time', 'times') })
+      : str('app.track_detail');
   }
 }
 
@@ -809,7 +816,7 @@ function paintGrid() {
   if (count) {
     count.textContent = shown.length === state.courses.length
       ? plural(state.courses.length, 'track', 'tracks')
-      : `${shown.length} of ${plural(state.courses.length, 'track', 'tracks')}`;
+      : str('app.of', { length: shown.length, plural: plural(state.courses.length, 'track', 'tracks') });
   }
   if (!shown.length && state.courses.length) {
     /*
@@ -819,27 +826,27 @@ function paintGrid() {
      */
     const parts = [];
     if (state.query.trim()) {
-      parts.push(`the search "${state.query.trim()}"`);
+      parts.push(str('app.the_search', { v1: state.query.trim() }));
     }
     if (state.author) {
-      parts.push(`tracks built by ${state.author}`);
+      parts.push(str('app.tracks_built_by', { author: state.author }));
     }
     if (state.tags.size) {
       parts.push(`${[...state.tags].map(tagLabel).join(' and ')}`);
     }
 
     const box = el('div', 'empty panel');
-    box.append(el('h2', null, 'Nothing matches that'));
+    box.append(el('h2', null, str('app.nothing_matches_that')));
     /* The aircraft is above the filters and is not one of them, so it is
      * named separately: a reader whose list is empty because they are on the
      * whoop side and every track is a five inch one needs to be told that,
      * and it is not something Clear the filters should undo. */
     box.append(el('p', 'empty-craft',
-      `You are looking at the ${CRAFT_LABEL[state.craft].toLowerCase()} tracks.`));
+      str('app.you_are_looking_at_the_tracks', { v1: CRAFT_LABEL[state.craft].toLowerCase() })));
     box.append(el('p', null, parts.length
-      ? `No track on the board is ${joined(parts)}.`
-      : 'No track on the board answers to that.'));
-    const clear = el('button', 'btn small', 'Clear the filters');
+      ? str('app.no_track_on_the_board_is', { joined: joined(parts) })
+      : str('app.no_track_on_the_board_answers')));
+    const clear = el('button', 'btn small', str('app.clear_the_filters'));
     clear.type = 'button';
     clear.addEventListener('click', () => {
       const find = byId('find');
@@ -920,7 +927,7 @@ function paintAuthors() {
   select.textContent = '';
   const any = document.createElement('option');
   any.value = '';
-  any.textContent = 'Anyone';
+  any.textContent = str('app.anyone');
   select.append(any);
   for (const [name, n] of authors()) {
     const opt = document.createElement('option');
@@ -1009,7 +1016,7 @@ function paintRail() {
   rail.hidden = false;
   deck.classList.add('has-rail');
 
-  const table = railBlock('Standings', 'Fastest pilots');
+  const table = railBlock('Standings', str('app.fastest_pilots'));
   pilots.slice(0, 8).forEach((p, i) => {
     const row = el('div', `standing p${i + 1}`);
     row.append(el('span', 'rk', String(i + 1)));
@@ -1021,11 +1028,11 @@ function paintRail() {
     ])));
     table.append(row);
   });
-  table.append(el('p', 'rail-note', 'Ranked by track records held, then podiums, then laps posted.'));
+  table.append(el('p', 'rail-note', str('app.ranked_by_track_records_held_then')));
   rail.append(table);
 
   if (feed.length) {
-    const lately = railBlock('Lately', 'Times posted');
+    const lately = railBlock('Lately', str('app.times_posted'));
     const list = el('div', 'feed');
     for (const row of feed) {
       const line = el('div', 'feed-row');
@@ -1099,7 +1106,7 @@ async function loadTimes(id) {
     const res = await fetch(here(`api/tracks/${encodeURIComponent(id)}`));
     const detail = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(detail.error || 'Those times could not be loaded.');
+      throw new Error(detail.error || str('app.those_times_could_not_be_loaded'));
     }
     const times = detail.times || [];
     state.timesById.set(id, times);
@@ -1277,7 +1284,7 @@ function signedIn() {
 async function adminFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (admin.token) {
-    headers.authorization = `Bearer ${admin.token}`;
+    headers.authorization = str('app.bearer', { token: admin.token });
   }
   const r = await fetch(here(path), { ...options, headers });
   const body = await r.json().catch(() => ({}));
@@ -1290,12 +1297,12 @@ async function adminFetch(path, options = {}) {
      * and the panel is honest about what it can do.
      */
     forgetAdmin();
-    const err = new Error(body.error || 'That sign in is no longer good. Sign in again.');
+    const err = new Error(body.error || str('app.that_sign_in_is_no_longer'));
     err.signedOut = true;
     throw err;
   }
   if (!r.ok) {
-    throw new Error(body.error || `The board answered ${r.status}.`);
+    throw new Error(body.error || str('app.the_board_answered', { status: r.status }));
   }
   return body;
 }
@@ -1320,8 +1327,8 @@ function paintAdminButton() {
    * that can delete a track should say whose hands are on it, and the local
    * part is enough to recognise yourself by without printing an email
    * address across the masthead. */
-  btn.textContent = signedIn() ? (admin.email.split('@')[0] || 'Signed in') : 'Admin';
-  btn.setAttribute('aria-label', signedIn() ? `Admin, signed in as ${admin.email || 'this board\'s token'}` : 'Admin');
+  btn.textContent = signedIn() ? (admin.email.split('@')[0] || str('app.signed_in')) : 'Admin';
+  btn.setAttribute('aria-label', signedIn() ? str('app.admin_signed_in_as', { v1: admin.email || str('app.this_board_s_token') }) : 'Admin');
 }
 
 /* The panel's two faces, and the track sheet's control, all follow from one
@@ -1347,31 +1354,31 @@ function paintAdminSponsors() {
   if (!signedIn()) {
     return;
   }
-  host.append(el('h3', null, 'Sponsor links'));
+  host.append(el('h3', null, str('app.sponsor_links')));
   const rows = admin.sponsors || [];
   if (!rows.length) {
-    host.append(el('p', null, 'No sponsors are set on this board. BOARD_SPONSORS names them, one slug and name per line.'));
+    host.append(el('p', null, str('app.no_sponsors_are_set_on_this')));
     return;
   }
-  host.append(el('p', null, 'Each link lands in the simulator and is counted under that sponsor on the statistics tab, for thirty days after somebody follows it.'));
+  host.append(el('p', null, str('app.each_link_lands_in_the_simulator')));
   for (const sponsor of rows) {
     const row = el('div', 'sponsor-row');
     row.append(el('span', 'sponsor-name', sponsor.name || sponsor.slug));
     row.append(el('span', 'sponsor-link', sponsor.link || ''));
-    const copy = el('button', 'btn small', 'Copy');
+    const copy = el('button', 'btn small', str('app.copy'));
     copy.type = 'button';
     copy.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(sponsor.link || '');
-        copy.textContent = 'Copied';
+        copy.textContent = str('app.copied');
       } catch (e) {
         /* No clipboard permission, or an insecure origin. The link is on
          * screen and can be selected, so this says so rather than failing
          * silently. */
-        copy.textContent = 'Select it';
+        copy.textContent = str('app.select_it');
       }
       setTimeout(() => {
-        copy.textContent = 'Copy';
+        copy.textContent = str('app.copy');
       }, 1600);
     });
     row.append(copy);
@@ -1391,14 +1398,14 @@ function paintAdmin() {
   }
   const who = byId('admin-who');
   if (who) {
-    who.textContent = admin.email || 'this board\'s own token';
+    who.textContent = admin.email || str('app.this_board_s_own_token');
   }
   const until = byId('admin-until');
   if (until) {
     const when = formatUntil(admin.expiresUtc);
     until.textContent = when
-      ? `This sign in runs out ${when}, and closing this tab ends it sooner.`
-      : 'Closing this tab ends this sign in.';
+      ? str('app.this_sign_in_runs_out_and', { when })
+      : str('app.closing_this_tab_ends_this_sign');
   }
   paintAdminSponsors();
   const track = state.openId ? courseById(state.openId) : null;
@@ -1489,32 +1496,32 @@ function paintSheetAdmin(track) {
   if (!signedIn()) {
     return;
   }
-  host.append(el('div', 'kicker', 'Admin'));
+  host.append(el('div', 'kicker', str('app.admin')));
   const held = track.times || 0;
   host.append(el('p', null, held
-    ? `Taking this off the board takes ${plural(held, 'posted time', 'posted times')} with it. There is no undo.`
-    : 'Taking this off the board cannot be undone. The id becomes free to publish again.'));
+    ? str('app.taking_this_off_the_board_takes', { plural: plural(held, 'posted time', 'posted times') })
+    : str('app.taking_this_off_the_board_cannot')));
 
-  const btn = el('button', 'btn danger small', 'Take off the board');
+  const btn = el('button', 'btn danger small', str('app.take_off_the_board'));
   btn.type = 'button';
   let armed = 0;
   const disarm = () => {
     clearTimeout(armed);
     armed = 0;
     btn.classList.remove('armed');
-    btn.textContent = 'Take off the board';
+    btn.textContent = str('app.take_off_the_board');
   };
   btn.addEventListener('click', async () => {
     if (!armed) {
       btn.classList.add('armed');
-      btn.textContent = `Remove ${track.name}, for good`;
+      btn.textContent = str('app.remove_for_good', { name: track.name });
       armed = setTimeout(disarm, 6000);
       return;
     }
     clearTimeout(armed);
     armed = 0;
     btn.disabled = true;
-    btn.textContent = 'Removing';
+    btn.textContent = str('app.removing');
     try {
       await adminFetch(`api/tracks/${encodeURIComponent(track.id)}/remove`, { method: 'POST' });
       dropTrack(track.id);
@@ -1654,26 +1661,26 @@ function paintShot(host, track) {
   }
   const frame = document.createElement('iframe');
   frame.className = 'orbit';
-  frame.title = `${track.name}, a flight through the track`;
+  frame.title = str('app.a_flight_through_the_track', { name: track.name });
   frame.tabIndex = -1;
   frame.setAttribute('aria-hidden', 'true');
   frame.src = orbitHref(state.config, track.id);
   const wait = el('div', 'shot-wait');
-  wait.append(el('span', 'shot-dot'), el('span', null, 'Flying the track'));
+  wait.append(el('span', 'shot-dot'), el('span', null, str('app.flying_the_track')));
   host.append(wait, frame);
 }
 
 function paintBoard(host, track, times) {
   host.textContent = '';
   const head = el('div', 'board-head');
-  head.append(el('h3', null, times.length ? 'Every time posted' : 'The board is open'));
+  head.append(el('h3', null, times.length ? str('app.every_time_posted') : str('app.the_board_is_open')));
   if (times.length) {
     head.append(el('span', 'count', plural(times.length, 'lap', 'laps')));
   }
   host.append(head);
 
   if (!times.length) {
-    host.append(el('p', 'none', `Nobody has posted a lap on ${track.name} yet. Fly it and the first time on the board is yours.`));
+    host.append(el('p', 'none', str('app.nobody_has_posted_a_lap_on', { name: track.name })));
     return;
   }
 
@@ -1693,7 +1700,7 @@ function paintBoard(host, track, times) {
     && times.some((t) => Number.isFinite(t.threeMs));
   const columns = [['rank', ''], ['nm', 'Pilot'], ['time', 'Lap']];
   if (wantsThree) {
-    columns.push(['time three', 'Three laps']);
+    columns.push([str('app.time_three'), str('app.three_laps')]);
   }
   columns.push(['gap', 'Gap'], ['when', 'Posted'], ['chase', '']);
   const table = document.createElement('table');
@@ -1724,7 +1731,7 @@ function paintBoard(host, track, times) {
     tr.append(time);
 
     if (wantsThree) {
-      const three = el('td', 'time three');
+      const three = el('td', str('app.time_three'));
       if (Number.isFinite(row.threeMs)) {
         three.append(timeNode(row.threeMs, 'tm'));
       } else {
@@ -1732,7 +1739,7 @@ function paintBoard(host, track, times) {
          * EMPTY, the way the gap column already leaves the leader's. A zero
          * would be a time, and a dash would be a mark this page does not
          * otherwise make. */
-        three.title = 'This run did not put three clean laps together.';
+        three.title = str('app.this_run_did_not_put_three');
       }
       tr.append(three);
     }
@@ -1769,23 +1776,23 @@ function paintHero(host, track, times) {
   if (!best) {
     return;
   }
-  host.append(el('span', 'record-label', 'Track record'));
+  host.append(el('span', 'record-label', str('app.track_record')));
   host.append(timeNode(best.lapMs, 'record-time'));
   host.append(el('div', 'record-holder', best.name));
 }
 
 function copyButton(url) {
-  const btn = el('button', 'text', 'Copy link');
+  const btn = el('button', 'text', str('app.copy_link'));
   btn.type = 'button';
   btn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(url);
-      btn.textContent = 'Link copied';
+      btn.textContent = str('app.link_copied');
     } catch (e) {
       btn.textContent = url;
     }
     setTimeout(() => {
-      btn.textContent = 'Copy link';
+      btn.textContent = str('app.copy_link');
     }, 2200);
   });
   return btn;
@@ -1794,21 +1801,21 @@ function copyButton(url) {
 async function paintSheet(track) {
   byId('sheet-kicker').textContent = track.times > 0
     ? `${plural(track.times, 'time', 'times')} posted`
-    : 'Open track';
+    : str('app.open_track');
   byId('sheet-title').textContent = track.name;
   const by = byId('sheet-by');
   by.textContent = '';
   if (track.designer) {
-    by.append('Designed by ');
+    by.append(str('app.designed_by_2'));
     by.append(el('b', null, track.designer));
-    by.append(track.series ? ` for ${track.series}.` : '.');
-    by.append(` Brought over by ${track.author}`);
+    by.append(track.series ? str('app.for_2', { series: track.series }) : '.');
+    by.append(str('app.brought_over_by', { author: track.author }));
   } else {
-    by.append('Built by ');
+    by.append(str('app.built_by'));
     by.append(el('b', null, track.author));
   }
   const published = formatWhen(track.publishedUtc);
-  by.append(published ? `. Published ${published}.` : '.');
+  by.append(published ? str('app.published', { published }) : '.');
 
   paintShot(byId('sheet-shot'), track);
 
@@ -1817,23 +1824,23 @@ async function paintSheet(track) {
   /* First, because it is what the track is FOR, and the gate count and the
    * field size are what it is made of. */
   if (tagsOf(track).length) {
-    factRow(facts, 'Built for', tagsOf(track).map(tagLabel).join(', '));
+    factRow(facts, str('app.built_for'), tagsOf(track).map(tagLabel).join(', '));
   }
   factRow(facts, 'Gates', plural(track.gates, 'gate', 'gates'));
   factRow(facts, 'Elements', track.elements);
   factRow(facts, classOf(track) === 'micro' ? 'Room' : 'Field', fieldSize(track));
-  factRow(facts, 'Flown on', craftLabel(track));
+  factRow(facts, str('app.flown_on'), craftLabel(track));
   factRow(facts, 'Updated', formatAgo(track.updatedUtc));
   if (track.hasLogo) {
-    factRow(facts, 'Branding', 'Sponsor print');
+    factRow(facts, 'Branding', str('app.sponsor_print'));
   }
 
   const actions = byId('sheet-actions');
   actions.textContent = '';
-  const fly = el('a', 'btn primary', 'Fly this track');
+  const fly = el('a', 'btn primary', str('app.fly_this_track'));
   fly.href = flyHref(state.config, track.id);
   fly.target = SIM_WINDOW;
-  const remix = el('a', 'text', 'Remix in the builder');
+  const remix = el('a', 'text', str('app.remix_in_the_builder'));
   remix.href = remixHref(state.config, track.id);
   /* The builder is the simulator's tab, not a third one: the simulator
    * navigates to the builder in place, so they share the name. */
@@ -2368,7 +2375,7 @@ async function start() {
     const r = await fetch(url);
     const body = await r.json().catch(() => ({}));
     if (!r.ok) {
-      throw new Error(body.error || `The board answered ${r.status}.`);
+      throw new Error(body.error || str('app.the_board_answered', { status: r.status }));
     }
     return body;
   };
@@ -2416,7 +2423,7 @@ async function start() {
     readTags(payload);
   } catch (e) {
     list.textContent = '';
-    notice.append(el('div', 'status panel', e.message || 'This page could not be loaded.'));
+    notice.append(el('div', 'status panel', e.message || str('app.this_page_could_not_be_loaded')));
     return;
   }
 
@@ -2424,9 +2431,9 @@ async function start() {
   if (!state.courses.length) {
     list.textContent = '';
     const box = el('div', 'empty panel');
-    box.append(el('h2', null, 'Nothing published yet'));
-    box.append(el('p', null, 'Build a track in the track builder, set a flying order, and publish it. This page starts when the first track lands.'));
-    const build = el('a', 'btn primary', 'Build a track');
+    box.append(el('h2', null, str('app.nothing_published_yet')));
+    box.append(el('p', null, str('app.build_a_track_in_the_track')));
+    const build = el('a', 'btn primary', str('app.build_a_track'));
     build.href = `${state.config.simOrigin}/src/trackbuilder/index.html`;
     build.target = SIM_WINDOW;
     box.append(build);

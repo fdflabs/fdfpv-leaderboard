@@ -1,3 +1,4 @@
+import { str } from './strings/index.js';
 /*
  * plan.js: a published track, drawn as a plan.
  *
@@ -755,7 +756,7 @@ export function planCanvas(plan, label, options) {
   canvas.planData = plan || null;
   canvas.planOptions = options || {};
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', label || 'Track plan');
+  canvas.setAttribute('aria-label', label || str('plan.track_plan'));
   return canvas;
 }
 
@@ -769,7 +770,7 @@ export function planLabel(track) {
    * is not five gates on a five by six metre field, and calling a living
    * room a field is the one word that would make the sentence wrong. */
   const where = plan.trackClass === 'micro' ? 'room' : 'field';
-  return `Plan of ${track.name}, ${gates} in a ${w} by ${d} metre ${where}.`;
+  return str('plan.plan_of_in_a_by_metre', { name: track.name, gates, w, d, where });
 }
 
 export function fieldSize(track) {
@@ -779,5 +780,5 @@ export function fieldSize(track) {
   if (!w || !d) {
     return '';
   }
-  return `${w} by ${d} m`;
+  return str('plan.by_m', { w, d });
 }
