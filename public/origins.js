@@ -43,7 +43,7 @@ export function isLoopback(hostname) {
  *   loopback       the simulator is served by scripts/serve.js on port 8000,
  *                  which is what DEPLOY.md says and what every checkout does.
  *   a /board mount the simulator is its sibling at /sim, which is the
- *                  production layout: webfpv.org/board and webfpv.org/sim.
+ *                  production layout: fdfpv.example/board and fdfpv.example/sim.
  *
  * Anything else, a board on its own host with the simulator on another one,
  * cannot be derived from here and returns null. A guess would be worse than
@@ -92,9 +92,9 @@ export function guessSimOrigin(location, here) {
  *   loopback       the landing page is served by its own scripts/serve.js on
  *                  port 8080, which is what DEPLOY.md says.
  *   a /board mount the landing page is what the mount hangs off, which is the
- *                  production layout: webfpv.org/board sits under webfpv.org.
+ *                  production layout: fdfpv.example/board sits under fdfpv.example.
  */
-export const PRODUCTION_LANDING_ORIGIN = 'https://webfpv.org';
+export const PRODUCTION_LANDING_ORIGIN = 'https://fdfpv.example';
 export const LOCAL_LANDING_PORT = 8080;
 
 export function landingOrigin(location, here) {
@@ -109,7 +109,7 @@ export function landingOrigin(location, here) {
   const path = String((here && here.pathname) || '/').replace(/\/+$/, '');
   if (/\/board$/.test(path)) {
     /* An empty remainder is the production case and leaves the bare origin,
-     * which is exactly right: webfpv.org/board hangs off webfpv.org. */
+     * which is exactly right: fdfpv.example/board hangs off fdfpv.example. */
     return `${location.origin}${path.replace(/\/board$/, '')}`;
   }
   return PRODUCTION_LANDING_ORIGIN;

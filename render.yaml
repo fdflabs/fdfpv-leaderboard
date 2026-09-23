@@ -16,7 +16,7 @@
 # Render blueprint for the board: one Node web service and one Postgres.
 #
 # The simulator is a separate repo and a separate blueprint, a static site:
-# https://github.com/Mathew-Harvey/WebFPVSimulator
+# https://github.com/fdflabs/fdfpv
 # Deploy this one first, because the simulator has to be told this URL and
 # this service has to be told that one. See DEPLOY.md for the order.
 #
@@ -26,7 +26,7 @@
 
 services:
   - type: web
-    name: webfpv-board
+    name: fdfpv-board
     runtime: node
     plan: free
     region: singapore
@@ -43,13 +43,13 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: webfpvleaderboard-db
+          name: fdfpv-board-db
           property: connectionString
 
       # Where the Fly and Build buttons send people, no trailing slash. Set
       # in the dashboard once the simulator exists. Every consumer treats it
       # as a prefix and concatenates, so it may carry a mount path as well as
-      # a host: behind webfpv.org it is https://webfpv.org/sim.
+      # a host: behind fdfpv.example it is https://fdfpv.example/sim.
       - key: SIM_ORIGIN
         sync: false
 
@@ -57,7 +57,7 @@ services:
       # when the board is the whole site: the request origin plus
       # BOARD_TRUST_PROXY below is then correct. Behind a mount prefix it is
       # not, because a forwarded host cannot carry a path, so set it to
-      # https://webfpv.org/board there. The board's page prefers its own
+      # https://fdfpv.example/board there. The board's page prefers its own
       # document.baseURI over this either way, so a wrong value here no
       # longer sends a pilot to the landing page; it only makes the JSON lie.
       - key: BOARD_PUBLIC_ORIGIN
@@ -108,7 +108,7 @@ services:
         sync: false
 
 databases:
-  - name: webfpvleaderboard-db
+  - name: fdfpv-board-db
     plan: free
     region: singapore
     postgresMajorVersion: "16"

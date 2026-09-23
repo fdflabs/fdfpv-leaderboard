@@ -22,9 +22,6 @@ import {
   inspectStatsEvent, normaliseCountry, statsDay,
 } from './validate.js';
 import { sourceKey } from './sponsors.js';
-import {
-  adminEmails, checkPassword, mintSession, normaliseEmail, readSession,
-} from './admin.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
 import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js';
 
@@ -215,7 +212,7 @@ async function testValidate() {
    * times, and the simulator's layoutFingerprint predicts that answer so it
    * can warn first. They hash differently on purpose; they must agree on
    * which keys ARE the layout. If this list changes, change
-   * WebFPVSimulator/src/share/listing.js with it.
+   * fdfpv/src/share/listing.js with it.
    */
   const layoutKeys = sampleDoc();
   const movedGate = sampleDoc();
@@ -532,7 +529,7 @@ async function testValidate() {
 
 async function testStore() {
   console.log('store');
-  const dir = await mkdtemp(join(tmpdir(), 'webfpv-board-'));
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
   process.env.BOARD_FILE = join(dir, 'board.json');
   delete process.env.DATABASE_URL;
   const store = await openStore();
@@ -647,7 +644,7 @@ async function testStore() {
   check('updating a missing ticket is a 404', missing.status === 404);
   await rm(dir, { recursive: true, force: true });
 
-  const legacyDir = await mkdtemp(join(tmpdir(), 'webfpv-board-legacy-'));
+  const legacyDir = await mkdtemp(join(tmpdir(), 'fdfpv-board-legacy-'));
   process.env.BOARD_FILE = join(legacyDir, 'board.json');
   delete process.env.DATABASE_URL;
   await writeFile(join(legacyDir, 'board.json'), JSON.stringify({ tracks: {}, times: {} }), 'utf8');
@@ -678,7 +675,7 @@ function waitFor(child, needle, ms = 8000) {
 
 async function testHttp() {
   console.log('http');
-  const dir = await mkdtemp(join(tmpdir(), 'webfpv-board-'));
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
   const child = spawn(process.execPath, [join(root, 'src', 'server.js')], {
     cwd: root,
     env: {
@@ -698,7 +695,7 @@ async function testHttp() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   try {
-    await waitFor(child, 'WebFPV leaderboard');
+    await waitFor(child, 'FDFPV leaderboard');
     const health = await fetch('http://127.0.0.1:3199/api/health').then((r) => r.json());
     check('health', health.ok === true && health.store === 'file');
     const created = await fetch('http://127.0.0.1:3199/api/tracks', {
@@ -784,7 +781,7 @@ async function testHttp() {
      * argued with rather than quietly deleted. */
     check('the page says what it counts', html.includes('No cookie is set'));
     /* Relative, not root absolute. The board is served at its own root here
-     * and under /board/ on webfpv.org, and a leading slash on either of these
+     * and under /board/ on fdfpv.example, and a leading slash on either of these
      * asks the landing page for the board's script. The old assertion above
      * matched both spellings, so it could not see the difference. */
     check('the page loads its script relatively', html.includes('src="./app.js"'));
@@ -831,7 +828,7 @@ async function testHttp() {
      */
     const simAnchors = html.match(/<a\b[^>]*href="http:\/\/127\.0\.0\.1:8000[^"]*"[^>]*>/g) || [];
     check('every fallback link to the simulator names the simulator tab',
-      simAnchors.length === 7 && simAnchors.every((a) => a.includes('target="webfpv-sim"')));
+      simAnchors.length === 7 && simAnchors.every((a) => a.includes('target="fdfpv-sim"')));
     /* Six: the card's Fly, the sheet's Fly and Remix, the header and
      * footer rewrite helper, the empty-page Build link, and the chase link
      * builder the podium and the sheet's table both go through. Credits
@@ -846,13 +843,13 @@ async function testHttp() {
      * click, each one running a physics loop and holding a WebGL context,
      * and the page looks perfectly correct while doing it. */
     check('the links app.js builds name the simulator tab',
-      app.includes("const SIM_WINDOW = 'webfpv-sim'")
+      app.includes("const SIM_WINDOW = 'fdfpv-sim'")
       && (app.match(/\.target = SIM_WINDOW/g) || []).length === 6);
     check('nothing app.js builds opens a bare new tab or asks for noopener',
       !app.includes("'_blank'") && !app.includes("noopener'"));
     const sneak = await fetch('http://127.0.0.1:3199/%2e%2e/package.json');
     const sneakText = await sneak.text();
-    check('encoded parent path cannot read the package', sneak.status !== 200 && !sneakText.includes('webfpvleaderboard'));
+    check('encoded parent path cannot read the package', sneak.status !== 200 && !sneakText.includes('fdfpvboard'));
     const badPct = await fetch('http://127.0.0.1:3199/%');
     check('a malformed percent is not a 500', badPct.status === 400 || badPct.status === 404);
     const filed = await fetch('http://127.0.0.1:3199/api/bugs', {
@@ -1322,18 +1319,6 @@ async function testHttp() {
     /* ------------------------------------------------------------------ */
     console.log('\nsigning in');
 
-    /* The server under test was started with BOARD_ADMINS naming one made
-     * up address, which REPLACES the built-in list rather than adding to
-     * it. A host that sets its own admins does not silently keep the one
-     * whose password is published, and this is the check that says so. */
-    const shipped = await fetch('http://127.0.0.1:3199/api/admin/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: 'mathewharvey@gmail.com', password: 'anything at all' }),
-    });
-    check('BOARD_ADMINS replaces the built-in list rather than adding to it',
-      shipped.status === 401);
-
     const wrongPassword = await fetch('http://127.0.0.1:3199/api/admin/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1428,17 +1413,17 @@ async function testHttp() {
 
     const visit = await post({
       v: 1, kind: 'visit', surface: 'sim', returning: false, source: 'rotorriot',
-    }, { 'x-webfpv-country': 'AU' });
+    }, { 'x-fdfpv-country': 'AU' });
     check('a visit posted as text/plain is taken', visit.status === 204);
     check('and it answers with no body at all', (await visit.text()) === '');
 
     await post({ v: 1, kind: 'visit', surface: 'board', returning: true, source: 'not-a-sponsor' },
-      { 'x-webfpv-country': 'nonsense' });
+      { 'x-fdfpv-country': 'nonsense' });
     await post({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' },
-      { 'x-webfpv-country': 'NZ' });
+      { 'x-fdfpv-country': 'NZ' });
     await post({
       v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', map: 'custom', laps: 4, flightS: 61, crashes: 1,
-    }, { 'x-webfpv-country': 'AU' });
+    }, { 'x-fdfpv-country': 'AU' });
 
     /* Global Privacy Control. The same 204 an accepted event gets, on
      * purpose, and nothing counted. A different status would tell a script
@@ -1489,7 +1474,7 @@ async function testHttp() {
     }, { 'cf-ipcountry': 'NZ' });
     await post({
       v: 1, kind: 'flush', tab: 'tab-cf-2', craft: '5inch', map: 'custom', laps: 1,
-    }, { 'cf-ipcountry': 'NZ', 'x-webfpv-country': 'FR' });
+    }, { 'cf-ipcountry': 'NZ', 'x-fdfpv-country': 'FR' });
     await new Promise((r) => setTimeout(r, 20_100));
     const later = await fetch(`${B}/api/stats`).then((r) => r.json());
     const laterRow = (key) => later.countries.find((r) => r.key === key) || {};
@@ -1579,9 +1564,9 @@ function testOrigins() {
     guessSimOrigin(...at('http://127.0.0.1:3100/#course=trk-1a2b3c4d')) === 'http://127.0.0.1:8000');
 
   check('the /board mount finds its sibling /sim',
-    guessSimOrigin(...at('https://webfpv.org/board/')) === 'https://webfpv.org/sim');
+    guessSimOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example/sim');
   check('the bug page under the mount answers the same',
-    guessSimOrigin(...at('https://webfpv.org/board/bugs')) === 'https://webfpv.org/sim');
+    guessSimOrigin(...at('https://fdfpv.example/board/bugs')) === 'https://fdfpv.example/sim');
 
   /*
    * The one case that cannot be derived, and must NOT be guessed: a board
@@ -1590,9 +1575,9 @@ function testOrigins() {
    * leaves those links alone until /api/config says otherwise.
    */
   check('a board on its own host declines to guess',
-    guessSimOrigin(...at('https://webfpvsimulator-leaderboard.onrender.com/')) === null);
+    guessSimOrigin(...at('https://fdfpv-board.onrender.com/')) === null);
   check('a public host at the root declines to guess',
-    guessSimOrigin(...at('https://webfpv.org/')) === null);
+    guessSimOrigin(...at('https://fdfpv.example/')) === null);
 
   check('a missing location is not a crash', guessSimOrigin(null, null) === null);
 
@@ -1607,34 +1592,44 @@ function testOrigins() {
   check('localhost by name, same answer',
     landingOrigin(...at('http://localhost:3100/')) === 'http://localhost:8080');
   check('the /board mount hangs off the front door',
-    landingOrigin(...at('https://webfpv.org/board/')) === 'https://webfpv.org');
+    landingOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example');
   check('the bug page under the mount answers the same',
-    landingOrigin(...at('https://webfpv.org/board/bugs')) === 'https://webfpv.org');
+    landingOrigin(...at('https://fdfpv.example/board/bugs')) === 'https://fdfpv.example');
   check('a board on its own host names the front door rather than declining',
-    landingOrigin(...at('https://webfpvsimulator-leaderboard.onrender.com/'))
-      === 'https://webfpv.org');
-  check('a missing location still answers', landingOrigin(null, null) === 'https://webfpv.org');
+    landingOrigin(...at('https://fdfpv-board.onrender.com/'))
+      === 'https://fdfpv.example');
+  check('a missing location still answers', landingOrigin(null, null) === 'https://fdfpv.example');
 
   check('loopback set covers the hosts a checkout uses',
     isLoopback('127.0.0.1') && isLoopback('localhost') && isLoopback('::1')
-      && !isLoopback('webfpv.org'));
+      && !isLoopback('fdfpv.example'));
 }
 
 /*
  * The whitelist, the password check and the session token, without a server.
  *
- * This half runs with BOARD_ADMINS unset, so what it sees is the list the
- * repository SHIPS. That is deliberate: the one thing worth checking about
- * a built-in whitelist is that it is the addresses somebody meant and not
- * one more.
+ * The module reads BOARD_ADMINS once, at import, so it is imported here
+ * rather than at the top of the file: first with the variable unset, to
+ * check that the repository ships nobody, then with the selftest's own
+ * address, for the password and session checks. The second import is a
+ * different URL so the module cache does not hand back the first.
  */
-function testAdmin() {
+async function testAdmin() {
   console.log('\nadmin');
 
-  check('the board ships exactly one admin address',
-    adminEmails().length === 1, adminEmails().join(', '));
-  check('and it is the one intended',
-    adminEmails()[0] === 'mathewharvey@gmail.com', adminEmails()[0]);
+  delete process.env.BOARD_ADMINS;
+  const shipped = await import('./admin.js?shipped');
+  check('the board ships no admin address',
+    shipped.adminEmails().length === 0, shipped.adminEmails().join(', '));
+  check('so nobody signs in until BOARD_ADMINS names somebody',
+    shipped.checkPassword('anyone@example.com', 'anything at all') === null);
+
+  process.env.BOARD_ADMINS = `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`;
+  const {
+    adminEmails, checkPassword, mintSession, normaliseEmail, readSession,
+  } = await import('./admin.js?selftest');
+  check('BOARD_ADMINS is the whole list',
+    adminEmails().length === 1 && adminEmails()[0] === ADMIN_EMAIL, adminEmails().join(', '));
 
   check('an address is lowercased and trimmed',
     normaliseEmail('  Someone@Example.COM ') === 'someone@example.com');
@@ -1642,40 +1637,28 @@ function testAdmin() {
     normaliseEmail('not an address') === '' && normaliseEmail('a@b') === ''
       && normaliseEmail(null) === '' && normaliseEmail('x:y@example.com') === '');
 
-  check('a wrong password does not open the shipped entry',
-    checkPassword('mathewharvey@gmail.com', 'Bongos4you') === null);
+  check('a wrong password does not open the entry',
+    checkPassword(ADMIN_EMAIL, 'not it') === null);
   check('an empty password does not open it either',
-    checkPassword('mathewharvey@gmail.com', '') === null);
+    checkPassword(ADMIN_EMAIL, '') === null);
   check('an address that is not on the list is refused whatever it brings',
-    checkPassword('stranger@example.com', 'Bongos4u') === null);
+    checkPassword('stranger@example.com', ADMIN_PASSWORD) === null);
+  check('the right address and password open it',
+    checkPassword(ADMIN_EMAIL, ADMIN_PASSWORD) === ADMIN_EMAIL);
 
-  /*
-   * The password behind the shipped hash is not in this repository, so the
-   * only machine that can check it is one where somebody has been told it.
-   * Unset, this says so rather than passing quietly, because a test that
-   * silently checks nothing is worse than one that is honestly absent.
-   */
-  const given = process.env.BOARD_SELFTEST_PASSWORD || '';
-  if (given) {
-    check('the shipped hash opens with the password given for it',
-      checkPassword('mathewharvey@gmail.com', given) === 'mathewharvey@gmail.com');
-  } else {
-    console.log('  skip  the shipped hash against its own password. Set BOARD_SELFTEST_PASSWORD to check it.');
-  }
-
-  const token = mintSession('mathewharvey@gmail.com');
+  const token = mintSession(ADMIN_EMAIL);
   const read = readSession(token);
   check('a session token reads back as the address that minted it',
-    read && read.email === 'mathewharvey@gmail.com');
+    read && read.email === ADMIN_EMAIL);
   check('and carries when it runs out',
     read && typeof read.expiresUtc === 'string' && read.expiresUtc.endsWith('Z'));
 
   check('a token with its signature changed is nobody',
     readSession(`${token.slice(0, -2)}zz`) === null);
   check('a token with its payload changed is nobody',
-    readSession(`v1.${Buffer.from(JSON.stringify({ e: 'mathewharvey@gmail.com', x: Date.now() + 9e6 })).toString('base64url')}.${token.split('.')[2]}`) === null);
+    readSession(`v1.${Buffer.from(JSON.stringify({ e: ADMIN_EMAIL, x: Date.now() + 9e6 })).toString('base64url')}.${token.split('.')[2]}`) === null);
   check('an expired token is nobody',
-    readSession(mintSession('mathewharvey@gmail.com', { ms: -1000 })) === null);
+    readSession(mintSession(ADMIN_EMAIL, { ms: -1000 })) === null);
   /* The whitelist is checked on every read, not only at sign in, so an
    * address taken out of BOARD_ADMINS is locked out at once rather than
    * when its token happens to run out. */
@@ -1797,7 +1780,7 @@ async function testStats() {
   check('and one second later is the next one', statsDay(new Date('2026-09-22T00:00:01Z')) === '2026-09-22');
 
   /* The counters themselves, against the file store. */
-  const dir = await mkdtemp(join(tmpdir(), 'webfpv-stats-'));
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-stats-'));
   try {
     process.env.BOARD_FILE = join(dir, 'board.json');
     const store = await openStore();
@@ -1871,7 +1854,7 @@ async function testStats() {
 }
 
 testOrigins();
-testAdmin();
+await testAdmin();
 await testValidate();
 await testStore();
 await testStats();

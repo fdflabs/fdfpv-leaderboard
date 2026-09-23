@@ -24,7 +24,7 @@ function el(tag, cls, text) {
 
 /*
  * Where this page lives. Same reason as app.js: the inbox is served at /bugs
- * on Render and at /board/bugs on webfpv.org, and a fetch of '/api/bugs' from
+ * on Render and at /board/bugs on fdfpv.example, and a fetch of '/api/bugs' from
  * the second one leaves the board's namespace. './' against the document's own
  * address is its directory, which is /board/ there and / here.
  */

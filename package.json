@@ -1,7 +1,7 @@
 {
-  "name": "webfpvleaderboard",
+  "name": "fdfpv-leaderboard",
   "version": "0.1.0",
-  "description": "Public board of shared WebFPV courses and their lap times.",
+  "description": "Public board of shared FDFPV courses and their lap times.",
   "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",

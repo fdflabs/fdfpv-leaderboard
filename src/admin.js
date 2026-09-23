@@ -17,17 +17,13 @@
  * is what scripts/boardgif.js in the simulator's repository holds, and a
  * script has no browser to sign in from.
  *
- * WHAT IS STORED HERE IS A HASH, NOT A PASSWORD, AND IT IS STILL PUBLISHED.
- *
- * The default entry below carries a scrypt hash rather than the password
- * that makes it, so the word itself is not in the history of a public
- * repository. That is worth doing and it is not the same as being secret: a
- * short password behind a published hash is a password anybody willing to
- * spend an afternoon can have, because they can try guesses against the hash
- * offline as fast as their machine allows. Treat the default as a
- * convenience that gets the screen working, and set BOARD_ADMINS on any host
- * that matters. scripts/admin-hash.js mints a record for that variable
- * without a plaintext password going anywhere near a shell history.
+ * NO ADMIN SHIPS. The upstream project carried one address with a published
+ * scrypt hash as a convenience, and a short password behind a published
+ * hash is a password anybody willing to spend an afternoon can have. This
+ * fork ships an empty list: until BOARD_ADMINS names somebody, nobody can
+ * sign in, and the board says so at start. scripts/admin-hash.js mints a
+ * record for that variable without a plaintext password going anywhere
+ * near a shell history.
  *
  * This file is part of WebFPVLeaderboard.
  *
@@ -55,14 +51,10 @@ import {
  * board is an address somebody wrote down here or in BOARD_ADMINS, and
  * everything else is refused. A list of one is a perfectly good list.
  *
- * BOARD_ADMINS, when set, REPLACES this rather than adding to it. Adding to
- * it would mean a host could never drop the default, and the default is the
- * one entry whose password is published.
+ * BOARD_ADMINS is the whole list. Nothing is written down here, so there is
+ * nothing a host can forget to drop.
  */
-const DEFAULT_ADMINS = [
-  /* Bongos4u, behind scrypt. See the header: published, not secret. */
-  'mathewharvey@gmail.com:scrypt:16384:8:1:a62fcfd3e12eb22f95cf9a99c5a48d18:fcb73d4f3ee9ca837b8bdc35968ef446e3723f26ccf4d8e0957954726f502b87',
-];
+const DEFAULT_ADMINS = [];
 
 /*
  * scrypt, not one round of SHA-256, and the parameters travel in the record
@@ -207,20 +199,19 @@ function parseList(raw) {
  * whitelist on every attempt. The environment does not change under a
  * running process anyway.
  *
- * A BOARD_ADMINS that parses to nothing is a configuration mistake loud
- * enough to say out loud and then fall back on, rather than a board that
- * silently has no admin and no explanation.
+ * A BOARD_ADMINS that is unset or parses to nothing is said out loud at
+ * start, because a board that silently has no admin and no explanation is
+ * the one nobody notices until the day somebody needs to remove a track.
  */
 function loadAdmins() {
   const raw = process.env.BOARD_ADMINS || '';
-  if (raw.trim()) {
-    const list = parseList(raw);
-    if (list.length) {
-      return list;
-    }
-    console.error('BOARD_ADMINS is set but no entry in it could be read. Falling back to the built-in list. Format: email:scrypt:N:r:p:saltHex:hashHex, one per line or comma separated.');
+  const list = raw.trim() ? parseList(raw) : parseList(DEFAULT_ADMINS.join('\n'));
+  if (!list.length) {
+    console.error(raw.trim()
+      ? 'BOARD_ADMINS is set but no entry in it could be read. Nobody can sign in. Format: email:scrypt:N:r:p:saltHex:hashHex, one per line or comma separated.'
+      : 'BOARD_ADMINS is not set. Nobody can sign in as admin until it names somebody; see README, The whitelist.');
   }
-  return parseList(DEFAULT_ADMINS.join('\n'));
+  return list;
 }
 
 const ADMINS = loadAdmins();
@@ -316,7 +307,7 @@ export function checkPassword(rawEmail, rawPassword) {
  * session without touching a password. Unset is fine and is the default.
  */
 const sessionKey = createHash('sha256')
-  .update('webfpv-board-admin-session/v1')
+  .update('fdfpv-board-admin-session/v1')
   .update(String(process.env.BOARD_SESSION_SECRET || ''))
   .update(ADMINS.map((a) => `${a.email}:${a.salt.toString('hex')}:${a.hash.toString('hex')}`).join('\n'))
   /* An empty whitelist would otherwise give every board on earth the same

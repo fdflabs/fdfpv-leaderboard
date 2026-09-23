@@ -25,7 +25,7 @@
 
 import { createHash } from 'node:crypto';
 
-/* MIRRORS NAME_RE in WebFPVSimulator/src/share/pilot.js. This copy is the
+/* MIRRORS NAME_RE in fdfpv/src/share/pilot.js. This copy is the
  * one that decides; the simulator's is a prediction of it so a pilot is told
  * before they upload. Two repos, so change both. */
 export const NAME_RE = /^[A-Za-z0-9._\- ]{2,24}$/;
@@ -96,7 +96,7 @@ function isObject(value) {
 /* ------------------------------------------------------------------ */
 
 /*
- * MIRRORS the wire format in WebFPVSimulator/src/share/ghostdata.js, the
+ * MIRRORS the wire format in fdfpv/src/share/ghostdata.js, the
  * same arrangement as NAME_RE above: the simulator's module is the copy of
  * record and encodes; this is the board's own reading of the header so it
  * never stores a blob the simulator could not replay. Two repos, so a
@@ -244,7 +244,7 @@ function inspectBranding(document) {
 }
 
 /*
- * MIRRORS layoutFingerprint in WebFPVSimulator/src/share/listing.js. This is
+ * MIRRORS layoutFingerprint in fdfpv/src/share/listing.js. This is
  * the copy that decides whether a republished track keeps its times. The
  * hashes differ, the KEY LIST must not: field, elements, sequence.
  */
@@ -258,7 +258,7 @@ function inspectBranding(document) {
  * cleared the moment the deal was signed. Paint has no collider and is not
  * in the flying order, so a lap flown before it was painted is the same lap.
  *
- * MIRRORS LAYOUT_SKIP in WebFPVSimulator/src/share/listing.js. Written out
+ * MIRRORS LAYOUT_SKIP in fdfpv/src/share/listing.js. Written out
  * as a literal in both, rather than derived from the simulator's element
  * library, because this repository has no element library and the two lists
  * have to be edited together on purpose. A track with no painted logos

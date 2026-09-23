@@ -435,7 +435,7 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
 
   const legal = el('p', 'credits-legal');
   legal.append(
-    document.createTextNode('Betaflight, Track Draw, Grok, Claude, Dutch Drone Squad, and their marks belong to their owners. The channel pictures belong to the pilots. Using them here is credit, not a claim they endorse this page. WebFPV is free software under '),
+    document.createTextNode('Betaflight, Track Draw, Grok, Claude, Dutch Drone Squad, and their marks belong to their owners. The channel pictures belong to the pilots. Using them here is credit, not a claim they endorse this page. FDFPV is free software under '),
     link('https://www.gnu.org/licenses/gpl-3.0.html', 'GPLv3'),
     document.createTextNode('.'),
   );

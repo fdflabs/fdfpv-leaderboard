@@ -41,46 +41,16 @@ import {
   fieldSize, paintPlans, planCanvas, planLabel,
 } from './plan.js';
 
-/*
- * The public Patreon page, and the hover line. The same two strings are
- * set in the simulator's src/share/patreon.js and the landing page's
- * src/config.js. Not a simulator-tab link: Patreon is outside the product,
- * so it must not take the webfpv-sim name.
- */
-const PATREON_URL = 'https://www.patreon.com/c/webfpv';
-
-const PATREON_NOTE = 'Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join.';
-
-function bindPatreonLinks() {
-  for (const a of document.querySelectorAll('[data-patreon]')) {
-    a.title = PATREON_NOTE;
-    a.setAttribute('aria-label', PATREON_NOTE);
-    if (PATREON_URL) {
-      a.href = PATREON_URL;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      delete a.dataset.patreonPending;
-      continue;
-    }
-    a.href = '#';
-    a.removeAttribute('target');
-    a.dataset.patreonPending = '1';
-    a.addEventListener('click', (event) => {
-      event.preventDefault();
-    });
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Where this page lives                                               */
 /* ------------------------------------------------------------------ */
 
 /*
  * The board is served from its own root on Render and from /board/ on
- * webfpv.org, where a Cloudflare Worker takes the prefix off before the
+ * fdfpv.example, where a Cloudflare Worker takes the prefix off before the
  * request reaches this service. The server therefore sees the same paths
  * either way and needs no telling. The PAGE does: a fetch of '/api/tracks'
- * from https://webfpv.org/board/ leaves the board's namespace entirely and
+ * from https://fdfpv.example/board/ leaves the board's namespace entirely and
  * asks the landing page for the tracks.
  *
  * So every url this page builds for itself is resolved against the directory
@@ -98,7 +68,7 @@ const HERE = new URL('./', document.baseURI);
  * This OUTRANKS the boardOrigin in /api/config, and that is the whole point.
  * The server works its own address out of the request headers, and a header
  * cannot carry a path: a host is a host. Behind the mount it answers
- * https://webfpv.org, which is the landing page, so every Fly link would send
+ * https://fdfpv.example, which is the landing page, so every Fly link would send
  * a pilot somewhere that has never heard of a lap time, and nothing would say
  * so out loud. The page is standing at the address in question and does not
  * have to work anything out.
@@ -302,8 +272,8 @@ function reduceMotion() {
  * when the visitor asks for that, which is the one case where a second
  * simulator is what was wanted.
  */
-const SIM_WINDOW = 'webfpv-sim';
-const BOARD_WINDOW = 'webfpv-board';
+const SIM_WINDOW = 'fdfpv-sim';
+const BOARD_WINDOW = 'fdfpv-board';
 
 /*
  * WHICH AIRCRAFT A LINK IS FOR, from the track it names.
@@ -357,7 +327,7 @@ function orbitHref(config, id) {
    * Relative, against simOrigin WITH a trailing slash. It was
    * new URL('/src/share/orbit.html', config.simOrigin), and a leading slash
    * throws away everything but the base's scheme and host: with the simulator
-   * at https://webfpv.org/sim that produced https://webfpv.org/src/share/...,
+   * at https://fdfpv.example/sim that produced https://fdfpv.example/src/share/...,
    * which is the landing page, so every card on the board drew an empty box.
    * The other two links below concatenate and were never affected, which is
    * exactly why this one was easy to miss.
@@ -377,7 +347,7 @@ function courseHref(id) {
  * The credits roll lives on the simulator at #credits. This board used to
  * paint a second copy, and the two drifted. One page, not two.
  *
- * On webfpv.org the simulator is a mount on the same host, so a root-relative
+ * On fdfpv.example the simulator is a mount on the same host, so a root-relative
  * /sim/#credits is the address. Locally the simulator is another origin, so
  * the config's simOrigin is the address.
  */
@@ -385,7 +355,7 @@ function creditsHref(config) {
   const origin = String((config && config.simOrigin) || guessSimOrigin() || 'http://127.0.0.1:8000').replace(/\/+$/, '');
   try {
     const host = window.location.hostname;
-    if (host === 'webfpv.org' || host === 'www.webfpv.org') {
+    if (host === 'fdfpv.example' || host === 'www.fdfpv.example') {
       return `${window.location.origin}/sim/#credits`;
     }
   } catch (e) {
@@ -2207,7 +2177,7 @@ function bindCredits() {
  * can hand over rather than cut. */
 function watchOrbit() {
   window.addEventListener('message', (e) => {
-    if (!e.data || e.data.type !== 'webfpv-orbit-ready') {
+    if (!e.data || e.data.type !== 'fdfpv-orbit-ready') {
       return;
     }
     for (const frame of document.querySelectorAll('iframe.orbit')) {
@@ -2415,7 +2385,6 @@ async function start() {
    * can be derived from this page's own address, so bind it now and let the
    * served config correct it if and when it arrives.
    */
-  bindPatreonLinks();
   bindLinks(state.config);
   bindHome();
 

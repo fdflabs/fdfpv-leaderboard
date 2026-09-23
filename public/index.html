@@ -34,8 +34,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tracks and Statistics, WebFPV</title>
-    <meta name="description" content="Every published WebFPV track, and the lap times flown on it." />
+    <title>Tracks and Statistics, FDFPV</title>
+    <meta name="description" content="Every published FDFPV track, and the lap times flown on it." />
     <!--
       A link to this page posted anywhere renders a 1200 by 630 card, and
       og.png is a frame of the real shell rather than a drawing of one, so it
@@ -47,22 +47,22 @@
       all flatten a link preview to one still frame; Discord is the only place
       that would animate it, which is not worth a second asset.
     -->
-    <link rel="canonical" href="https://webfpv.org/board/" />
+    <link rel="canonical" href="https://fdfpv.example/board/" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="WebFPV" />
-    <meta property="og:url" content="https://webfpv.org/board/" />
-    <meta property="og:title" content="Tracks and Statistics, WebFPV" />
-    <meta property="og:description" content="Every published WebFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
-    <meta property="og:image" content="https://webfpv.org/board/og.png" />
+    <meta property="og:site_name" content="FDFPV" />
+    <meta property="og:url" content="https://fdfpv.example/board/" />
+    <meta property="og:title" content="Tracks and Statistics, FDFPV" />
+    <meta property="og:description" content="Every published FDFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
+    <meta property="og:image" content="https://fdfpv.example/board/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="The race field in the WebFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
+    <meta property="og:image:alt" content="The race field in the FDFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Tracks and Statistics, WebFPV" />
-    <meta name="twitter:description" content="Every published WebFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
-    <meta name="twitter:image" content="https://webfpv.org/board/og.png" />
-    <meta name="twitter:image:alt" content="The race field in the WebFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
+    <meta name="twitter:title" content="Tracks and Statistics, FDFPV" />
+    <meta name="twitter:description" content="Every published FDFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
+    <meta name="twitter:image" content="https://fdfpv.example/board/og.png" />
+    <meta name="twitter:image:alt" content="The race field in the FDFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
 
     <!--
       Mint, which is what this page paints a record in, and the one accent of
@@ -223,40 +223,6 @@
       }
       a.text:hover, button.text:hover { color: var(--sakura); }
 
-      /*
-       * Support. Patreon's symbol in their coral, the name in this page's
-       * type. It sits with the other links, under the Tracks, Times and
-       * Pilots counts, and again in the spine and the footer so it does
-       * not scroll away. The counts stay the record. The coral is only
-       * the mark.
-       */
-      a.patreon {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        height: 28px;
-        padding: 0 11px 0 8px;
-        border-radius: 3px;
-        background: rgba(16, 22, 17, 0.72);
-        box-shadow: inset 0 0 0 1px rgba(244, 236, 214, 0.16);
-        color: var(--cream);
-        font: 600 12px/1 var(--ui);
-        letter-spacing: 0.02em;
-        text-decoration: none;
-        white-space: nowrap;
-      }
-      a.patreon svg { width: 14px; height: 14px; display: block; flex: 0 0 auto; }
-      a.patreon:hover { color: var(--cream); box-shadow: inset 0 0 0 1px #FF424D; }
-      @media (max-width: 520px) {
-        .spine a.patreon { position: relative; }
-        .spine a.patreon span {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          overflow: hidden;
-          clip: rect(0 0 0 0);
-        }
-      }
 
       /* Times. Mono, tabular, with the hundredths a shade quieter so the
          seconds are what the eye lands on. */
@@ -1819,7 +1785,6 @@
       footer nav { display: flex; gap: 18px; margin-left: auto; }
       footer a { color: var(--slate); text-decoration: none; }
       footer a:hover { color: var(--sakura); }
-      footer a.patreon:hover { color: var(--cream); box-shadow: inset 0 0 0 1px #FF424D; }
 
 
       /* ---------------------------------------------------------------
@@ -2268,7 +2233,7 @@
           is a way back, and a way back that leaves the page you are
           leaving open behind it is not one.
         -->
-        <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page">WEB<span class="fpv">FPV</span></a></h1>
+        <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a></h1>
         <div class="eyebrow">Tracks and statistics</div>
         <p class="invite">
           Every published track, and the times flown on it. Open one, fly it in
@@ -2281,7 +2246,7 @@
           <div><dt>Times</dt><dd id="stat-times">0</dd></div>
           <div><dt>Pilots</dt><dd id="stat-pilots">0</dd></div>
         </dl>
-        <!-- target="webfpv-sim" on every link that crosses to the
+        <!-- target="fdfpv-sim" on every link that crosses to the
              simulator: one simulator tab, reused, rather than one per
              click. app.js sets the same target when it binds the real
              origins; it is written here too so it still holds if the
@@ -2290,13 +2255,9 @@
              each click to a fresh tab. See src/share/windows.js in the
              simulator. -->
         <nav class="links">
-          <a class="btn" id="builder-link" target="webfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
-          <a class="text" id="sim-link" target="webfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
-          <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="webfpv-sim">Credits</a>
-          <a class="patreon" data-patreon href="https://www.patreon.com/c/webfpv" target="_blank" rel="noopener noreferrer" aria-label="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join." title="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join.">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#FF424D" d="M15.386.524c-4.764 0-8.64 3.876-8.64 8.64 0 4.75 3.876 8.613 8.64 8.613 4.75 0 8.614-3.864 8.614-8.613C24 4.4 20.136.524 15.386.524M.003 23.537h4.22V.524H.003"/></svg>
-            <span>Patreon</span>
-          </a>
+          <a class="btn" id="builder-link" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
+          <a class="text" id="sim-link" target="fdfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
+          <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
           <!--
             ADMIN, AND IT IS THE QUIETEST THING IN THE MASTHEAD ON PURPOSE.
 
@@ -2319,16 +2280,12 @@
     <div class="spine">
       <div class="chequer" aria-hidden="true"></div>
       <div class="spine-inner">
-        <a class="spine-mark" id="spine-home" href="http://127.0.0.1:8080/" title="Back to the front page">WEB<span class="fpv">FPV</span></a>
+        <a class="spine-mark" id="spine-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a>
         <span class="spine-stats" id="spine-stats"></span>
         <nav class="links">
-          <a class="text" id="spine-build" target="webfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
+          <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html">Build a track</a>
           <a class="text" href="#stats">Statistics</a>
-          <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="webfpv-sim">Credits</a>
-          <a class="patreon" data-patreon href="https://www.patreon.com/c/webfpv" target="_blank" rel="noopener noreferrer" aria-label="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join." title="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join.">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#FF424D" d="M15.386.524c-4.764 0-8.64 3.876-8.64 8.64 0 4.75 3.876 8.613 8.64 8.613 4.75 0 8.614-3.864 8.614-8.613C24 4.4 20.136.524 15.386.524M.003 23.537h4.22V.524H.003"/></svg>
-            <span>Patreon</span>
-          </a>
+          <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
         </nav>
       </div>
     </div>
@@ -2504,19 +2461,15 @@
 
     <footer>
       <p>
-        WebFPV Tracks and Statistics. Every published track and every named
+        FDFPV Tracks and Statistics. Every published track and every named
         time lives here. The simulator itself keeps nothing: a track you build stays
         in your browser until you publish it. Free software under GPLv3.
       </p>
       <nav>
-        <a id="foot-sim" target="webfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
+        <a id="foot-sim" target="fdfpv-sim" href="http://127.0.0.1:8000/">Open the simulator</a>
         <a href="#stats">Site statistics</a>
         <a href="bugs.html">Bugs and feedback</a>
-        <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="webfpv-sim">Credits</a>
-        <a class="patreon" data-patreon href="https://www.patreon.com/c/webfpv" target="_blank" rel="noopener noreferrer" aria-label="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join." title="Support WebFPV on Patreon. Keep the lights on, $5. Hosting + runway, $12. Build the sim, $25. USD, plus GST on join.">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#FF424D" d="M15.386.524c-4.764 0-8.64 3.876-8.64 8.64 0 4.75 3.876 8.613 8.64 8.613 4.75 0 8.614-3.864 8.614-8.613C24 4.4 20.136.524 15.386.524M.003 23.537h4.22V.524H.003"/></svg>
-          <span>Patreon</span>
-        </a>
+        <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
       </nav>
     </footer>
 

@@ -618,7 +618,7 @@ async function handleApi(req, res, url) {
      * are ignored, so a direct instance cannot be told where its visitors
      * are.
      *
-     * TWO HEADERS, IN ORDER. x-webfpv-country is the one the Worker in
+     * TWO HEADERS, IN ORDER. x-fdfpv-country is the one the Worker in
      * edge/router.js sets on purpose. cf-ipcountry is Cloudflare's own,
      * put on every proxied request when the zone's geolocation is on, and
      * the Worker forwards it with the rest of the headers whether or not it
@@ -631,7 +631,7 @@ async function handleApi(req, res, url) {
      */
     const country = normaliseCountry(
       process.env.BOARD_TRUST_PROXY === '1'
-        ? (req.headers['x-webfpv-country'] || req.headers['cf-ipcountry'])
+        ? (req.headers['x-fdfpv-country'] || req.headers['cf-ipcountry'])
         : '',
     );
     await store.recordStats(inspected.event, { day: statsDay(), country });
@@ -1237,7 +1237,7 @@ const server = http.createServer(async (req, res) => {
 
 if (process.env.BOARD_LISTEN !== '0') {
   server.listen(port, '0.0.0.0', () => {
-    console.log(`WebFPV leaderboard: http://127.0.0.1:${port}/`);
+    console.log(`FDFPV leaderboard: http://127.0.0.1:${port}/`);
     console.log(`Store: ${store.kind}. Simulator: ${simOrigin}`);
   });
 }

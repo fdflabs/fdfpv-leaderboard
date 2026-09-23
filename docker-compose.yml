@@ -17,9 +17,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: webfpv
-      POSTGRES_PASSWORD: webfpv
-      POSTGRES_DB: webfpvleaderboard
+      POSTGRES_USER: fdfpv
+      POSTGRES_PASSWORD: fdfpv
+      POSTGRES_DB: fdfpvboard
     ports:
       - "5432:5432"
     volumes:

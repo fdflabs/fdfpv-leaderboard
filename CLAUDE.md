@@ -4,9 +4,9 @@ Project conventions. Read fully before any turn. These are decisions already mad
 
 ## What this is
 
-The public board for WebFPVSimulator. One Node service and one Postgres. It stores published courses and the times flown on them, and it serves a single static page that reads them back. It is not the simulator and it does not render anything: every course thumbnail on the board is the simulator's own `src/share/orbit.html`, in a cross origin iframe.
+The public board for FDFPV, a GPLv3 fork of WebFPVSimulator. One Node service and one Postgres. It stores published courses and the times flown on them, and it serves a single static page that reads them back. It is not the simulator and it does not render anything: every course thumbnail on the board is the simulator's own `src/share/orbit.html`, in a cross origin iframe.
 
-The three repositories are one product. `Mathew-Harvey/WebFPVSimulator` holds the simulator and the track builder and is the copy of record for anything shared; `Mathew-Harvey/landingpage-WebFPVSimulator-` is the front door. Read the simulator's `CLAUDE.md` before changing anything that has to agree across the three, and `DEPLOY.md` there for how they are wired together.
+The three repositories are one product. `fdflabs/fdfpv` holds the simulator and the track builder and is the copy of record for anything shared; `fdflabs/fdfpv-landing` is the front door. Read the simulator's `CLAUDE.md` before changing anything that has to agree across the three, and `DEPLOY.md` there for how they are wired together.
 
 ## Decisions already made
 
@@ -26,7 +26,7 @@ There is one credential: an admin signs in at `/api/admin/login` and the page se
 
 **Site statistics are counters, never events.** The board stores a total per UTC day in `stats_days` and a total per day per dimension in `stats_dims`, and that is the finest grain there is: there is no row that describes one visitor, one visit or one lap. No identifier is accepted from a client and none is stored. The country is two letters from the edge, believed only behind `BOARD_TRUST_PROXY`, and nothing here ever looks an address up. New or returning is decided by the browser from a date it keeps for itself and sent as a boolean. Every dimension is a closed list, in `src/validate.js` or in `src/sponsors.js`, which is what stops a stranger with curl growing a table on a public page. The per tab handle that answers "how many are flying now" lives in memory for three minutes and reaches no store. If this ever needs to hold something finer, it needs an argument first and the sentence on the page has to change with it.
 
-**The site icon comes from the simulator's `scripts/icons.js`.** `public/icon.svg`, `public/favicon.ico` and `public/apple-touch-icon.png` are generated output, in mint, which is the colour this page paints a record in. Regenerate, do not edit: `node scripts/icons.js mint ../WebFPVSimulator-LeaderBoard/public` from a checkout of the simulator beside this one.
+**The site icon comes from the simulator's `scripts/icons.js`.** `public/icon.svg`, `public/favicon.ico` and `public/apple-touch-icon.png` are generated output, in mint, which is the colour this page paints a record in. Regenerate, do not edit: `node scripts/icons.js mint ../fdfpv-leaderboard/public` from a checkout of the simulator beside this one.
 
 ## Style
 

@@ -1,6 +1,7 @@
-# WebFPV Leaderboard
+# FDFPV Leaderboard
 
-The public board for [WebFPVSimulator](https://github.com/Mathew-Harvey/WebFPVSimulator).
+The public board for [FDFPV](https://github.com/fdflabs/fdfpv), a GPLv3 fork of
+[WebFPVSimulator](https://github.com/fdflabs/fdfpv).
 Every published course lives here, with the times flown on it.
 
 The page has two tabs. **Tracks and times** is the board itself. **Site
@@ -9,7 +10,7 @@ now, pilots and laps by day, which countries, which sponsors' links people
 arrived from, and what they fly on. See [Site statistics](#site-statistics)
 below for what is counted and, more to the point, what is not.
 
-Repository: [Mathew-Harvey/WebFPVSimulator-LeaderBoard](https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard).
+Repository: [fdflabs/fdfpv-leaderboard](https://github.com/fdflabs/fdfpv-leaderboard).
 
 The simulator itself keeps nothing. Tracks you build stay in that browser
 until you publish them. This page is the copy that other people can fly.
@@ -40,13 +41,13 @@ A Fly link looks like this:
 The simulator fetches `/api/tracks/{id}/document`, builds the world, and
 offers to post a lap time back here under the pilot's name.
 
-The **WEBFPV** mark, in the masthead and again in the sticky spine, is the
+The **FDFPV** mark, in the masthead and again in the sticky spine, is the
 way back to the front door, and it opens in this tab rather than the
 simulator's: it is a way back, and a way back that leaves this page open
 behind it is not one. Where the front door is comes from `public/origins.js`
 without asking the server, the same way the simulator's address does. A
 checkout finds it on `http://127.0.0.1:8080`, the `/board` mount finds
-whatever it hangs off, and anything else is `https://webfpv.org`, which is
+whatever it hangs off, and anything else is `https://fdfpv.example`, which is
 the one line a fork changes.
 
 ## Run locally
@@ -73,7 +74,7 @@ A local instance:
 
 ```bash
 docker compose up -d
-DATABASE_URL=postgres://webfpv:webfpv@127.0.0.1:5432/webfpvleaderboard npm start
+DATABASE_URL=postgres://fdfpv:fdfpv@127.0.0.1:5432/fdfpvboard npm start
 ```
 
 ## Host on Render
@@ -85,7 +86,7 @@ pick this repo. That is both halves of the board.
 Then set one thing by hand, under the service's **Environment**:
 
 ```
-SIM_ORIGIN = https://<the simulator's static site>   # or https://webfpv.org/sim
+SIM_ORIGIN = https://<the simulator's static site>   # or https://fdfpv.example/sim
 ```
 
 No trailing slash. Until it is set the board runs fine but its Fly and
@@ -105,12 +106,12 @@ Two things about hosting here that are easy to get wrong:
 makes the board write `https://` Fly links from behind Render's TLS
 termination rather than `http://` ones a browser refuses as mixed content.
 Leave `BOARD_PUBLIC_ORIGIN` unset unless a custom domain confuses that, or
-the board is mounted under a path such as `https://webfpv.org/board`, where a
+the board is mounted under a path such as `https://fdfpv.example/board`, where a
 forwarded host cannot carry the path and this is the only way to say it.
 
 The full walkthrough, including the simulator's static site and the order
 to create things in, is in
-[DEPLOY.md in the simulator repo](https://github.com/Mathew-Harvey/WebFPVSimulator/blob/main/DEPLOY.md).
+[DEPLOY.md in the simulator repo](https://github.com/fdflabs/fdfpv/blob/main/DEPLOY.md).
 
 ## API
 
@@ -171,13 +172,9 @@ Mint one without the password reaching a shell history:
 node scripts/admin-hash.js someone@example.com
 ```
 
-Setting `BOARD_ADMINS` **replaces** the built-in list rather than adding to
-it. That matters, because the built-in list is one address whose password
-ships as an scrypt hash in `src/admin.js`: hashing keeps the word itself
-out of the history of a public repository, and it does not make a short
-password secret, because anybody with the hash can try guesses against it
-offline. Treat the default as the thing that gets the screen working on a
-checkout, and set `BOARD_ADMINS` on any host that matters.
+`BOARD_ADMINS` is the whole list. The repository ships no admin: until the
+variable names somebody, nobody can sign in, and the board says so when it
+starts. On a checkout, `someone@example.com:plain:a-password` is enough.
 
 `BOARD_SESSION_SECRET` is optional and unset by default. It is mixed into
 the signing key, so changing it signs every admin out at once without
@@ -194,7 +191,7 @@ is the other way in and is what a script uses, because a script has no
 browser to sign in from:
 
 ```bash
-curl -X POST https://webfpv.org/board/api/tracks/trk-xxxxxxxx/remove \
+curl -X POST https://fdfpv.example/board/api/tracks/trk-xxxxxxxx/remove \
   -H "Authorization: Bearer $BOARD_ADMIN_TOKEN"
 ```
 
@@ -296,7 +293,7 @@ sponsors is not, because it includes the ones with no traffic yet.
 
 ### The country
 
-`edge/router.js` in the simulator's repository puts `x-webfpv-country` on
+`edge/router.js` in the simulator's repository puts `x-fdfpv-country` on
 the request from Cloudflare's own `request.cf.country`, overwriting anything
 the client sent. The board believes the header only when `BOARD_TRUST_PROXY`
 is `1`, exactly like the forwarded host. On a checkout that is unset, so
