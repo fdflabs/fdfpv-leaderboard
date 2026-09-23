@@ -48,7 +48,7 @@ import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(root, 'public');
-const port = Number(process.env.PORT || 3100);
+const port = Number(process.env.PORT || 3180);
 const simOrigin = (process.env.SIM_ORIGIN || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 const boardPublic = (process.env.BOARD_PUBLIC_ORIGIN || '').replace(/\/+$/, '');
 

@@ -1557,11 +1557,11 @@ function testOrigins() {
   };
 
   check('a checkout on 127.0.0.1 finds the simulator on 8000',
-    guessSimOrigin(...at('http://127.0.0.1:3100/')) === 'http://127.0.0.1:8000');
+    guessSimOrigin(...at('http://127.0.0.1:3180/')) === 'http://127.0.0.1:8000');
   check('localhost by name, same answer',
-    guessSimOrigin(...at('http://localhost:3100/')) === 'http://localhost:8000');
+    guessSimOrigin(...at('http://localhost:3180/')) === 'http://localhost:8000');
   check('a track hash does not change the answer',
-    guessSimOrigin(...at('http://127.0.0.1:3100/#course=trk-1a2b3c4d')) === 'http://127.0.0.1:8000');
+    guessSimOrigin(...at('http://127.0.0.1:3180/#course=trk-1a2b3c4d')) === 'http://127.0.0.1:8000');
 
   check('the /board mount finds its sibling /sim',
     guessSimOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example/sim');
@@ -1588,9 +1588,9 @@ function testOrigins() {
    * mark in the masthead has somewhere to go from anywhere.
    */
   check('a checkout on 127.0.0.1 finds the front door on 8080',
-    landingOrigin(...at('http://127.0.0.1:3100/')) === 'http://127.0.0.1:8080');
+    landingOrigin(...at('http://127.0.0.1:3180/')) === 'http://127.0.0.1:8080');
   check('localhost by name, same answer',
-    landingOrigin(...at('http://localhost:3100/')) === 'http://localhost:8080');
+    landingOrigin(...at('http://localhost:3180/')) === 'http://localhost:8080');
   check('the /board mount hangs off the front door',
     landingOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example');
   check('the bug page under the mount answers the same',

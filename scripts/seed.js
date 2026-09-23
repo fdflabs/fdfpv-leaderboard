@@ -18,7 +18,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-const origin = process.env.BOARD_ORIGIN || 'http://127.0.0.1:3100';
+const origin = process.env.BOARD_ORIGIN || 'http://127.0.0.1:3180';
 
 const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 

@@ -56,11 +56,11 @@ Node 22 or newer. No database required: a JSON file in `data/` is enough.
 
 ```bash
 npm install
-npm start          # http://127.0.0.1:3100/
+npm start          # http://127.0.0.1:3180/
 ```
 
 Point the simulator at this board by leaving the default
-`http://127.0.0.1:3100` in the builder's Publish dialog, or by opening a
+`http://127.0.0.1:3180` in the builder's Publish dialog, or by opening a
 Fly link from this page.
 
 ```bash
@@ -318,17 +318,17 @@ local agent can read tickets with no header.
 
 ```bash
 # Open tickets, newest first
-curl http://127.0.0.1:3100/api/bugs?status=open
+curl http://127.0.0.1:3180/api/bugs?status=open
 
 # One ticket, including auto-captured map / GPU / browser
-curl http://127.0.0.1:3100/api/bugs/bug-xxxxxxxx
+curl http://127.0.0.1:3180/api/bugs/bug-xxxxxxxx
 
 # Claim it, then close it
-curl -X POST http://127.0.0.1:3100/api/bugs/bug-xxxxxxxx \
+curl -X POST http://127.0.0.1:3180/api/bugs/bug-xxxxxxxx \
   -H "content-type: application/json" \
   -d "{\"status\":\"in_progress\"}"
 
-curl -X POST http://127.0.0.1:3100/api/bugs/bug-xxxxxxxx \
+curl -X POST http://127.0.0.1:3180/api/bugs/bug-xxxxxxxx \
   -H "content-type: application/json" \
   -d "{\"status\":\"fixed\",\"resolution\":\"What you changed.\"}"
 ```
