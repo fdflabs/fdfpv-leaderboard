@@ -27,7 +27,11 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
+      # The simulator is pinned under vendor/fdfpv: the lap check and the
+      # selftest's synthetic laps come from it.
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22

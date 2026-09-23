@@ -24,6 +24,45 @@ import {
 import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
 import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js';
+import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
+
+/*
+ * Documents with two gates, for the routes that post times. A course of one
+ * gate is a lap every millisecond by the detector's own rules (the gate is
+ * both the start and the next gate, and the craft is still in its slab), so
+ * a lap that the board can measure needs somewhere to go in between.
+ */
+function lapDoc(id = 'trk-1a2b3c4d', extra = {}) {
+  const gate = (gid, x) => ({
+    id: gid, type: 'gate', name: 'Gate', position: { x, y: 8, z: 0 }, yaw: 0, pitch: 0, yawOverridden: false,
+    dims: { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 },
+  });
+  return sampleDoc(id, {
+    ...extra,
+    elements: [gate('el-1', 10), gate('el-2', 30)],
+    sequence: [
+      { id: 'seq-1', elementId: 'el-1', apertureIndex: 0, entry: 1 },
+      { id: 'seq-2', elementId: 'el-2', apertureIndex: 0, entry: 1 },
+    ],
+  });
+}
+
+function lapRoom(id = 'trk-2b3c4d5e') {
+  const room = roomDoc(id);
+  room.elements.push({
+    id: 'el-3', type: 'gate', position: { x: 2, y: 0.6, z: 0 }, yaw: 0,
+    dims: { clearW: 0.7112, clearH: 0.7112, sillH: 0, levels: 1 },
+  });
+  room.sequence.push({ id: 'seq-2', elementId: 'el-3', apertureIndex: 0, entry: 1 });
+  return room;
+}
+
+/* A lap the board must accept: flown through every gate of the document by
+ * the simulator's own test helper, as the base64 the simulator would post. */
+function honestLap(document, opts = {}) {
+  const lap = syntheticLapBytes(document, opts);
+  return { ghost: Buffer.from(lap.bytes).toString('base64'), lapMs: lap.lapMs, durationMs: lap.durationMs };
+}
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 let failed = 0;
@@ -701,36 +740,43 @@ async function testHttp() {
     const created = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: sampleDoc() }),
+      body: JSON.stringify({ author: 'Ada Rook', document: lapDoc() }),
     });
     const body = await created.json();
     check('publish over HTTP', created.status === 201 && body.id === 'trk-1a2b3c4d');
+    const adaLap = honestLap(lapDoc());
     const time = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Rook', lapMs: 29110 }),
+      body: JSON.stringify({ name: 'Ada Rook', lapMs: adaLap.lapMs, ghost: adaLap.ghost }),
     });
     const posted = await time.json();
-    check('post a time over HTTP', time.status === 201 && posted.rank === 1);
+    check('post a time over HTTP', time.status === 201 && posted.rank === 1, `${time.status} ${JSON.stringify(posted).slice(0, 120)}`);
+    const bare = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Ada Rook', lapMs: adaLap.lapMs }),
+    });
+    check('a time without a ghost is refused', bare.status === 400);
     const renamed = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         author: 'Ada Rook',
-        document: { ...sampleDoc(), name: 'HTTP Rename' },
+        document: { ...lapDoc(), name: 'HTTP Rename' },
         editKey: body.editKey,
       }),
     });
     const renamedBody = await renamed.json();
     check('rename over HTTP', renamed.status === 200 && renamedBody.updated === true && renamedBody.timesCleared !== true);
     const page = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
-    check('expanded track has the new name and the time', page.name === 'HTTP Rename' && page.times[0].lapMs === 29110);
+    check('expanded track has the new name and the time', page.name === 'HTTP Rename' && page.times[0].lapMs === Math.round(adaLap.lapMs));
     const reauthor = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         author: 'Ada Two',
-        document: { ...sampleDoc(), name: 'HTTP Rename' },
+        document: { ...lapDoc(), name: 'HTTP Rename' },
         editKey: body.editKey,
       }),
     });
@@ -738,11 +784,12 @@ async function testHttp() {
     check('author rename over HTTP', reauthor.status === 200 && reauthorBody.updated === true && reauthorBody.timesCleared !== true);
     const renamedTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
     check('author rename retitles the posted time', renamedTimes.author === 'Ada Two' && renamedTimes.times[0].name === 'Ada Two');
-    const ghostWire = makeGhostB64(31500);
+    const boLap = honestLap(lapDoc(), { speed: 15 });
+    const ghostWire = boLap.ghost;
     const ghostPost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: 31500, ghost: ghostWire }),
+      body: JSON.stringify({ name: 'Bo', lapMs: boLap.lapMs, ghost: ghostWire }),
     });
     const ghostPosted = await ghostPost.json();
     check('post a time with a ghost over HTTP', ghostPost.status === 201 && /^tm-[0-9a-f]{8}$/.test(String(ghostPosted.id)));
@@ -751,10 +798,16 @@ async function testHttp() {
     check('the track lists the ghost without carrying it', Boolean(boRow) && boRow.hasGhost === true && boRow.ghost === undefined);
     const ghostGet = await fetch(`http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times/${ghostPosted.id}/ghost`);
     const ghostBody = await ghostGet.json();
-    check('the ghost is fetched whole', ghostGet.status === 200 && ghostBody.ghost === ghostWire && ghostBody.lapMs === 31500);
-    const adaRow = ghostList.times.find((t) => t.name === 'Ada Two');
-    const noGhost = await fetch(`http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times/${adaRow.id}/ghost`);
-    check('a time posted without a ghost answers 404', noGhost.status === 404);
+    check('the ghost is fetched whole', ghostGet.status === 200 && ghostBody.ghost === ghostWire && ghostBody.lapMs === Math.round(boLap.lapMs));
+    const skipped = honestLap(lapDoc(), { hoverAfterMs: 1500 });
+    const padded = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bo', lapMs: skipped.durationMs, ghost: skipped.ghost }),
+    });
+    const paddedBody = await padded.json();
+    check('a ghost that hovers past the line cannot claim the long time',
+      padded.status === 422 && /does not hold up/.test(paddedBody.error), `${padded.status} ${paddedBody.error}`);
     const badGhostId = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times/constructor/ghost');
     check('a non-time ghost address is not a 500', badGhostId.status === 400 || badGhostId.status === 404);
     const badGhost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
@@ -769,6 +822,12 @@ async function testHttp() {
       body: JSON.stringify({ name: 'Bo', lapMs: 90000, ghost: ghostWire }),
     });
     check('a ghost for a different lap is refused', wrongLap.status === 400);
+    const noSuch = await fetch('http://127.0.0.1:3199/api/tracks/trk-0000dead/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bo', lapMs: boLap.lapMs, ghost: ghostWire }),
+    });
+    check('a time on a track that is not on the board is a 404', noSuch.status === 404, `${noSuch.status}`);
     const html = await fetch('http://127.0.0.1:3199/').then((r) => r.text());
     check('the page is served', html.includes('Tracks and Statistics') && html.includes('app.js'));
     /* The two tabs are in the MARKUP rather than built by the script, so a
@@ -915,7 +974,7 @@ async function testHttp() {
     const proto = await fetch('http://127.0.0.1:3199/api/bugs/constructor');
     check('a non-ticket id is not a 500', proto.status === 400 || proto.status === 404);
     const stillBoard = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('filing a bug does not drop tracks', stillBoard.tracks[0].id === 'trk-1a2b3c4d' && stillBoard.tracks[0].best.lapMs === 29110);
+    check('filing a bug does not drop tracks', stillBoard.tracks[0].id === 'trk-1a2b3c4d' && stillBoard.tracks[0].best.lapMs === Math.round(adaLap.lapMs));
 
     /* ---------------------------------------------------------------- */
     /* Tags                                                              */
@@ -929,7 +988,7 @@ async function testHttp() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         author: 'Ada Rook',
-        document: sampleDoc('trk-7a7a7a7a'),
+        document: lapDoc('trk-7a7a7a7a'),
         tags: ['experiment', 'race', 'race'],
       }),
     });
@@ -967,17 +1026,18 @@ async function testHttp() {
      * author rather than inside the document, where they would have to be
      * kept out of layoutHash by hand.
      */
+    const finchLap = honestLap(lapDoc('trk-7a7a7a7a'));
     await fetch('http://127.0.0.1:3199/api/tracks/trk-7a7a7a7a/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo Finch', lapMs: 41000 }),
+      body: JSON.stringify({ name: 'Bo Finch', lapMs: finchLap.lapMs, ghost: finchLap.ghost }),
     });
     const retagged = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         author: 'Ada Rook',
-        document: sampleDoc('trk-7a7a7a7a'),
+        document: lapDoc('trk-7a7a7a7a'),
         editKey: taggedBody.editKey,
         tags: ['skills'],
       }),
@@ -994,7 +1054,7 @@ async function testHttp() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         author: 'Ada Rook',
-        document: sampleDoc('trk-7a7a7a7a'),
+        document: lapDoc('trk-7a7a7a7a'),
         editKey: taggedBody.editKey,
         tags: [],
       }),
@@ -1124,7 +1184,7 @@ async function testHttp() {
     const roomPosted = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: roomDoc() }),
+      body: JSON.stringify({ author: 'Ada Rook', document: lapRoom() }),
     });
     const roomBody = await roomPosted.json();
     check('publish a room', roomPosted.status === 201 && Boolean(roomBody.editKey));
@@ -1210,7 +1270,7 @@ async function testHttp() {
      * A RELAYOUT THROWS IT AWAY AND A RENAME DOES NOT. It is a picture of a
      * layout, so it goes for the same reason the times go.
      */
-    const renamedRoom = roomDoc();
+    const renamedRoom = lapRoom();
     renamedRoom.name = 'The same room, renamed';
     const roomRenamed = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
@@ -1222,7 +1282,7 @@ async function testHttp() {
     check('and the animation is still there',
       afterRename.tracks.find((t) => t.id === 'trk-2b3c4d5e').hasGif === true);
 
-    const movedRoom = roomDoc();
+    const movedRoom = lapRoom();
     movedRoom.elements[1].position = { x: 1, y: 1.2, z: 0 };
     const roomMoved = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
@@ -1247,11 +1307,16 @@ async function testHttp() {
     /* A time on it first, because the point of the route is that the times
      * go with the track and the point of the gate is that the publisher
      * alone may not throw somebody else's away. */
-    await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/times', {
+    /* Against the room as it is on the board now, gate moved and all: a
+     * lap flown through the old layout is exactly what the check refuses. */
+    const roomNow = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/document').then((r) => r.json());
+    const kiteLap = honestLap(roomNow.document, { speed: 6 });
+    const kitePost = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo Kite', lapMs: 4200 }),
+      body: JSON.stringify({ name: 'Bo Kite', lapMs: kiteLap.lapMs, ghost: kiteLap.ghost }),
     });
+    check('a lap in the micro room is accepted', kitePost.status === 201, `${kitePost.status} ${(await kitePost.clone().text()).slice(0, 120)}`);
     const beforeRemoval = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
     check('the room is on the board, with a time on it',
       beforeRemoval.tracks.find((t) => t.id === 'trk-2b3c4d5e')?.times === 1);
@@ -1312,7 +1377,7 @@ async function testHttp() {
     const republished = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: roomDoc() }),
+      body: JSON.stringify({ author: 'Ada Rook', document: lapRoom() }),
     });
     check('and the id is free to publish again', republished.status === 201);
 

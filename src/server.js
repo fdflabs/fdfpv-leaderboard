@@ -44,6 +44,7 @@ import {
   BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
   TIME_ID_RE, TRACK_ID_RE,
 } from './validate.js';
+import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
 import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -969,9 +970,31 @@ async function handleApi(req, res, url) {
       send(res, 400, { error: ghost.error });
       return;
     }
+    if (!ghost.ghost) {
+      send(res, 400, { error: 'A time on the board comes with its ghost. The simulator records one for every lap; post from there.' });
+      return;
+    }
     const trackId = trackIdFrom(times[1]);
     if (!trackId) {
       send(res, 400, { error: 'That address is not usable.' });
+      return;
+    }
+    /*
+     * The ghost is the lap. Before a time goes on the board, the simulator's
+     * own gate detector is run over it against the course as published,
+     * and a ghost that did not start on the line, pass every gate in order,
+     * cross the line again and keep the clock honest is refused with the
+     * reason. This is what makes a time here worth more than a number
+     * somebody typed into a POST.
+     */
+    const published = await store.getDocument(trackId);
+    if (!published) {
+      send(res, 404, { error: 'No track with that id is on the board.' });
+      return;
+    }
+    const verdict = checkLap(published.document, new Uint8Array(Buffer.from(ghost.ghost, 'base64')), lapMs);
+    if (!verdict.ok) {
+      send(res, 422, { error: `That lap does not hold up against the track: ${verdict.reason}.` });
       return;
     }
     const result = await store.addTime({

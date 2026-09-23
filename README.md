@@ -55,9 +55,17 @@ the one line a fork changes.
 Node 22 or newer. No database required: a JSON file in `data/` is enough.
 
 ```bash
+git submodule update --init   # the simulator, pinned under vendor/fdfpv
 npm install
 npm start          # http://127.0.0.1:3180/
 ```
+
+The simulator is checked out under `vendor/fdfpv` at a pinned commit, not
+recursively, so its own Betaflight submodule stays out. The board imports
+the lap check from it (`src/game/verify.js`) and its selftest imports the
+synthetic laps, so the board and the simulator can never disagree about
+what a gate is. A host that clones without submodules fails at start with
+a missing module, on purpose.
 
 Point the simulator at this board by leaving the default
 `http://127.0.0.1:3180` in the builder's Publish dialog, or by opening a
@@ -121,7 +129,7 @@ to create things in, is in
 | GET | `/api/tracks/:id` | That course and its leaderboard. Each time carries `{ id, hasGhost }` |
 | GET | `/api/tracks/:id/document` | The full track document, marks included |
 | POST | `/api/tracks` | Publish `{ author, document, editKey? }` |
-| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost? }` |
+| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course |
 | GET | `/api/tracks/:id/times/:timeId/ghost` | That time's recorded lap, `{ id, name, lapMs, ghost }` |
 | GET | `/api/tracks/:id/gif` | That room's card animation, as `image/gif` |
 | POST | `/api/tracks/:id/gif` | Upload `{ gif, editKey? }`. Rooms only |

@@ -1,0 +1,3 @@
+[submodule "vendor/fdfpv"]
+	path = vendor/fdfpv
+	url = https://github.com/fdflabs/fdfpv
