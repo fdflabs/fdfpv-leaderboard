@@ -865,6 +865,56 @@ async function testHttp() {
       body: await signedTime(boKey, 'trk-0000dead', 'Bo', boLap),
     });
     check('a time on a track that is not on the board is a 404', noSuch.status === 404, `${noSuch.status}`);
+    /* ---------------------------------------------------------------- */
+    console.log('\nlive rooms');
+    const nextMessage = (ws, ms = 3000) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no message')), ms);
+      ws.addEventListener('message', (ev) => { clearTimeout(timer); resolve(ev.data); }, { once: true });
+    });
+    const opened = (ws, ms = 3000) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no open')), ms);
+      ws.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+      ws.addEventListener('error', () => { clearTimeout(timer); resolve(); }, { once: true });
+    });
+    const wsA = new WebSocket('ws://127.0.0.1:3199/api/live/trk-1a2b3c4d?name=Ada%20Rook');
+    wsA.binaryType = 'arraybuffer';
+    await opened(wsA);
+    const welcomeA = JSON.parse(await nextMessage(wsA));
+    check('a pilot joining a room is welcomed with an id and nobody else', welcomeA.type === 'welcome' && welcomeA.id > 0 && welcomeA.peers.length === 0, JSON.stringify(welcomeA));
+    const wsB = new WebSocket('ws://127.0.0.1:3199/api/live/trk-1a2b3c4d?name=Bo');
+    wsB.binaryType = 'arraybuffer';
+    const joinSeenByA = nextMessage(wsA);
+    await opened(wsB);
+    const welcomeB = JSON.parse(await nextMessage(wsB));
+    check('the second pilot is welcomed with the first in the roster', welcomeB.type === 'welcome' && welcomeB.peers.length === 1 && welcomeB.peers[0].name === 'Ada Rook', JSON.stringify(welcomeB));
+    const joinMsg = JSON.parse(await joinSeenByA);
+    check('and the first pilot is told', joinMsg.type === 'join' && joinMsg.id === welcomeB.id && joinMsg.name === 'Bo', JSON.stringify(joinMsg));
+    const frame = new Uint8Array(24);
+    new DataView(frame.buffer).setUint32(0, 4242, true);
+    frame[4] = 7;
+    const relayedToB = nextMessage(wsB);
+    wsA.send(frame);
+    const got = new Uint8Array(await relayedToB);
+    check('a frame reaches the other pilot with the sender id in front',
+      got.length === 26 && new DataView(got.buffer).getUint16(0, true) === welcomeA.id && new DataView(got.buffer).getUint32(2, true) === 4242 && got[6] === 7, `${got.length}`);
+    let echoed = false;
+    wsA.addEventListener('message', () => { echoed = true; }, { once: true });
+    wsA.send(new Uint8Array(10));
+    await new Promise((r) => setTimeout(r, 150));
+    check('a frame of the wrong size goes nowhere, and nothing comes back to the sender', echoed === false);
+    const leaveSeenByA = nextMessage(wsA);
+    wsB.close();
+    const leaveMsg = JSON.parse(await leaveSeenByA);
+    check('leaving is announced', leaveMsg.type === 'leave' && leaveMsg.id === welcomeB.id, JSON.stringify(leaveMsg));
+    wsA.close();
+    const wsNone = new WebSocket('ws://127.0.0.1:3199/api/live/trk-0000dead');
+    const roomRefused = await new Promise((resolve) => {
+      wsNone.addEventListener('error', () => resolve(true), { once: true });
+      wsNone.addEventListener('open', () => resolve(false), { once: true });
+      setTimeout(() => resolve(false), 3000);
+    });
+    check('a room for a track that is not on the board is refused', roomRefused === true);
+
     const html = await fetch('http://127.0.0.1:3199/').then((r) => r.text());
     check('the page is served', html.includes('Tracks and Statistics') && html.includes('app.js'));
     /* The two tabs are in the MARKUP rather than built by the script, so a

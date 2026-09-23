@@ -46,6 +46,7 @@ import {
 } from './validate.js';
 import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
 import { verifyTimeSignature } from '../vendor/fdfpv/src/share/identity.js';
+import { attachLive } from './live.js';
 import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -1281,6 +1282,9 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: 'The board failed.' });
   }
 });
+
+/* Live rooms ride the same port as an upgrade; see live.js. */
+attachLive(server, store);
 
 if (process.env.BOARD_LISTEN !== '0') {
   server.listen(port, '0.0.0.0', () => {
