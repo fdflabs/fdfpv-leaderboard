@@ -34,7 +34,7 @@ const EXCUSED = new Map([
 ]);
 
 const SHAPE_OK = [
-  /^[MmLlHhVvCcSsQqTtAaZz0-9\s.,\-e]+$/,                        /* svg path */
+  /^[MmLlHhVvCcSsQqTtAaZz0-9xX\s.,\-e]+$/,                      /* svg path, x for a blanked placeholder */
   /(\d(px|em|rem|vh|vw|%|deg|ms|s)\b|rgba?\(|hsla?\(|var\(--|calc\(|translate|scale\(|url\(|!important|inset\b)/,
   /^\s*[<{[]/,                                                    /* html or json */
   /^[A-Z_0-9]+(\s+[A-Z_0-9]+)+$/,                                 /* constants */
@@ -44,6 +44,7 @@ const SHAPE_OK = [
   /^[a-z_]+:\s*x\s*$/,                                             /* a key with a placeholder */
   /^[a-z_]+( x)+$/,                                                 /* a CLI line with placeholders */
   /\/api\//,                                                        /* a board route */
+  /^\s*[a-z-]+=\\?"[^"]*\\?"/,                                      /* markup attributes */
 ];
 const CONTEXT_OK = /(new Error|new TypeError|new RangeError|throw |console\.[a-z]+|\.style\.[a-zA-Z]+ *=|setProperty\(|\.cssText|className *=|classList\.|setAttribute\((['"])(d|viewBox|points|fill|stroke|transform|style|class|font|font-family)\1|\.font *=|\.textBaseline|\.textAlign|\.globalCompositeOperation|\.filter *=|localStorage\.|sessionStorage\.|Symbol\(|new RegExp|assert\(|must\(|import\(|from |\.matchMedia\(|querySelector(All)?\(|getContext\(|new URL\(|fetch\(|performance\.mark|performance\.measure|dataset\.[a-zA-Z]+ *=)[^;]*$/;
 
@@ -136,8 +137,8 @@ function isProse(raw) {
   if (SHAPE_OK.some((re) => re.test(text))) {
     return false;
   }
-  if (/^[a-z0-9-]+( [a-z0-9-]+)+$/.test(text) && !text.split(' ').some((w) => /^(the|a|an|and|or|to|of|in|on|is|it|you|your|this|that|for|with|not|no|at|by|as|be|are|was|from|per|one|two|three)$/.test(w))) {
-    return false; /* a class list */
+  if (/^[a-z0-9-]+( [a-z0-9-]+)+$/.test(text) && (text.split(' ').some((w) => w.includes('-')) || !text.split(' ').some((w) => /^(the|a|an|and|or|to|of|in|on|is|it|you|your|this|that|for|with|not|no|at|by|as|be|are|was|from|per|one|two|three)$/.test(w)))) {
+    return false; /* a class list: hyphenated tokens, or no English word among them */
   }
   return true;
 }

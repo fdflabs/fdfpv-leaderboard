@@ -134,7 +134,7 @@
         only for somebody who has a token and no sign in.
       </p>
       <div class="bar">
-        <label>Status
+        <label><span data-str="bugs.status">Status</span>
           <select id="status">
             <option value="open">Open</option>
             <option value="in_progress">In progress</option>
@@ -144,7 +144,7 @@
             <option value="">All</option>
           </select>
         </label>
-        <label>Kind
+        <label><span data-str="bugs.kind">Kind</span>
           <select id="kind">
             <option value="">All kinds</option>
             <option value="feel">Feedback, flight feel</option>
@@ -155,10 +155,10 @@
             <option value="other">Other</option>
           </select>
         </label>
-        <label>Token
+        <label><span data-str="bugs.token">Token</span>
           <input id="token" type="password" autocomplete="off" placeholder="BUGS_TOKEN if set" />
         </label>
-        <button class="primary" id="reload" type="button">Load</button>
+        <button class="primary" id="reload" type="button"><span data-str="bugs.load">Load</span></button>
       </div>
       <p class="err" id="err"></p>
       <div class="layout">

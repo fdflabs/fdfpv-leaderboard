@@ -37,7 +37,7 @@
 import { guessSimOrigin as guess, landingOrigin as frontDoor } from './origins.js';
 import { mountStats, pingVisit, showStats } from './stats.js';
 import { fillCredits } from './credits.js';
-import { str } from './strings/index.js';
+import { str, LOCALES, LOCALE_NAMES, currentLocale, rememberLocale } from './strings/index.js';
 
 /* Static sentences in the markup carry data-str keys; filled here so the
  * page stays greppable and the copy lives in one table. */
@@ -303,7 +303,7 @@ function craftParamOf(id) {
 
 function flyHref(config, id, ghostId) {
   const board = encodeURIComponent(config.boardOrigin);
-  const base = `${config.simOrigin}/?map=custom&share=${encodeURIComponent(id)}&board=${board}${craftParamOf(id)}`;
+  const base = withLang(`${config.simOrigin}/?map=custom&share=${encodeURIComponent(id)}&board=${board}${craftParamOf(id)}`);
   /* A ghost id turns the link into a chase: the simulator fetches that
    * lap's recording and flies it beside the visitor as a translucent
    * pacer. Only times posted with a recording carry one. */
@@ -326,7 +326,7 @@ function remixHref(config, id) {
   /* The builder reads ?class= for which canvas to open on. Same reason as
    * craftParamOf: a room remixed on a five inch builder is a room. */
   const cls = track ? `&class=${classOf(track)}` : '';
-  return `${config.simOrigin}/src/trackbuilder/index.html?share=${encodeURIComponent(id)}&board=${board}${cls}`;
+  return withLang(`${config.simOrigin}/src/trackbuilder/index.html?share=${encodeURIComponent(id)}&board=${board}${cls}`);
 }
 
 function orbitHref(config, id) {
@@ -2053,9 +2053,31 @@ function watchSpine() {
   io.observe(mast);
 }
 
+/* The other language, one click away, in its own name. */
+(function bindLanguage() {
+  const a = document.getElementById('lang-toggle');
+  if (!a) {
+    return;
+  }
+  const at = LOCALES.indexOf(currentLocale());
+  const other = LOCALES[(at + 1) % LOCALES.length];
+  a.textContent = LOCALE_NAMES[other] || other;
+  a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    rememberLocale(other);
+    window.location.reload();
+  });
+}());
+
+/* The simulator reads ?lang= too, so a visitor who chose Spanish here
+ * arrives there in Spanish. */
+function withLang(url) {
+  return currentLocale() === 'en' ? url : `${url}${url.includes('?') ? '&' : '?'}lang=${encodeURIComponent(currentLocale())}`;
+}
+
 function bindLinks(config) {
-  const sim = `${config.simOrigin}/`;
-  const builder = `${config.simOrigin}/src/trackbuilder/index.html`;
+  const sim = withLang(`${config.simOrigin}/`);
+  const builder = withLang(`${config.simOrigin}/src/trackbuilder/index.html`);
   const credits = creditsHref(config);
   /* These used to navigate this tab, which left the visitor with a
    * simulator where the board had been and no way back but the back

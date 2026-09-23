@@ -2242,9 +2242,9 @@
       </div>
       <div class="mast-side">
         <dl class="stats" id="mast-stats" hidden>
-          <div><dt>Tracks</dt><dd id="stat-courses">0</dd></div>
-          <div><dt>Times</dt><dd id="stat-times">0</dd></div>
-          <div><dt>Pilots</dt><dd id="stat-pilots">0</dd></div>
+          <div><dt><span data-str="html.tracks">Tracks</span></dt><dd id="stat-courses">0</dd></div>
+          <div><dt><span data-str="html.times">Times</span></dt><dd id="stat-times">0</dd></div>
+          <div><dt><span data-str="html.pilots">Pilots</span></dt><dd id="stat-pilots">0</dd></div>
         </dl>
         <!-- target="fdfpv-sim" on every link that crosses to the
              simulator: one simulator tab, reused, rather than one per
@@ -2257,7 +2257,7 @@
         <nav class="links">
           <a class="btn" id="builder-link" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
           <a class="text" id="sim-link" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
-          <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
+          <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
           <!--
             ADMIN, AND IT IS THE QUIETEST THING IN THE MASTHEAD ON PURPOSE.
 
@@ -2272,7 +2272,7 @@
             and a page that can do that should say so where it can be seen
             from anywhere on it.
           -->
-          <button type="button" class="text admin-open" id="admin-open" aria-haspopup="dialog">Admin</button>
+          <button type="button" class="text admin-open" id="admin-open" aria-haspopup="dialog"><span data-str="app.admin">Admin</span></button>
         </nav>
       </div>
     </header>
@@ -2284,8 +2284,8 @@
         <span class="spine-stats" id="spine-stats"></span>
         <nav class="links">
           <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
-          <a class="text" href="#stats">Statistics</a>
-          <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
+          <a class="text" href="#stats"><span data-str="html.statistics">Statistics</span></a>
+          <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
         </nav>
       </div>
     </div>
@@ -2378,7 +2378,7 @@
                 <select id="by"><option value="">Anyone</option></select>
               </div>
               <div class="sort">
-                <label for="sort">Order</label>
+                <label for="sort"><span data-str="html.order">Order</span></label>
                 <select id="sort">
                   <option value="flown">Most flown</option>
                   <option value="fastest">Fastest lap</option>
@@ -2469,7 +2469,8 @@
         <a id="foot-sim" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
         <a href="#stats"><span data-str="html.site_statistics">Site statistics</span></a>
         <a href="bugs.html"><span data-str="html.bugs_and_feedback">Bugs and feedback</span></a>
-        <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim">Credits</a>
+        <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
+        <a id="lang-toggle" href="#">Español</a>
       </nav>
     </footer>
 
@@ -2478,11 +2479,11 @@
       <div class="sheet-inner">
         <div class="sheet-top">
           <div>
-            <div class="kicker" id="sheet-kicker">Track</div>
+            <div class="kicker" id="sheet-kicker"><span data-str="html.track">Track</span></div>
             <h2 id="sheet-title"></h2>
             <p class="sheet-by" id="sheet-by"></p>
           </div>
-          <button type="button" class="btn" id="sheet-close">Close</button>
+          <button type="button" class="btn" id="sheet-close"><span data-str="html.close">Close</span></button>
         </div>
         <div class="sheet-grid">
           <div>
@@ -2524,9 +2525,9 @@
         <div class="sheet-top">
           <div>
             <div class="kicker"><span data-str="html.this_board">This board</span></div>
-            <h2 id="admin-title" class="rule-after">Admin</h2>
+            <h2 id="admin-title" class="rule-after"><span data-str="app.admin">Admin</span></h2>
           </div>
-          <button type="button" class="btn" id="admin-close">Close</button>
+          <button type="button" class="btn" id="admin-close"><span data-str="html.close">Close</span></button>
         </div>
 
         <form class="admin-panel panel" id="admin-signin">
@@ -2536,13 +2537,13 @@
             it is refused whatever password it arrives with.</span>
           </p>
           <div class="admin-field">
-            <label for="admin-email">Email</label>
+            <label for="admin-email"><span data-str="html.email">Email</span></label>
             <input id="admin-email" name="email" type="email" autocomplete="username"
                    autocapitalize="off" autocorrect="off" spellcheck="false"
                    inputmode="email" maxlength="254" required />
           </div>
           <div class="admin-field">
-            <label for="admin-password">Password</label>
+            <label for="admin-password"><span data-str="html.password">Password</span></label>
             <input id="admin-password" name="password" type="password"
                    autocomplete="current-password" maxlength="200" required />
           </div>
@@ -2584,8 +2585,8 @@
       <div class="chequer" aria-hidden="true"></div>
       <div class="credits-inner">
         <div class="credits-top">
-          <h2 id="credits-title" class="rule-after">Credits</h2>
-          <button type="button" class="btn" id="credits-close">Close</button>
+          <h2 id="credits-title" class="rule-after"><span data-str="html.credits">Credits</span></h2>
+          <button type="button" class="btn" id="credits-close"><span data-str="html.close">Close</span></button>
         </div>
         <div id="credits-roll" class="credits-roll"></div>
       </div>

@@ -40,3 +40,4 @@ jobs:
       - run: npm run lint:licence
       - run: npm run lint:nouns
       - run: npm run lint:copy
+      - run: npm run strings:selftest

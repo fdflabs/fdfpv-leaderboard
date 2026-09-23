@@ -35,10 +35,18 @@ import en from './en.js';
 
 export const LANG_KEY = 'webfpv.lang';
 /* Shared with the simulator on purpose: one choice of language for both. */
-export const LOCALES = ['en'];
+export const LOCALES = ['en', 'es'];
+export const LOCALE_NAMES = { en: 'English', es: 'Español' };
 
 const tables = { en };
 let locale = 'en';
+
+/* The page is small and its modules build copy as they load, so Spanish is
+ * loaded here, before anyone imports this, and the locale chosen at once. */
+try {
+  tables.es = (await import('./es.js')).default;
+} catch (e) {
+}
 
 export function currentLocale() {
   return locale;
@@ -88,6 +96,13 @@ export async function useLocale(id) {
   return setLocale(want);
 }
 
+export function rememberLocale(id) {
+  try {
+    localStorage.setItem(LANG_KEY, id);
+  } catch (e) {
+  }
+}
+
 /* The locale a page should start in. */
 export function preferredLocale() {
   try {
@@ -110,3 +125,5 @@ export function preferredLocale() {
     return 'en';
   }
 }
+
+setLocale(String(preferredLocale() || 'en').toLowerCase().split('-')[0]);

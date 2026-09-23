@@ -452,9 +452,9 @@ function barChart({
       const r = Math.min(4, barW / 2, height);
       const y = base - height;
       node.append(svg('path', {
-        d: str('stats.m_l_q', { x, base, x2: x, v4: y + r, x3: x, y, v7: x + r, y2: y })
-          + str('stats.l_q', { v1: x + barW - r, y, v3: x + barW, y2: y, v5: x + barW, v6: y + r })
-          + str('stats.l_z', { v1: x + barW, base }),
+        d: `M${x} ${base} L${x} ${y + r} Q${x} ${y} ${x + r} ${y}`
+          + ` L${x + barW - r} ${y} Q${x + barW} ${y} ${x + barW} ${y + r}`
+          + ` L${x + barW} ${base} Z`,
         fill: isToday ? '#f3ead4' : '#9db3c8',
       }));
       if (value === best && best > 0) {
