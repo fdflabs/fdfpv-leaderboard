@@ -38,7 +38,8 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /* Directories that are not ours to licence. */
-const SKIP_DIR = new Set(['.git', 'node_modules', 'data', 'public/credits']);
+/* vendor holds the pinned simulator, which its own repository lints. */
+const SKIP_DIR = new Set(['.git', 'node_modules', 'data', 'public/credits', 'vendor']);
 /* Extensions that carry a header, and can. A .json file has no comment
  * syntax, a .png has no text, and LICENSE is the licence. */
 const WANT = new Set(['.js', '.mjs', '.html', '.css', '.sql', '.yml', '.yaml']);
