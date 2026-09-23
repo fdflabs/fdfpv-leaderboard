@@ -1,0 +1,15 @@
+# NOTICE
+
+This repository is distributed under the GNU General Public License
+version 3 or later. See LICENSE.
+
+## Origin of this fork
+
+    Upstream    https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard
+    Commit      the head of main on 2026-09-23, full history retained here
+    Licence     GPLv3, Copyright (C) 2026 Mathew Harvey and contributors
+    Forked      2026-09-23 as the FDFPV leaderboard,
+                https://github.com/fdflabs/fdfpv-leaderboard
+
+Every file the upstream project shipped keeps its GPLv3 header and its
+copyright line.
