@@ -50,6 +50,22 @@ checkout finds it on `http://127.0.0.1:8080`, the `/board` mount finds
 whatever it hangs off, and anything else is `https://fdfpv.example`, which is
 the one line a fork changes.
 
+## What a time on the board means
+
+Every time here was flown. The post carries the lap's ghost, and before a
+time is stored the board runs the simulator's own gate detector over it
+against the track as published (`vendor/fdfpv/src/game/verify.js`): start
+on the line, every gate in flying order, line again, and the clock has to
+agree with the claim and with every split. A lap that does not hold up is
+refused with the reason.
+
+Every name here is claimed. The post is signed by a key the pilot's
+browser keeps, and the first key seen for a name owns it; another key
+posting under it is refused. The board holds only public keys.
+
+Pilots on the same track can fly together: the board relays their poses
+between them in a room per track, in memory, and stores nothing.
+
 ## Run locally
 
 Node 22 or newer. No database required: a JSON file in `data/` is enough.
