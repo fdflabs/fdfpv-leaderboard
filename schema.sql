@@ -68,6 +68,15 @@ ALTER TABLE times ADD COLUMN IF NOT EXISTS ghost TEXT;
 -- list, exactly as the plan is: one copy of the truth and no migration to
 -- get wrong.
 ALTER TABLE times ADD COLUMN IF NOT EXISTS three_ms INTEGER;
+ALTER TABLE times ADD COLUMN IF NOT EXISTS pilot_key TEXT;
+-- A name belongs to the first pilot key that posted under it. name_key is
+-- the name lowercased; name keeps the case the pilot typed.
+CREATE TABLE IF NOT EXISTS pilots (
+  name_key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  public_key TEXT NOT NULL,
+  claimed_utc TIMESTAMPTZ NOT NULL
+);
 
 CREATE INDEX IF NOT EXISTS times_track_lap
   ON times (track_id, lap_ms, posted_utc);

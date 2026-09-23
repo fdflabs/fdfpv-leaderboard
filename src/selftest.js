@@ -25,6 +25,7 @@ import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
 import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js';
 import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
+import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identity.js';
 
 /*
  * Documents with two gates, for the routes that post times. A course of one
@@ -62,6 +63,19 @@ function lapRoom(id = 'trk-2b3c4d5e') {
 function honestLap(document, opts = {}) {
   const lap = syntheticLapBytes(document, opts);
   return { ghost: Buffer.from(lap.bytes).toString('base64'), lapMs: lap.lapMs, durationMs: lap.durationMs };
+}
+
+/* One browser's pilot key each, made in memory the way the simulator makes
+ * them in localStorage. */
+const adaKey = createIdentity(memoryStorage());
+const boKey = createIdentity(memoryStorage());
+
+/* The body the simulator posts: the time, its ghost, and the signature the
+ * pilot key puts over exactly those. */
+async function signedTime(identity, trackId, name, lap, extra = {}) {
+  const lapMs = Math.round(lap.lapMs);
+  const auth = await identity.signTime({ trackId, lapMs, ghost: lap.ghost });
+  return JSON.stringify({ name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, ...extra });
 }
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -748,7 +762,7 @@ async function testHttp() {
     const time = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Rook', lapMs: adaLap.lapMs, ghost: adaLap.ghost }),
+      body: await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', adaLap),
     });
     const posted = await time.json();
     check('post a time over HTTP', time.status === 201 && posted.rank === 1, `${time.status} ${JSON.stringify(posted).slice(0, 120)}`);
@@ -758,6 +772,29 @@ async function testHttp() {
       body: JSON.stringify({ name: 'Ada Rook', lapMs: adaLap.lapMs }),
     });
     check('a time without a ghost is refused', bare.status === 400);
+    const unsigned = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Ada Rook', lapMs: Math.round(adaLap.lapMs), ghost: adaLap.ghost }),
+    });
+    check('a time without a signature is refused', unsigned.status === 400, `${unsigned.status}`);
+    const forgedBody = JSON.parse(await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', adaLap));
+    /* Inside the ghost's 250 ms slack, so only the signature can catch it. */
+    forgedBody.lapMs -= 100;
+    const forged = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(forgedBody),
+    });
+    check('a signed post with its lap changed afterwards is refused', forged.status === 401, `${forged.status}`);
+    const squatter = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(boKey, 'trk-1a2b3c4d', 'ada rook', adaLap),
+    });
+    const squatterBody = await squatter.json();
+    check('another key posting under a claimed name is refused, case and all',
+      squatter.status === 403 && /belongs to another pilot/.test(squatterBody.error), `${squatter.status} ${squatterBody.error}`);
     const renamed = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -789,7 +826,7 @@ async function testHttp() {
     const ghostPost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: boLap.lapMs, ghost: ghostWire }),
+      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', boLap),
     });
     const ghostPosted = await ghostPost.json();
     check('post a time with a ghost over HTTP', ghostPost.status === 201 && /^tm-[0-9a-f]{8}$/.test(String(ghostPosted.id)));
@@ -803,7 +840,7 @@ async function testHttp() {
     const padded = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: skipped.durationMs, ghost: skipped.ghost }),
+      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: skipped.ghost, lapMs: skipped.durationMs }),
     });
     const paddedBody = await padded.json();
     check('a ghost that hovers past the line cannot claim the long time',
@@ -813,19 +850,19 @@ async function testHttp() {
     const badGhost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: 31500, ghost: 'AAAA' }),
+      body: JSON.stringify({ name: 'Bo', lapMs: 31500, ghost: 'AAAA', key: 'x', sig: 'y' }),
     });
     check('a malformed ghost is refused, not stored', badGhost.status === 400);
     const wrongLap = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: 90000, ghost: ghostWire }),
+      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: ghostWire, lapMs: 90000 }),
     });
     check('a ghost for a different lap is refused', wrongLap.status === 400);
     const noSuch = await fetch('http://127.0.0.1:3199/api/tracks/trk-0000dead/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: boLap.lapMs, ghost: ghostWire }),
+      body: await signedTime(boKey, 'trk-0000dead', 'Bo', boLap),
     });
     check('a time on a track that is not on the board is a 404', noSuch.status === 404, `${noSuch.status}`);
     const html = await fetch('http://127.0.0.1:3199/').then((r) => r.text());
@@ -1030,7 +1067,7 @@ async function testHttp() {
     await fetch('http://127.0.0.1:3199/api/tracks/trk-7a7a7a7a/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo Finch', lapMs: finchLap.lapMs, ghost: finchLap.ghost }),
+      body: await signedTime(boKey, 'trk-7a7a7a7a', 'Bo Finch', finchLap),
     });
     const retagged = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
@@ -1314,7 +1351,7 @@ async function testHttp() {
     const kitePost = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/times', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo Kite', lapMs: kiteLap.lapMs, ghost: kiteLap.ghost }),
+      body: await signedTime(boKey, 'trk-2b3c4d5e', 'Bo Kite', kiteLap),
     });
     check('a lap in the micro room is accepted', kitePost.status === 201, `${kitePost.status} ${(await kitePost.clone().text()).slice(0, 120)}`);
     const beforeRemoval = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());

@@ -1245,3 +1245,27 @@ export function inspectStatsEvent(body, sourceKey) {
 export function statsDay(now = new Date()) {
   return new Date(now).toISOString().slice(0, 10);
 }
+
+/*
+ * The pilot key and the signature a posted time carries, as the simulator's
+ * src/share/identity.js makes them: the raw 65 byte P-256 public key and the
+ * 64 byte signature, both base64. Only the shape is checked here; whether
+ * the signature holds is the identity module's business, on the server.
+ */
+const KEY_B64_RE = /^[A-Za-z0-9+/]{87}=$/;
+const SIG_B64_RE = /^[A-Za-z0-9+/]{86}==$/;
+
+export function inspectAuth(body) {
+  const key = typeof body.key === 'string' ? body.key : '';
+  const sig = typeof body.sig === 'string' ? body.sig : '';
+  if (!key && !sig) {
+    return { error: 'A time on the board is signed by the pilot key the simulator keeps. Post from there.' };
+  }
+  if (!KEY_B64_RE.test(key)) {
+    return { error: 'That pilot key is not usable.' };
+  }
+  if (!SIG_B64_RE.test(sig)) {
+    return { error: 'That signature is not usable.' };
+  }
+  return { key, sig };
+}

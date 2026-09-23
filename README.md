@@ -129,7 +129,7 @@ to create things in, is in
 | GET | `/api/tracks/:id` | That course and its leaderboard. Each time carries `{ id, hasGhost }` |
 | GET | `/api/tracks/:id/document` | The full track document, marks included |
 | POST | `/api/tracks` | Publish `{ author, document, editKey? }` |
-| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course |
+| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost, key, sig }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course. `key` and `sig` are the pilot's key and its signature over the post; the first key seen for a name owns the name, and another key posting under it is a 403 |
 | GET | `/api/tracks/:id/times/:timeId/ghost` | That time's recorded lap, `{ id, name, lapMs, ghost }` |
 | GET | `/api/tracks/:id/gif` | That room's card animation, as `image/gif` |
 | POST | `/api/tracks/:id/gif` | Upload `{ gif, editKey? }`. Rooms only |

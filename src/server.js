@@ -38,13 +38,14 @@ import {
   adminCount, checkPassword, mintSession, normaliseEmail, readSession, PASSWORD_MAX,
 } from './admin.js';
 import {
-  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, inspectGif, inspectRun,
+  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, inspectAuth, inspectGif, inspectRun,
   inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
   BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
   TIME_ID_RE, TRACK_ID_RE,
 } from './validate.js';
 import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
+import { verifyTimeSignature } from '../vendor/fdfpv/src/share/identity.js';
 import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -980,6 +981,23 @@ async function handleApi(req, res, url) {
       return;
     }
     /*
+     * The name is claimed by a key. The post carries the pilot's public key
+     * and a signature over this exact post (track, rounded lap, ghost), so
+     * a signed post cannot be moved to another track or have its ghost
+     * swapped; then the first key seen for a name owns it. Checked before
+     * the lap, because a signature is microseconds and a lap is a course
+     * build.
+     */
+    const auth = inspectAuth(body);
+    if (auth.error) {
+      send(res, 400, { error: auth.error });
+      return;
+    }
+    if (!(await verifyTimeSignature({ key: auth.key, sig: auth.sig, trackId, lapMs, ghost: ghost.ghost }))) {
+      send(res, 401, { error: 'That signature does not match this post.' });
+      return;
+    }
+    /*
      * The ghost is the lap. Before a time goes on the board, the simulator's
      * own gate detector is run over it against the course as published,
      * and a ghost that did not start on the line, pass every gate in order,
@@ -997,6 +1015,11 @@ async function handleApi(req, res, url) {
       send(res, 422, { error: `That lap does not hold up against the track: ${verdict.reason}.` });
       return;
     }
+    const claim = await store.claimName(name, auth.key);
+    if (claim.error) {
+      send(res, claim.status || 403, { error: claim.error });
+      return;
+    }
     const result = await store.addTime({
       trackId,
       name,
@@ -1011,6 +1034,7 @@ async function handleApi(req, res, url) {
        */
       threeMs: normaliseThreeMs(body.threeMs, lapMs),
       ghost: ghost.ghost,
+      key: auth.key,
     });
     if (result.error) {
       send(res, result.status || 400, { error: result.error });

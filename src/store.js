@@ -244,7 +244,7 @@ function summaryRun(row) {
 
 function emptyFile() {
   return {
-    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {} },
+    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {} }, pilots: {},
   };
 }
 
@@ -394,6 +394,9 @@ class FileStore {
        * board on the next start. Same rule bugs got. */
       if (!Array.isArray(this.data.runs)) {
         this.data.runs = [];
+      }
+      if (!this.data.pilots || typeof this.data.pilots !== 'object' || Array.isArray(this.data.pilots)) {
+        this.data.pilots = {};
       }
       /* Same rule again, for the statistics counters. A board.json written
        * before this page existed is old, not corrupt. */
@@ -589,8 +592,30 @@ class FileStore {
     });
   }
 
-  async addTime({ trackId, name, lapMs, threeMs, ghost }) {
-    return this.lock(() => this.addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost }));
+  async addTime({ trackId, name, lapMs, threeMs, ghost, key }) {
+    return this.lock(() => this.addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key }));
+  }
+
+  /*
+   * A name belongs to the first key that posts under it. Names compare
+   * case-insensitively, so "Ada" and "ada" are one pilot. The same key
+   * claiming again is a no-op; another key is refused with a 403 the pilot
+   * can read. Nothing here can free a name: that is an admin's job, later.
+   */
+  async claimName(name, key) {
+    return this.lock(async () => {
+      const nameKey = String(name).trim().toLowerCase();
+      const have = this.data.pilots[nameKey];
+      if (!have) {
+        this.data.pilots[nameKey] = { name, key, claimedUtc: nowIso() };
+        await this.flush();
+        return { claimed: true };
+      }
+      if (have.key === key) {
+        return { claimed: false };
+      }
+      return { error: 'That name belongs to another pilot. Pick another name, or import their pilot key.', status: 403 };
+    });
   }
 
   hasTimeId(id) {
@@ -602,7 +627,7 @@ class FileStore {
     return false;
   }
 
-  async addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost }) {
+  async addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key }) {
     const track = this.data.tracks[trackId];
     if (!track) {
       return { error: 'That track is not on the board.', status: 404 };
@@ -612,7 +637,7 @@ class FileStore {
       id = newTimeId();
     }
     const row = {
-      id, name, lapMs, threeMs: threeMs == null ? null : threeMs, ghost: ghost || null, postedUtc: nowIso(),
+      id, name, lapMs, threeMs: threeMs == null ? null : threeMs, ghost: ghost || null, key: key || null, postedUtc: nowIso(),
     };
     const list = this.data.times[trackId] || [];
     list.push(row);
@@ -1124,13 +1149,30 @@ class PgStore {
     }
   }
 
-  async addTime({ trackId, name, lapMs, threeMs, ghost }) {
+  async claimName(name, key) {
+    const nameKey = String(name).trim().toLowerCase();
+    const inserted = await this.pool.query(
+      `INSERT INTO pilots (name_key, name, public_key, claimed_utc) VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name_key) DO NOTHING RETURNING name_key`,
+      [nameKey, name, key],
+    );
+    if (inserted.rowCount) {
+      return { claimed: true };
+    }
+    const have = await this.pool.query('SELECT public_key FROM pilots WHERE name_key = $1', [nameKey]);
+    if (have.rowCount && have.rows[0].public_key === key) {
+      return { claimed: false };
+    }
+    return { error: 'That name belongs to another pilot. Pick another name, or import their pilot key.', status: 403 };
+  }
+
+  async addTime({ trackId, name, lapMs, threeMs, ghost, key }) {
     /* The public id is random, so an insert can collide with an existing
      * row's unique index. The whole transaction retries on a fresh id, the
      * same shape as addBug's loop; six failures in a row is not luck, it is
      * a broken random source, and deserves the throw. */
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const result = await this.addTimeOnce({ trackId, name, lapMs, threeMs, ghost });
+      const result = await this.addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key });
       if (result !== null) {
         return result;
       }
@@ -1138,7 +1180,7 @@ class PgStore {
     throw new Error('Could not allocate a time id.');
   }
 
-  async addTimeOnce({ trackId, name, lapMs, threeMs, ghost }) {
+  async addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -1148,11 +1190,11 @@ class PgStore {
         return { error: 'That track is not on the board.', status: 404 };
       }
       const inserted = await client.query(
-        `INSERT INTO times (track_id, public_id, name, lap_ms, three_ms, ghost, posted_utc)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `INSERT INTO times (track_id, public_id, name, lap_ms, three_ms, ghost, pilot_key, posted_utc)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
          RETURNING id, public_id AS "publicId", name, lap_ms AS "lapMs",
                    three_ms AS "threeMs", posted_utc AS "postedUtc"`,
-        [trackId, newTimeId(), name, lapMs, threeMs == null ? null : threeMs, ghost || null],
+        [trackId, newTimeId(), name, lapMs, threeMs == null ? null : threeMs, ghost || null, key || null],
       );
       /*
        * Ranked against the stored row, by its id, and entirely inside
