@@ -15,6 +15,7 @@
     "lint:nouns": "node scripts/noun-lint.js",
     "lint:copy": "node scripts/copy-lint.js",
     "strings:selftest": "node scripts/strings-selftest.js",
+    "wing:e2e": "FDFPV_BOARD=. node vendor/fdfpv/scripts/wing-e2e.js",
     "admin:hash": "node scripts/admin-hash.js"
   },
   "dependencies": {
