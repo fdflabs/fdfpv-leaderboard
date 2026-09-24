@@ -694,7 +694,7 @@ function countryName(code) {
   }
 }
 
-const CRAFT_NAMES = { '5inch': str('app.five_inch'), whoop65: '65 mm whoop' };
+const CRAFT_NAMES = { '5inch': str('app.five_inch'), whoop65: '65 mm whoop', wing1000: str('app.fixed_wing') };
 const MAP_NAMES = { custom: 'Track', city: str('stats.freestyle_city'), other: 'Other' };
 const INPUT_NAMES = {
   gamepad: str('stats.radio_or_controller'), keyboard: 'Keyboard', touch: 'Touch', other: 'Other',

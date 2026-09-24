@@ -247,4 +247,6 @@ export default {
   "bugs.kind": "Tipo",
   "bugs.token": "Token",
   "bugs.load": "Cargar",
+  "app.fixed_wing": "Ala fija",
+  "html.four_hundred_metre_airfield": "Aeródromo de cuatrocientos metros",
 };

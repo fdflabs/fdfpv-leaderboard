@@ -248,4 +248,6 @@ export default {
   "bugs.kind": "Kind",
   "bugs.token": "Token",
   "bugs.load": "Load",
+  "app.fixed_wing": "Fixed wing",
+  "html.four_hundred_metre_airfield": "Four hundred metre airfield",
 };

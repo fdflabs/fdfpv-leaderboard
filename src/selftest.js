@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import {
   inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName,
-  creditOf, normaliseThreeMs, planFromDocument, trackClassOf,
+  creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
   inspectStatsEvent, normaliseCountry, statsDay,
 } from './validate.js';
 import { sourceKey } from './sponsors.js';
@@ -161,6 +161,34 @@ function roomDoc(id = 'trk-2b3c4d5e') {
   room.trackClass = 'micro';
   room.field = { width: 5, depth: 6, gridSize: 0.0254 };
   return room;
+}
+
+/*
+ * A WING COURSE: four five metre gates round the 400 by 300 m airfield, the
+ * simulator's own defaults for the class (src/trackbuilder/elements.js),
+ * with the yaws its builder decides for that loop. Flown at the wing's
+ * cruise, 20 m/s, which is what the vendored lap check has to accept.
+ */
+function wingDoc(id = 'trk-3c4d5e6f') {
+  const gate = (gid, x, y, yaw) => ({
+    id: gid, type: 'gate', name: 'Gate', position: { x, y, z: 0 }, yaw, pitch: 0, yawOverridden: false,
+    dims: { levels: 1, sillH: 0, clearW: 5, clearH: 5, levelPitch: 5.0334 },
+  });
+  const wing = sampleDoc(id, {
+    name: 'Airfield Loop',
+    elements: [
+      gate('el-1', 100, 75, 0),
+      gate('el-2', 300, 75, 0.643501),
+      gate('el-3', 300, 225, 2.498092),
+      gate('el-4', 100, 225, 3.141593),
+    ],
+    sequence: [1, 2, 3, 4].map((n) => ({ id: `seq-${n}`, elementId: `el-${n}`, apertureIndex: 0, entry: 1 })),
+  });
+  wing.schemaVersion = 3;
+  wing.trackClass = 'wing';
+  wing.field = { width: 400, depth: 300, gridSize: 5 };
+  wing.settings = { tangentScale: 1.1, minCurveRadius: 20, samplesPerSegment: 48 };
+  return wing;
 }
 
 function sampleDoc(id = 'trk-1a2b3c4d', extra = {}) {
@@ -334,6 +362,16 @@ async function testValidate() {
   check('trackClassOf defaults anything else to the field',
     trackClassOf({}) === 'full' && trackClassOf(null) === 'full'
     && trackClassOf({ trackClass: 'nonsense' }) === 'full');
+
+  /* AN AIRFIELD. The third class, a fixed wing's, and the mirror check:
+   * the board has to read the word the simulator writes. */
+  const wingOut = inspectDocument(wingDoc());
+  check('accepts a wing course', !wingOut.error, wingOut.error);
+  check('and reads its class', wingOut.trackClass === 'wing', wingOut.trackClass);
+  check('and its plan carries the class', wingOut.plan && wingOut.plan.trackClass === 'wing', wingOut.plan && wingOut.plan.trackClass);
+  check('and the plan keeps the airfield', wingOut.plan.width === 400 && wingOut.plan.depth === 300, `${wingOut.plan.width} by ${wingOut.plan.depth}`);
+  check('TRACK_CLASSES names the three the simulator writes',
+    TRACK_CLASSES.join() === 'full,micro,wing', TRACK_CLASSES.join());
 
   /*
    * THE DESIGNER SURVIVES THE ROUND TRIP.
@@ -865,6 +903,38 @@ async function testHttp() {
       body: await signedTime(boKey, 'trk-0000dead', 'Bo', boLap),
     });
     check('a time on a track that is not on the board is a 404', noSuch.status === 404, `${noSuch.status}`);
+    /*
+     * A WING COURSE, published and flown. The lap check is the simulator's
+     * own, vendored, so this is the board accepting a wing lap through the
+     * wing class's five metre gates, and refusing one that missed a gate.
+     */
+    const wingPub = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: wingDoc() }),
+    });
+    const wingPubBody = await wingPub.json();
+    check('publish a wing course over HTTP', wingPub.status === 201 && wingPubBody.id === 'trk-3c4d5e6f', `${wingPub.status}`);
+    const wingList = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
+    const wingRow = (wingList.tracks || []).find((t) => t.id === 'trk-3c4d5e6f');
+    check('and the listing says it is a wing course', Boolean(wingRow) && wingRow.trackClass === 'wing', wingRow && wingRow.trackClass);
+    const wingLap = honestLap(wingDoc(), { speed: 20 });
+    const wingTime = await fetch('http://127.0.0.1:3199/api/tracks/trk-3c4d5e6f/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(adaKey, 'trk-3c4d5e6f', 'Ada Rook', wingLap),
+    });
+    const wingPosted = await wingTime.json();
+    check('a signed wing lap at cruise is accepted', wingTime.status === 201 && wingPosted.rank === 1, `${wingTime.status} ${JSON.stringify(wingPosted).slice(0, 120)}`);
+    const wingSkip = honestLap(wingDoc(), { speed: 20, skip: 2 });
+    const wingSkipped = await fetch('http://127.0.0.1:3199/api/tracks/trk-3c4d5e6f/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(boKey, 'trk-3c4d5e6f', 'Bo', { ghost: wingSkip.ghost, lapMs: wingSkip.durationMs }),
+    });
+    const wingSkippedBody = await wingSkipped.json();
+    check('a wing lap that skipped a gate is refused',
+      wingSkipped.status === 422 && /does not hold up/.test(wingSkippedBody.error), `${wingSkipped.status} ${wingSkippedBody.error}`);
     /* ---------------------------------------------------------------- */
     console.log('\nlive rooms');
     const nextMessage = (ws, ms = 3000) => new Promise((resolve, reject) => {
@@ -1061,7 +1131,11 @@ async function testHttp() {
     const proto = await fetch('http://127.0.0.1:3199/api/bugs/constructor');
     check('a non-ticket id is not a 500', proto.status === 400 || proto.status === 404);
     const stillBoard = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('filing a bug does not drop tracks', stillBoard.tracks[0].id === 'trk-1a2b3c4d' && stillBoard.tracks[0].best.lapMs === Math.round(adaLap.lapMs));
+    /* By id rather than as tracks[0]: the wing course published above is
+     * newer and lists first, and the question is whether Ada's is still
+     * there with its time. */
+    const stillAda = stillBoard.tracks.find((t) => t.id === 'trk-1a2b3c4d');
+    check('filing a bug does not drop tracks', Boolean(stillAda) && stillAda.best.lapMs === Math.round(adaLap.lapMs));
 
     /* ---------------------------------------------------------------- */
     /* Tags                                                              */

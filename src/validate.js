@@ -291,18 +291,19 @@ const PLAN_APERTURE = new Set([
 
 /*
  * The track's class, normalised the way the simulator's
- * src/trackbuilder/elements.js normalises it: anything that is not the word
- * 'micro' is the sixty metre field. A version 1 or 2 document has no such
- * key and is a field, which it is.
+ * src/trackbuilder/elements.js normalises it: 'micro' is a RaceGOW room,
+ * 'wing' is a fixed wing's airfield, and anything else is the sixty metre
+ * field. A version 1 or 2 document has no such key and is a field, which
+ * it is. MIRRORS TRACK_CLASSES there; the selftest checks the mirror.
  *
  * It is derived from the stored document on every read rather than kept in
  * a column, for the same reason the plan is: there is one copy of the truth
  * and no migration to get wrong.
  */
-export const TRACK_CLASSES = ['full', 'micro'];
+export const TRACK_CLASSES = ['full', 'micro', 'wing'];
 
 export function trackClassOf(document) {
-  return isObject(document) && document.trackClass === 'micro' ? 'micro' : 'full';
+  return isObject(document) && TRACK_CLASSES.includes(document.trackClass) ? document.trackClass : 'full';
 }
 
 /*
@@ -539,8 +540,9 @@ export function planFromDocument(document) {
   return {
     /* The class travels with the plan, because the drawer has three sizes it
      * cannot read off a mark: the marker symbol, and the two fallbacks a
-     * plan with no dimensions falls through to. public/plan.js reads it. */
-    trackClass: small ? 'micro' : 'full',
+     * plan with no dimensions falls through to. public/plan.js reads it,
+     * and draws a wing plan with the field's sizes, which fit it. */
+    trackClass: trackClassOf(document),
     /* A RaceGOW room when the document forgot to say, not a MultiGP field.
      * Neither producer emits a plan without a field, so this is the last
      * line rather than the usual one. */
@@ -615,11 +617,13 @@ export function inspectDocument(raw) {
    *
    * Version 3 is the track CLASS. A version 3 document carries
    * `trackClass`, which is 'full' for the sixty metre field every track on
-   * this board has been until now, or 'micro' for a RaceGOW room: a 65 mm
+   * this board has been until now, 'micro' for a RaceGOW room (a 65 mm
    * whoop, 28 inch gates out of 26.7 mm PVC, and a whole track inside about
-   * 1.4 by 2.1 m. Nothing else about the document moved, so a version 1 or
-   * 2 track keeps its times across a republish from a builder that writes 3,
-   * and every stored track reads as 'full', which is what it is.
+   * 1.4 by 2.1 m) or 'wing' for a fixed wing's airfield (a 1000 mm wing,
+   * five metre gates over 400 by 300 m). Nothing else about the document
+   * moved, so a version 1 or 2 track keeps its times across a republish
+   * from a builder that writes 3, and every stored track reads as 'full',
+   * which is what it is.
    */
   if (![1, 2, 3].includes(document.schemaVersion)) {
     return { error: 'This board accepts schemaVersion 1, 2 and 3 tracks.' };

@@ -1617,16 +1617,17 @@
       /* ---------------------------------------------------------------
          The switch. Which aircraft, and which one you are on.
 
-         Not tabs. A tab strip says "these are two views of one thing" and
-         these are two aircraft: a five inch on sixty metres and a whoop in
-         a room share a pilot and nothing else. So it is two plates side by
-         side and the one you are on is lit while the other is a door. Mint
+         Not tabs. A tab strip says "these are views of one thing" and
+         these are three aircraft: a five inch on sixty metres, a whoop in
+         a room and a wing on an airfield share a pilot and nothing else. So
+         it is three plates side by side and the one you are on is lit while
+         the others are doors. Mint
          is the lit accent because mint is what this page paints a record
          in, and that holds everywhere below.
          --------------------------------------------------------------- */
       .switch {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
         margin: 4px 0 26px;
       }
@@ -1701,7 +1702,9 @@
       .switch-btn.is-on .switch-count { color: var(--cream); }
 
       @media (max-width: 560px) {
-        .switch { gap: 8px; margin-bottom: 20px; }
+        /* Three plates across a phone are three columns of wrapped words,
+           so they stack, and the lit one still reads as the one you are on. */
+        .switch { grid-template-columns: 1fr; gap: 8px; margin-bottom: 20px; }
         .switch-btn { padding: 11px 13px 12px; }
         .switch-name { font-size: 16px; }
         .switch-count { display: none; }
@@ -2294,18 +2297,19 @@
       WHICH AIRCRAFT, AND IT IS A PRIMARY CHOICE RATHER THAN A FILTER.
 
       It is the first thing under the masthead, because it is the first
-      question. A track on this page is one of two things and they are not
+      question. A track on this page is one of three things and they are not
       alternatives to each other. A MultiGP field is 5 ft gates over sixty
       metres flown on a five inch; a RaceGOW room is 28 inch gates inside
-      about 1.4 by 2.1 m flown on a 65 mm whoop. Offering a whoop pilot a
-      five inch track is offering them a track they cannot fly: the
-      simulator seats the aircraft from the track, so pressing Fly on the
-      wrong one changes their aircraft under them.
+      about 1.4 by 2.1 m flown on a 65 mm whoop; an airfield is five metre
+      gates over 400 by 300 m flown on a 1000 mm fixed wing. Offering a
+      whoop pilot a five inch track is offering them a track they cannot
+      fly: the simulator seats the aircraft from the track, so pressing Fly
+      on the wrong one changes their aircraft under them.
 
-      So it is two plates side by side rather than a select in the toolbar,
-      one of the two always chosen. It is remembered, and the simulator's
-      own links carry ?craft= so a pilot arriving from a whoop lands on the
-      whoop side.
+      So it is three plates side by side rather than a select in the
+      toolbar, one of them always chosen. It is remembered, and the
+      simulator's own links carry ?craft= so a pilot arriving from a whoop
+      lands on the whoop side.
 
       THE WHOOP PLATE IS NAMED AFTER THE AIRCRAFT, NOT AFTER RaceGOW. It
       read "RaceGOW room" while every track on that side was one, and that
@@ -2358,6 +2362,11 @@
           <span class="switch-kicker"><span data-str="html.65_mm_whoop">65 mm whoop</span></span>
           <span class="switch-name"><span data-str="html.whoop_micro_tracks">Whoop Micro Tracks</span></span>
           <span class="switch-count" id="craft-micro-count"></span>
+        </button>
+        <button type="button" class="switch-btn" id="craft-wing" aria-pressed="false">
+          <span class="switch-kicker"><span data-str="app.fixed_wing">Fixed wing</span></span>
+          <span class="switch-name"><span data-str="html.four_hundred_metre_airfield">Four hundred metre airfield</span></span>
+          <span class="switch-count" id="craft-wing-count"></span>
         </button>
       </nav>
 

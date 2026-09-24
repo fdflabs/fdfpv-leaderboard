@@ -298,7 +298,7 @@ function craftParamOf(id) {
   if (!track) {
     return '';
   }
-  return `&craft=${classOf(track) === 'micro' ? 'whoop65' : '5inch'}`;
+  return `&craft=${CRAFT_ID[classOf(track)]}`;
 }
 
 function flyHref(config, id, ghostId) {
@@ -496,17 +496,24 @@ function tagsOf(track) {
 
 /*
  * The class of a track, and 'full' for every one published before there were
- * two, which is what they are. The server derives it from the stored document
- * on every list, so this never has to guess.
+ * classes, which is what they are. The server derives it from the stored
+ * document on every list, so this never has to guess. MIRRORS TRACK_CLASSES
+ * in src/validate.js, which mirrors the simulator's.
  */
+const TRACK_CLASSES = ['full', 'micro', 'wing'];
+
 function classOf(track) {
-  return track && track.trackClass === 'micro' ? 'micro' : 'full';
+  return track && TRACK_CLASSES.includes(track.trackClass) ? track.trackClass : 'full';
 }
 
 /* What a pilot calls it. The board says the aircraft, not the class, because
  * "micro" is a word about the document and "65 mm whoop" is a word about the
  * thing you fly. */
-const CRAFT_LABEL = { full: str('app.five_inch'), micro: '65 mm whoop' };
+const CRAFT_LABEL = { full: str('app.five_inch'), micro: '65 mm whoop', wing: str('app.fixed_wing') };
+
+/* The simulator's airframe id for each class, which is what its links and
+ * settings carry: configs/airframes.js there, one airframe per class. */
+const CRAFT_ID = { full: '5inch', micro: 'whoop65', wing: 'wing1000' };
 
 function craftLabel(track) {
   return CRAFT_LABEL[classOf(track)];
@@ -641,10 +648,10 @@ function cardFor(track, config) {
   if (size) {
     tile.append(el('span', 'tile-chip', size));
   }
-  /* Only the whoop is marked. Every track here is a five inch track until
-   * somebody publishes a room, so a chip on all of them is a word repeated
-   * on every card; marking the exception is what a chip is for. */
-  if (classOf(track) === 'micro') {
+  /* The five inch is not marked. Every track here was a five inch track
+   * until somebody published a room, so a chip on all of them is a word
+   * repeated on every card; marking the exceptions is what a chip is for. */
+  if (classOf(track) !== 'full') {
     tile.append(el('span', 'tile-craft', craftLabel(track)));
   }
   if (track.times > 0) {
@@ -1156,32 +1163,35 @@ const CRAFT_KEY = 'webfpv.board.craft.v1';
 function readCraft() {
   try {
     const wanted = new URL(window.location.href).searchParams.get('craft');
-    if (wanted === 'micro' || wanted === 'whoop65') {
-      return 'micro';
+    if (TRACK_CLASSES.includes(wanted)) {
+      return wanted;
     }
-    if (wanted === 'full' || wanted === '5inch') {
-      return 'full';
+    const byId = TRACK_CLASSES.find((cls) => CRAFT_ID[cls] === wanted);
+    if (byId) {
+      return byId;
     }
   } catch (e) {
     /* No URL to read. Fall through to the remembered answer. */
   }
   try {
-    return localStorage.getItem(CRAFT_KEY) === 'micro' ? 'micro' : 'full';
+    const held = localStorage.getItem(CRAFT_KEY);
+    return TRACK_CLASSES.includes(held) ? held : 'full';
   } catch (e) {
     return 'full';
   }
 }
 
 function writeCraft(craft) {
+  const cls = TRACK_CLASSES.includes(craft) ? craft : 'full';
   try {
-    localStorage.setItem(CRAFT_KEY, craft === 'micro' ? 'micro' : 'full');
+    localStorage.setItem(CRAFT_KEY, cls);
   } catch (e) {
     /* Private mode. The choice holds for this visit and not past it. */
   }
   try {
     const url = new URL(window.location.href);
-    if (craft === 'micro') {
-      url.searchParams.set('craft', 'micro');
+    if (cls !== 'full') {
+      url.searchParams.set('craft', cls);
     } else {
       url.searchParams.delete('craft');
     }
@@ -1192,9 +1202,10 @@ function writeCraft(craft) {
 }
 
 function showCraft(craft, { write = true } = {}) {
-  state.craft = craft === 'micro' ? 'micro' : 'full';
-  for (const [id, lit] of [['craft-full', state.craft === 'full'], ['craft-micro', state.craft === 'micro']]) {
-    const btn = byId(id);
+  state.craft = TRACK_CLASSES.includes(craft) ? craft : 'full';
+  for (const cls of TRACK_CLASSES) {
+    const btn = byId(`craft-${cls}`);
+    const lit = state.craft === cls;
     if (btn) {
       btn.classList.toggle('is-on', lit);
       btn.setAttribute('aria-pressed', lit ? 'true' : 'false');
@@ -1213,14 +1224,14 @@ function showCraft(craft, { write = true } = {}) {
  * them and a count that moved when a search did would read as the switch
  * being part of the search. */
 function paintCraftCounts() {
-  const by = { full: 0, micro: 0 };
+  const by = Object.fromEntries(TRACK_CLASSES.map((cls) => [cls, 0]));
   for (const t of state.courses) {
     by[classOf(t)] += 1;
   }
-  for (const [id, n] of [['craft-full-count', by.full], ['craft-micro-count', by.micro]]) {
-    const cell = byId(id);
+  for (const cls of TRACK_CLASSES) {
+    const cell = byId(`craft-${cls}-count`);
     if (cell) {
-      cell.textContent = n ? plural(n, 'track', 'tracks') : 'none yet';
+      cell.textContent = by[cls] ? plural(by[cls], 'track', 'tracks') : 'none yet';
     }
   }
 }
@@ -2124,10 +2135,10 @@ function bindHome() {
 }
 
 function bindCraftSwitch() {
-  for (const [id, craft] of [['craft-full', 'full'], ['craft-micro', 'micro']]) {
-    const btn = byId(id);
+  for (const cls of TRACK_CLASSES) {
+    const btn = byId(`craft-${cls}`);
     if (btn) {
-      btn.addEventListener('click', () => showCraft(craft));
+      btn.addEventListener('click', () => showCraft(cls));
     }
   }
 }
