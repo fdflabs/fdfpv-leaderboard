@@ -4,8 +4,9 @@
  * The document is the same schema.md object the simulator's track builder
  * writes. This file does not import that code. It checks the few things
  * the board must believe before it will keep a copy: a version it knows,
- * a stable id, a flying order, and a logo that is an embedded image or
- * nothing. The simulator is the reader that decides what a gate means.
+ * a stable id, a flying order, a logo that is an embedded image or
+ * nothing, and on a track built inside a world, the world and a pose per
+ * gate. The simulator is the reader that decides what a gate means.
  *
  * This file is part of WebFPVLeaderboard.
  *
@@ -268,7 +269,20 @@ function inspectBranding(document) {
 const LAYOUT_SKIP = new Set(['groundLogo']);
 
 export function layoutHash(document) {
+  /*
+   * A MAP TRACK'S WORLD IS PART OF ITS LAYOUT. Its positions are absolute in
+   * the world it names, so the same gates on swiss2 and on alps are two
+   * different races, and a republish onto another world has to clear the
+   * times rather than carry laps flown somewhere else. The poses are already
+   * in the hash: each element's orientation travels inside `elements`.
+   *
+   * Only a map track carries the key, and it goes in front of the others,
+   * so every version 1 to 3 document hashes byte for byte what it always
+   * did and no published field track loses a time to this line. MIRRORS
+   * layoutFingerprint in fdfpv/src/share/listing.js.
+   */
   const payload = {
+    ...(mapOf(document) ? { map: document.map } : {}),
     field: document.field ?? {},
     elements: (document.elements ?? []).filter((el) => !(isObject(el) && LAYOUT_SKIP.has(el.type))),
     sequence: document.sequence ?? [],
@@ -288,6 +302,141 @@ const PLAN_SKIP = new Set(['label', 'waypoint', 'groundLogo']);
 const PLAN_APERTURE = new Set([
   'gate', 'flaggedGate', 'doubleStack', 'flaggedDoubleStack', 'ladder', 'tower', 'diveGate',
 ]);
+
+/* ------------------------------------------------------------------ */
+/* Map tracks                                                          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * THE WORLDS A TRACK CAN STAND IN, AND WHY IT IS A CLOSED LIST.
+ *
+ * A schemaVersion 4 document is a track built inside one of the simulator's
+ * own worlds with its in-sim builder (src/builder/ there), and `map` names
+ * the world. That string picks a world for every pilot who presses Fly, so
+ * it is refused unless it is one the builder can build on. swiss2 and alps
+ * are the two; the town and Yellowstone are held back by the owner. MIRRORS
+ * the `build: true` entries of fdfpv/src/maps/registry.js: a world added
+ * there is a line here, deployed first.
+ */
+export const MAP_IDS = ['swiss2', 'alps'];
+
+/*
+ * What the in-sim builder places, MIRRORS BUILD_TYPES in
+ * fdfpv/src/builder/course.js. A map track is made only by that builder,
+ * so an element it cannot place is not a map track's element: it is a hand
+ * edit, and the simulator would build it into a world with no idea where
+ * its openings are. `pylon` is the one marker, scored through the square
+ * beside it; the rest are openings.
+ */
+export const MAP_ELEMENT_TYPES = [
+  'gate', 'flaggedGate', 'doubleStack', 'ladder', 'tower', 'wideGate3', 'wideGate5', 'pylonPair', 'pylon',
+];
+const MAP_MARKERS = new Set(['pylon']);
+
+/*
+ * Where a map track's elements may stand, metres in the document frame
+ * (x and y across the world with its centre at the origin, z up from the
+ * world's zero). Both worlds are the same 6000 m square (FIELD in the
+ * simulator's src/maps/alps/terrain.js, which swiss2 builds through), so
+ * anything past 3000 m from the centre is outside the world. The floor is
+ * at zero and the lake 1.5 m under it; the ridges stand 1400 m over the
+ * floor with the peaks on top. A hundred metres under the floor and three
+ * kilometres over it holds every place the builder's free camera can hang
+ * a gate with a wide margin, and refuses a number that is not a place.
+ */
+const MAP_HALF = 3000;
+const MAP_Z_MIN = -100;
+const MAP_Z_MAX = 3000;
+
+/*
+ * The most elements, and steps in the flying order, a map track may carry.
+ * Derived rather than picked: a lap's ghost carries one split per scored
+ * step and GHOST_MAX_SPLITS (below) is 256, so a track with more steps than
+ * that could never carry a lap to this board. A field track has no count
+ * cap because it predates this and its document size caps it; a map track
+ * starts with one.
+ */
+const MAP_MAX_STEPS = GHOST_MAX_SPLITS;
+
+/* How far a stored orientation may sit from unit length. The builder
+ * writes six decimal places of a normalised quaternion, which is within a
+ * few millionths; a thousandth is rounding with room, not a second pose. */
+const QUAT_SLACK = 1e-3;
+
+function finite(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/* The world a stored document stands in, or null for a field track. A
+ * version 4 document that passed inspectDocument always names one. */
+export function mapOf(document) {
+  return isObject(document) && document.schemaVersion === 4 && MAP_IDS.includes(document.map) ? document.map : null;
+}
+
+/*
+ * The checks a map track needs on top of every track's: a known world, the
+ * builder's own element types, and a pose per element that is a place in
+ * that world and a rotation. Returns null when it holds, or the sentence.
+ */
+function inspectMapTrack(document) {
+  if (!MAP_IDS.includes(document.map)) {
+    return `A version 4 track names the world it stands in, and this board knows ${MAP_IDS.join(' and ')}.`;
+  }
+  if (document.elements.length > MAP_MAX_STEPS || document.sequence.length > MAP_MAX_STEPS) {
+    return `A track built in a world carries at most ${MAP_MAX_STEPS} gates.`;
+  }
+  for (const el of document.elements) {
+    if (!isObject(el) || !MAP_ELEMENT_TYPES.includes(el.type)) {
+      return 'A track built in a world carries only the gates its builder places.';
+    }
+    const p = el.position;
+    if (!isObject(p) || !finite(p.x) || !finite(p.y) || !finite(p.z)) {
+      return 'Every gate on a track built in a world needs a position.';
+    }
+    if (Math.abs(p.x) > MAP_HALF || Math.abs(p.y) > MAP_HALF || p.z < MAP_Z_MIN || p.z > MAP_Z_MAX) {
+      return 'A gate on that track stands outside its world.';
+    }
+    const q = el.orientation;
+    if (!isObject(q) || !finite(q.w) || !finite(q.x) || !finite(q.y) || !finite(q.z)
+      || Math.abs(Math.hypot(q.w, q.x, q.y, q.z) - 1) > QUAT_SLACK) {
+      return 'Every gate on a track built in a world needs an orientation.';
+    }
+  }
+  return null;
+}
+
+/*
+ * A map track's plan, framed on its own gates.
+ *
+ * The page draws a plan on a rectangle measured from its corner, and a map
+ * track's positions are measured from the middle of a six kilometre world,
+ * so drawn as they stand three gates would be a speck in one corner of an
+ * empty square. The rectangle is instead the gates' own extent with a
+ * margin, and every mark is moved into it. The builder's plane sized
+ * openings draw as the gate they are at their own width, and its pylon as
+ * the marker it is, because those are the drawings the page has.
+ */
+function mapPlan(document, plan) {
+  if (!plan.marks.length) {
+    return { ...plan, map: document.map, width: 60, depth: 40 };
+  }
+  const xs = plan.marks.map((m) => m.x);
+  const ys = plan.marks.map((m) => m.y);
+  const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  const margin = Math.max(10, span * 0.12);
+  const x0 = Math.min(...xs) - margin;
+  const y0 = Math.min(...ys) - margin;
+  const shift = (p) => ({ ...p, x: p.x - x0, y: p.y - y0 });
+  return {
+    ...plan,
+    map: document.map,
+    width: Math.max(...xs) + margin - x0,
+    depth: Math.max(...ys) + margin - y0,
+    marks: plan.marks.map((m) => shift({ ...m, type: MAP_MARKERS.has(m.type) ? 'cone' : 'gate' })),
+    path: plan.path.map(shift),
+    numbers: plan.numbers.map(shift),
+  };
+}
 
 /*
  * The track's class, normalised the way the simulator's
@@ -436,6 +585,9 @@ export function inspectGif({ base64, document }) {
 
 export function planFromDocument(document) {
   const field = isObject(document.field) ? document.field : {};
+  /* On a map track every step the builder made is scored, a pylon's too,
+   * so every one gets its badge. */
+  const onMap = Boolean(mapOf(document));
   const byId = new Map();
   const sequenced = new Set();
   for (const step of document.sequence || []) {
@@ -528,7 +680,7 @@ export function planFromDocument(document) {
      * `stack` is how many badges already sit on this exact spot, so the
      * drawer can step them apart the way the builder does.
      */
-    if (PLAN_APERTURE.has(type) && el.id) {
+    if ((PLAN_APERTURE.has(type) || (onMap && MAP_ELEMENT_TYPES.includes(type))) && el.id) {
       const spot = `${x},${y}`;
       const stack = stacked.get(spot) || 0;
       stacked.set(spot, stack + 1);
@@ -537,7 +689,7 @@ export function planFromDocument(document) {
     }
   }
   const small = trackClassOf(document) === 'micro';
-  return {
+  const plan = {
     /* The class travels with the plan, because the drawer has three sizes it
      * cannot read off a mark: the marker symbol, and the two fallbacks a
      * plan with no dimensions falls through to. public/plan.js reads it,
@@ -552,6 +704,7 @@ export function planFromDocument(document) {
     path,
     numbers,
   };
+  return onMap ? mapPlan(document, plan) : plan;
 }
 
 /*
@@ -563,6 +716,12 @@ export function planFromDocument(document) {
  * src/game/trackdoc.js.
  */
 function gateCount(document) {
+  /* The in-sim builder gives every element exactly one step and every step
+   * is scored, a pylon's on the square beside it, so on a map track the
+   * flying order IS the gate count. */
+  if (mapOf(document)) {
+    return document.sequence.length;
+  }
   const byId = new Map();
   for (const el of document.elements || []) {
     if (isObject(el) && typeof el.id === 'string' && el.id) {
@@ -625,8 +784,16 @@ export function inspectDocument(raw) {
    * from a builder that writes 3, and every stored track reads as 'full',
    * which is what it is.
    */
-  if (![1, 2, 3].includes(document.schemaVersion)) {
-    return { error: 'This board accepts schemaVersion 1, 2 and 3 tracks.' };
+  /*
+   * And 4, a track built inside one of the simulator's worlds, which is the
+   * only kind of document a builder writes as 4: a field track is still
+   * written as 3. It names its world in `map` and every element stands at
+   * an absolute position with a full orientation, so it is read more
+   * strictly than a field track, below, once the checks every track shares
+   * have passed. Nothing about a version 1 to 3 document moved.
+   */
+  if (![1, 2, 3, 4].includes(document.schemaVersion)) {
+    return { error: 'This board accepts schemaVersion 1, 2, 3 and 4 tracks.' };
   }
   const id = String(document.id || '');
   if (!TRACK_ID_RE.test(id)) {
@@ -656,6 +823,12 @@ export function inspectDocument(raw) {
       return { error: 'That flying order names a gate that is not in the track.' };
     }
   }
+  if (document.schemaVersion === 4) {
+    const wrong = inspectMapTrack(document);
+    if (wrong) {
+      return { error: wrong };
+    }
+  }
   const branding = inspectBranding(document);
   if (branding.error) {
     return { error: branding.error };
@@ -671,6 +844,7 @@ export function inspectDocument(raw) {
     gates: gateCount(document),
     elements: document.elements.length,
     trackClass: trackClassOf(document),
+    map: mapOf(document),
     layoutHash: layoutHash(document),
     plan: planFromDocument(document),
   };
