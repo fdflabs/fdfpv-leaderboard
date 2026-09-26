@@ -519,6 +519,18 @@ function craftLabel(track) {
   return CRAFT_LABEL[classOf(track)];
 }
 
+/*
+ * THE WORLD A TRACK BUILT INSIDE ONE STANDS IN, which is the first thing a
+ * reader needs about it: its gates hang in a valley rather than on a field,
+ * and Fly takes the pilot there. MIRRORS MAP_IDS in src/validate.js, named
+ * the way the simulator's own map list names them. Empty on a field track.
+ */
+const WORLD_LABEL = { swiss2: str('app.world_swiss2'), alps: str('app.world_alps') };
+
+function worldLabel(track) {
+  return track && WORLD_LABEL[track.map] ? WORLD_LABEL[track.map] : '';
+}
+
 /* Every tag actually in use, with how many tracks wear it. Counted over the
  * tracks the OTHER filters leave standing, so ticking an author greys out
  * the tags that author never used rather than offering an empty result. */
@@ -644,7 +656,7 @@ function cardFor(track, config) {
   tile.href = courseHref(track.id);
   tile.setAttribute('aria-label', str('app.and_times', { name: track.name, v2: track.hasGif ? str('app.a_lap') : 'plan' }));
   tile.append(cardArt(track));
-  const size = fieldSize(track);
+  const size = worldLabel(track) || fieldSize(track);
   if (size) {
     tile.append(el('span', 'tile-chip', size));
   }
@@ -1839,7 +1851,11 @@ async function paintSheet(track) {
   }
   factRow(facts, 'Gates', plural(track.gates, 'gate', 'gates'));
   factRow(facts, 'Elements', track.elements);
-  factRow(facts, classOf(track) === 'micro' ? 'Room' : 'Field', fieldSize(track));
+  if (worldLabel(track)) {
+    factRow(facts, str('app.world'), worldLabel(track));
+  } else {
+    factRow(facts, classOf(track) === 'micro' ? 'Room' : 'Field', fieldSize(track));
+  }
   factRow(facts, str('app.flown_on'), craftLabel(track));
   factRow(facts, 'Updated', formatAgo(track.updatedUtc));
   if (track.hasLogo) {
