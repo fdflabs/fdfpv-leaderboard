@@ -141,11 +141,11 @@ to create things in, is in
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| GET | `/api/tracks` | Every published course, with its best time |
-| GET | `/api/tracks/:id` | That course and its leaderboard. Each time carries `{ id, hasGhost }` |
+| GET | `/api/tracks` | Every published course, with its best time. A track built inside a world also carries `planes`, the fixed wings that fit every gate, and `wing`, its plane board's `{ times, best }` |
+| GET | `/api/tracks/:id` | That course and its leaderboard. Each time carries `{ id, hasGhost, craft }`, `craft` naming the plane on a plane board's time and null on every other |
 | GET | `/api/tracks/:id/document` | The full track document, marks included |
 | POST | `/api/tracks` | Publish `{ author, document, editKey? }` |
-| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost, key, sig }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course. `key` and `sig` are the pilot's key and its signature over the post; the first key seen for a name owns the name, and another key posting under it is a 403 |
+| POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost, key, sig }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course. `key` and `sig` are the pilot's key and its signature over the post; the first key seen for a name owns the name, and another key posting under it is a 403. A fixed wing's lap on a track built inside a world adds `craft`, the plane's airframe id, which the signature covers and which puts the time on the track's plane board; the lap check refuses a plane that does not fit every gate |
 | WS | `/api/live/:id?name=` | Live room for that track: pilots on it see each other. Binary frames are relayed with the sender's id in front; text frames are `welcome`, `join` and `leave` |
 | GET | `/api/tracks/:id/times/:timeId/ghost` | That time's recorded lap, `{ id, name, lapMs, ghost }` |
 | GET | `/api/tracks/:id/gif` | That room's card animation, as `image/gif` |

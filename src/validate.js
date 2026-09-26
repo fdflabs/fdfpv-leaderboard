@@ -88,6 +88,27 @@ export function normaliseThreeMs(raw, lapMs) {
   return ms;
 }
 
+/*
+ * The aircraft a time names, which only a plane's lap on a track built
+ * inside a world does: the simulator files those on the plane board and
+ * every other time posts none. Returns { craft } with null for a time that
+ * names nothing, or { error }. This is the SHAPE of an airframe id and no
+ * more; whether it is a fixed wing that fits the track's gates is the lap
+ * check's question (the simulator's src/game/verify.js), which reads the
+ * stored document and the simulator's own aircraft.
+ */
+const CRAFT_RE = /^[a-z0-9]{1,32}$/;
+
+export function inspectCraft(raw) {
+  if (raw == null || raw === '') {
+    return { craft: null };
+  }
+  if (typeof raw !== 'string' || !CRAFT_RE.test(raw)) {
+    return { error: 'That is not an aircraft this board knows.' };
+  }
+  return { craft: raw };
+}
+
 function isObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }

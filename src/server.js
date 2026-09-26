@@ -38,7 +38,7 @@ import {
   adminCount, checkPassword, mintSession, normaliseEmail, readSession, PASSWORD_MAX,
 } from './admin.js';
 import {
-  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, inspectAuth, inspectGif, inspectRun,
+  inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectAuth, inspectGif, inspectRun,
   inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
   BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
@@ -982,6 +982,20 @@ async function handleApi(req, res, url) {
       return;
     }
     /*
+     * THE PLANE BOARD. A fixed wing's lap on a track built inside a world
+     * names its aircraft, and that files it on a board of its own beside
+     * the quads' on the same track: a quad and a plane through the same
+     * gates are not one race. The name is under the signature, so a signed
+     * lap cannot be moved from one board to the other, and the lap check
+     * below refuses a plane that is not a fixed wing, a track that is not a
+     * map track, and a plane that does not fit every gate.
+     */
+    const craft = inspectCraft(body.craft);
+    if (craft.error) {
+      send(res, 400, { error: craft.error });
+      return;
+    }
+    /*
      * The name is claimed by a key. The post carries the pilot's public key
      * and a signature over this exact post (track, rounded lap, ghost), so
      * a signed post cannot be moved to another track or have its ghost
@@ -994,7 +1008,9 @@ async function handleApi(req, res, url) {
       send(res, 400, { error: auth.error });
       return;
     }
-    if (!(await verifyTimeSignature({ key: auth.key, sig: auth.sig, trackId, lapMs, ghost: ghost.ghost }))) {
+    if (!(await verifyTimeSignature({
+      key: auth.key, sig: auth.sig, trackId, lapMs, ghost: ghost.ghost, craft: craft.craft,
+    }))) {
       send(res, 401, { error: 'That signature does not match this post.' });
       return;
     }
@@ -1011,7 +1027,7 @@ async function handleApi(req, res, url) {
       send(res, 404, { error: 'No track with that id is on the board.' });
       return;
     }
-    const verdict = checkLap(published.document, new Uint8Array(Buffer.from(ghost.ghost, 'base64')), lapMs);
+    const verdict = checkLap(published.document, new Uint8Array(Buffer.from(ghost.ghost, 'base64')), lapMs, craft.craft);
     if (!verdict.ok) {
       send(res, 422, { error: `That lap does not hold up against the track: ${verdict.reason}.` });
       return;
@@ -1036,6 +1052,7 @@ async function handleApi(req, res, url) {
       threeMs: normaliseThreeMs(body.threeMs, lapMs),
       ghost: ghost.ghost,
       key: auth.key,
+      craft: craft.craft,
     });
     if (result.error) {
       send(res, result.status || 400, { error: result.error });

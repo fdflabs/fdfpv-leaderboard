@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS pilots (
   claimed_utc TIMESTAMPTZ NOT NULL
 );
 
+-- The fixed wing a plane's lap on a track built inside a world was flown
+-- on, and null on every other time. A time naming one is on the plane
+-- board of its track and every other time on the track's own, which is
+-- the quads' on a map track. Additive, like three_ms: every row from
+-- before reads as the board it was always on. The id is the simulator's
+-- airframe id, and the lap check vouched for it (a fixed wing that fits
+-- every gate) before the row was written.
+ALTER TABLE times ADD COLUMN IF NOT EXISTS craft TEXT;
+
 CREATE INDEX IF NOT EXISTS times_track_lap
   ON times (track_id, lap_ms, posted_utc);
 
