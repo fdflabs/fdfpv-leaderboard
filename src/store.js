@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
-  creditOf, hashEditKey, planFromDocument, trackClassOf, STATS_COUNTRY_UNKNOWN,
+  creditOf, hashEditKey, mapOf, planFromDocument, trackClassOf, STATS_COUNTRY_UNKNOWN,
 } from './validate.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -174,6 +174,10 @@ export function summaryOf(track, times) {
      * is, so there is one copy of the truth and no migration. Every track
      * published before the class existed reads as the field it was. */
     trackClass: trackClassOf(track.document),
+    /* The world a track built inside one stands in, or null for a field
+     * track, read off the document the same way. The simulator lists a map
+     * track only where it can seat that world. */
+    map: mapOf(track.document),
     /* The designer, and the series the track belongs to, read off the
      * document the same way. Empty on a track whose builder left the credit
      * block alone, which is most of them. See creditOf in validate.js. */
@@ -1627,6 +1631,7 @@ export function rowToSummary(row) {
     elements: row.elements,
     hasLogo: row.has_logo,
     trackClass: trackClassOf(row.document),
+    map: mapOf(row.document),
     /* The designer and the series, read off the stored document. The twin
      * of the same line in summaryOf, and the reason the pair is now checked
      * against each other below: this one was forgotten for a deploy, so the

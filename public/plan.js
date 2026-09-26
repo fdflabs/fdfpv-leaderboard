@@ -769,7 +769,9 @@ export function planLabel(track) {
    * thing a sighted reader can see: five gates in a five by six metre ROOM
    * is not five gates on a five by six metre field, and calling a living
    * room a field is the one word that would make the sentence wrong. */
-  const where = plan.trackClass === 'micro' ? 'room' : 'field';
+  /* A track built inside a world is drawn on its own gates' extent, which
+   * is a stretch of a valley and not a field anybody laid out. */
+  const where = plan.trackClass === 'micro' ? 'room' : (plan.map ? 'valley' : 'field');
   return str('plan.plan_of_in_a_by_metre', { name: track.name, gates, w, d, where });
 }
 

@@ -10,6 +10,7 @@
  * your option) any later version.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +18,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import {
-  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName,
+  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName, MAP_IDS,
   creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
   inspectStatsEvent, normaliseCountry, statsDay,
 } from './validate.js';
@@ -25,6 +26,7 @@ import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
 import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js';
 import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
+import { mapTrackDocument } from '../vendor/fdfpv/tests/lib/maptrack.js';
 import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identity.js';
 
 /*
@@ -341,9 +343,74 @@ async function testValidate() {
   const three = inspectDocument(v3);
   check('accepts a schema 3 track', !three.error, three.error);
   check('and a schema 3 track with no class is the field', three.trackClass === 'full', three.trackClass);
-  const v4 = sampleDoc('trk-1a2b3c4d');
-  v4.schemaVersion = 4;
-  check('but still refuses a version it has not been taught', Boolean(inspectDocument(v4).error));
+  const v5 = sampleDoc('trk-1a2b3c4d');
+  v5.schemaVersion = 5;
+  check('but still refuses a version it has not been taught', Boolean(inspectDocument(v5).error));
+
+  /*
+   * SCHEMA 4 IS A TRACK BUILT INSIDE A WORLD, and this used to assert its
+   * refusal too. The document is the simulator's own: three gates hung in a
+   * ring on swiss2 by the in-sim builder's functions, from its pinned
+   * checkout, so this is the shape a pilot's publish actually sends.
+   */
+  const ring = mapTrackDocument({ id: 'trk-4d5e6f70' });
+  const ringOut = inspectDocument(ring);
+  check('accepts a schema 4 track built on swiss2', !ringOut.error, ringOut.error);
+  check('and knows which world it stands in', ringOut.map === 'swiss2', ringOut.map);
+  check('and counts its three gates', ringOut.gates === 3, `${ringOut.gates}`);
+  check('and it is raced as the five inch field class', ringOut.trackClass === 'full', ringOut.trackClass);
+  check('its plan is framed on its own gates, not the world', ringOut.plan.map === 'swiss2'
+    && ringOut.plan.width > 60 && ringOut.plan.width < 200
+    && ringOut.plan.marks.every((m) => m.x >= 0 && m.y >= 0 && m.x <= ringOut.plan.width && m.y <= ringOut.plan.depth),
+  JSON.stringify(ringOut.plan).slice(0, 160));
+  check('and every gate on it carries its number', ringOut.plan.numbers.map((n) => n.n).join() === '1,2,3');
+  check('the worlds are swiss2 and alps and nothing else', MAP_IDS.join() === 'swiss2,alps', MAP_IDS.join());
+  check('accepts the same ring on alps', inspectDocument({ ...ring, map: 'alps' }).map === 'alps');
+  const unmapped = { ...ring };
+  delete unmapped.map;
+  check('refuses a version 4 track that names no world', /world it stands in/.test(inspectDocument(unmapped).error || ''));
+  for (const world of ['city', 'yellowstone', 'custom', 'SWISS2']) {
+    check(`refuses a version 4 track on ${world}`, Boolean(inspectDocument({ ...ring, map: world }).error));
+  }
+  const withEl = (fn) => ({ ...ring, elements: ring.elements.map((el, i) => (i === 1 ? fn({ ...el }) : el)) });
+  check('refuses an element the in-sim builder does not place', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'flag' }))).error));
+  check('refuses a label on a map track', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'label' }))).error));
+  check('accepts every type the builder places', ['gate', 'flaggedGate', 'doubleStack', 'ladder', 'tower', 'wideGate3', 'wideGate5', 'pylonPair', 'pylon']
+    .every((type) => !inspectDocument(withEl((el) => ({ ...el, type }))).error));
+  check('refuses a gate outside the world across it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, x: 3001 } }))).error));
+  check('refuses a gate outside the world along it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, y: -3001 } }))).error));
+  check('refuses a gate three kilometres up', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, z: 3001 } }))).error));
+  check('refuses a gate under the floor', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, z: -101 } }))).error));
+  check('accepts a gate on the world\'s edge', !inspectDocument(withEl((el) => ({ ...el, position: { x: 3000, y: -3000, z: 0 } }))).error);
+  check('refuses a position that is text', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, x: '10' } }))).error));
+  check('refuses a gate with no position', Boolean(inspectDocument(withEl((el) => { delete el.position; return el; })).error));
+  check('refuses a gate with no orientation', Boolean(inspectDocument(withEl((el) => { delete el.orientation; return el; })).error));
+  check('refuses an orientation that is not a rotation', Boolean(inspectDocument(withEl((el) => ({ ...el, orientation: { w: 2, x: 0, y: 0, z: 0 } }))).error));
+  check('refuses an orientation with a hole in it', Boolean(inspectDocument(withEl((el) => ({ ...el, orientation: { w: 1, x: 0, y: null, z: 0 } }))).error));
+  check('accepts an orientation within rounding of unit length', !inspectDocument(withEl((el) => ({ ...el, orientation: { w: 0.9999, x: 0, y: 0, z: 0 } }))).error);
+  const crowded = mapTrackDocument({ id: 'trk-4d5e6f70', gates: 257, radius: 900 });
+  check('refuses a map track with more gates than a ghost can split', /at most 256/.test(inspectDocument(crowded).error || ''), inspectDocument(crowded).error);
+  check('accepts one at the limit', !inspectDocument(mapTrackDocument({ id: 'trk-4d5e6f70', gates: 256, radius: 900 })).error);
+
+  /*
+   * THE LAYOUT HASH. A field track's must be byte for byte what it was, or
+   * every published track loses its times on its next republish: the
+   * expected value below is computed here from the three keys, independently
+   * of layoutHash. A map track's carries its world, so the same ring on
+   * another world is another race, and its poses, so turning a gate is too.
+   */
+  const fieldDoc = sampleDoc('trk-1a2b3c4d');
+  const byHand = createHash('sha256').update(JSON.stringify({
+    field: fieldDoc.field, elements: fieldDoc.elements, sequence: fieldDoc.sequence,
+  })).digest('hex');
+  check('a field track hashes exactly as it did before map tracks', layoutHash(fieldDoc) === byHand);
+  check('a field track that says map is still hashed as a field', layoutHash({ ...fieldDoc, map: 'swiss2' }) === byHand);
+  check('the same ring on another world is another layout', layoutHash(ring) !== layoutHash({ ...ring, map: 'alps' }));
+  check('the same ring on the same world is the same layout', layoutHash(ring) === layoutHash(mapTrackDocument({ id: 'trk-4d5e6f70' })));
+  check('a ring renamed is the same layout', layoutHash(ring) === layoutHash({ ...ring, name: 'Another name' }));
+  const turned = withEl((el) => ({ ...el, orientation: { w: 1, x: 0, y: 0, z: 0 } }));
+  check('turning one gate is another layout', layoutHash(ring) !== layoutHash(turned));
+  check('raising one gate is another layout', layoutHash(ring) !== layoutHash(withEl((el) => ({ ...el, position: { ...el.position, z: el.position.z + 1 } }))));
 
   /*
    * A ROOM. RaceGOW's own dimensions: a 5 by 6 m field, a 28 inch gate out
@@ -935,6 +1002,79 @@ async function testHttp() {
     const wingSkippedBody = await wingSkipped.json();
     check('a wing lap that skipped a gate is refused',
       wingSkipped.status === 422 && /does not hold up/.test(wingSkippedBody.error), `${wingSkipped.status} ${wingSkippedBody.error}`);
+    /*
+     * A TRACK BUILT INSIDE A WORLD, published, listed, served, flown and
+     * chased. The lap check is the simulator's, vendored, reading the ring's
+     * gates at their absolute poses the way the shell races them.
+     */
+    console.log('\nmap tracks');
+    const ringDoc = mapTrackDocument({ id: 'trk-4d5e6f70', name: 'Ring over the drop' });
+    const ringPub = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: ringDoc }),
+    });
+    const ringPubBody = await ringPub.json();
+    check('publish a swiss2 map track over HTTP', ringPub.status === 201 && ringPubBody.id === 'trk-4d5e6f70' && Boolean(ringPubBody.editKey), `${ringPub.status} ${JSON.stringify(ringPubBody).slice(0, 120)}`);
+    const mapList = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
+    const ringRow = (mapList.tracks || []).find((t) => t.id === 'trk-4d5e6f70');
+    check('the listing says which world it stands in', Boolean(ringRow) && ringRow.map === 'swiss2' && ringRow.trackClass === 'full' && ringRow.gates === 3,
+      ringRow && JSON.stringify({ map: ringRow.map, trackClass: ringRow.trackClass, gates: ringRow.gates }));
+    check('and a field track in the same listing names none', (mapList.tracks || []).find((t) => t.id === 'trk-1a2b3c4d').map === null);
+    const ringServed = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/document').then((r) => r.json());
+    const servedDoc = ringServed.document || ringServed;
+    check('its document is served back whole', servedDoc.schemaVersion === 4 && servedDoc.map === 'swiss2'
+      && JSON.stringify(servedDoc.elements) === JSON.stringify(ringDoc.elements));
+    const ringLap = honestLap(ringDoc);
+    const ringTime = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', ringLap),
+    });
+    const ringPosted = await ringTime.json();
+    check('a signed lap of the ring is checked and kept', ringTime.status === 201 && ringPosted.rank === 1, `${ringTime.status} ${JSON.stringify(ringPosted).slice(0, 160)}`);
+    const ringGhost = await fetch(`http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times/${ringPosted.id}/ghost`).then((r) => r.json());
+    check('and its ghost is served back to chase', ringGhost.ghost === ringLap.ghost && ringGhost.lapMs === Math.round(ringLap.lapMs));
+    const ringSkip = honestLap(ringDoc, { skip: 1 });
+    const ringSkipped = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(boKey, 'trk-4d5e6f70', 'Bo', { ghost: ringSkip.ghost, lapMs: ringSkip.durationMs }),
+    });
+    const ringSkippedBody = await ringSkipped.json();
+    check('a lap of the ring that skipped a gate is refused', ringSkipped.status === 422 && /does not hold up/.test(ringSkippedBody.error), `${ringSkipped.status} ${ringSkippedBody.error}`);
+    const fieldLapOnRing = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await signedTime(boKey, 'trk-4d5e6f70', 'Bo', boLap),
+    });
+    check('and so is a field lap posted to it', fieldLapOnRing.status === 422 || fieldLapOnRing.status === 400, `${fieldLapOnRing.status}`);
+    const ringTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70').then((r) => r.json());
+    check('the ring keeps its own times and nobody else\'s', ringTimes.times.length === 1 && ringTimes.times[0].name === 'Ada Rook');
+    const fieldTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
+    check('and the field track kept its own', fieldTimes.times.every((t) => t.name !== 'Ada Rook' || t.lapMs !== Math.round(ringLap.lapMs)));
+    const retitled = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: { ...ringDoc, name: 'Ring, renamed' }, editKey: ringPubBody.editKey }),
+    });
+    const retitledBody = await retitled.json();
+    check('renaming the ring keeps its time', retitled.status === 200 && retitledBody.timesCleared !== true, `${retitled.status} ${JSON.stringify(retitledBody).slice(0, 120)}`);
+    const ringMoved = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: { ...ringDoc, map: 'alps' }, editKey: ringPubBody.editKey }),
+    });
+    const ringMovedBody = await ringMoved.json();
+    check('moving the ring to another world clears its times', ringMoved.status === 200 && ringMovedBody.timesCleared === true, `${ringMoved.status} ${JSON.stringify(ringMovedBody).slice(0, 120)}`);
+    const movedRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-4d5e6f70');
+    check('and the listing follows it there', movedRow.map === 'alps' && movedRow.times === 0, JSON.stringify({ map: movedRow.map, times: movedRow.times }));
+    const cityPub = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: mapTrackDocument({ id: 'trk-5e6f7081', map: 'city' }) }),
+    });
+    check('a map track on the town is refused over HTTP', cityPub.status === 400, `${cityPub.status}`);
     /* ---------------------------------------------------------------- */
     console.log('\nlive rooms');
     const nextMessage = (ws, ms = 3000) => new Promise((resolve, reject) => {
