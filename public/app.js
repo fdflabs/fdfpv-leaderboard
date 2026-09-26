@@ -293,17 +293,25 @@ const BOARD_WINDOW = 'fdfpv-board';
  * document now as well, but the link saying so is what lets it draw the
  * right world from the first frame instead of swapping under the title.
  */
-function craftParamOf(id) {
+function craftParamOf(id, craft) {
   const track = state.courses.find((t) => t.id === id);
   if (!track) {
     return '';
   }
+  /* A plane's lap names its plane, and a chase of it seats that plane; the
+   * plane board's Fly seats the first plane that fits every gate. */
+  if (craft) {
+    return `&craft=${encodeURIComponent(craft)}`;
+  }
+  if (planeView(track)) {
+    return `&craft=${encodeURIComponent(track.planes[0])}`;
+  }
   return `&craft=${CRAFT_ID[classOf(track)]}`;
 }
 
-function flyHref(config, id, ghostId) {
+function flyHref(config, id, ghostId, craft) {
   const board = encodeURIComponent(config.boardOrigin);
-  const base = withLang(`${config.simOrigin}/?map=custom&share=${encodeURIComponent(id)}&board=${board}${craftParamOf(id)}`);
+  const base = withLang(`${config.simOrigin}/?map=custom&share=${encodeURIComponent(id)}&board=${board}${craftParamOf(id, craft)}`);
   /* A ghost id turns the link into a chase: the simulator fetches that
    * lap's recording and flies it beside the visitor as a translucent
    * pacer. Only times posted with a recording carry one. */
@@ -314,7 +322,7 @@ function flyHref(config, id, ghostId) {
  * podium and the sheet's table must not drift apart on what a chase is. */
 function chaseLink(config, trackId, row) {
   const a = el('a', 'chase', 'chase');
-  a.href = flyHref(config, trackId, row.id);
+  a.href = flyHref(config, trackId, row.id, row.craft);
   a.target = SIM_WINDOW;
   a.title = str('app.fly_against_s_recorded_lap', { name: row.name });
   return a;
@@ -423,15 +431,64 @@ function tagLabel(id) {
 }
 
 function courseById(id) {
-  return state.courses.find((t) => t.id === id) || null;
+  const track = state.courses.find((t) => t.id === id);
+  return track ? seenAs(track) : null;
 }
 
 function timesFor(id) {
   return state.timesById.get(id) || null;
 }
 
+/*
+ * THE PLANE BOARD. A track built inside a world is raced by the quads, as
+ * the five inch's track it is filed as, and by every fixed wing that fits
+ * its gates (the server's `planes`), and the two keep separate times: a
+ * time naming a plane (`craft`) is on the plane board. The aircraft switch
+ * says which board a reader is looking at, so under Fixed wing such a track
+ * shows its plane board and under Five inch its quads'.
+ */
+function planeView(track) {
+  return state.craft === 'wing' && Boolean(track && track.map);
+}
+
+/* The times on the board the reader is looking at, fastest first as the
+ * server sends them. A field track has one board and keeps every row. */
+function boardTimes(track, times) {
+  if (!times || !track || !track.map) {
+    return times;
+  }
+  const plane = planeView(track);
+  return times.filter((row) => Boolean(row.craft) === plane);
+}
+
+/* The track with that board's count and record in its own `times` and
+ * `best`, which is what every card, sort and sheet reads. */
+function seenAs(track) {
+  if (!planeView(track)) {
+    return track;
+  }
+  return { ...track, times: track.wing ? track.wing.times : 0, best: track.wing ? track.wing.best : null };
+}
+
+/* Every board a track has, as its own list of rows: one on a field track,
+ * the quads' and the planes' on a map track. A record is a board's. */
+function boardsOf(times) {
+  const quads = times.filter((row) => !row.craft);
+  const planes = times.filter((row) => row.craft);
+  return [quads, planes].filter((rows) => rows.length);
+}
+
+/* Whether a track is on the switch's aircraft's list: its own class, or a
+ * track built inside a world that some fixed wing fits, under Fixed wing. */
+function flownBy(track, craft) {
+  if (craft === 'wing' && track.map && Array.isArray(track.planes) && track.planes.length) {
+    return true;
+  }
+  return classOf(track) === craft;
+}
+
 function bestMsOf(track) {
-  const times = timesFor(track.id);
+  const times = boardTimes(track, timesFor(track.id));
   if (times && times.length) {
     return times[0].lapMs;
   }
@@ -516,7 +573,7 @@ const CRAFT_LABEL = { full: str('app.five_inch'), micro: '65 mm whoop', wing: st
 const CRAFT_ID = { full: '5inch', micro: 'whoop65', wing: 'wing1000' };
 
 function craftLabel(track) {
-  return CRAFT_LABEL[classOf(track)];
+  return CRAFT_LABEL[planeView(track) ? 'wing' : classOf(track)];
 }
 
 /*
@@ -561,7 +618,7 @@ function poolBeforeTags() {
   const needle = state.query.trim().toLowerCase();
   return state.courses.filter((t) => matches(t, needle)
     && (!state.author || String(t.author) === state.author)
-    && (!state.craft || classOf(t) === state.craft));
+    && (!state.craft || flownBy(t, state.craft)));
 }
 
 function visibleCourses() {
@@ -569,6 +626,7 @@ function visibleCourses() {
   const wanted = [...state.tags];
   return poolBeforeTags()
     .filter((t) => wanted.every((id) => tagsOf(t).includes(id)))
+    .map(seenAs)
     .sort(compare);
 }
 
@@ -663,7 +721,7 @@ function cardFor(track, config) {
   /* The five inch is not marked. Every track here was a five inch track
    * until somebody published a room, so a chip on all of them is a word
    * repeated on every card; marking the exceptions is what a chip is for. */
-  if (classOf(track) !== 'full') {
+  if (classOf(track) !== 'full' || planeView(track)) {
     tile.append(el('span', 'tile-craft', craftLabel(track)));
   }
   if (track.times > 0) {
@@ -826,7 +884,7 @@ function paintGrid() {
   for (const track of shown) {
     const card = cardFor(track, state.config);
     list.append(card);
-    const times = timesFor(track.id);
+    const times = boardTimes(track, timesFor(track.id));
     if (times) {
       paintPodium(card, times);
     }
@@ -976,19 +1034,21 @@ function standings() {
     if (!times || !times.length) {
       continue;
     }
-    times.forEach((row, i) => {
-      const rec = by.get(row.name) || {
-        name: row.name, laps: 0, records: 0, podiums: 0,
-      };
-      rec.laps += 1;
-      if (i === 0) {
-        rec.records += 1;
-      }
-      if (i < 3) {
-        rec.podiums += 1;
-      }
-      by.set(row.name, rec);
-    });
+    for (const rows of boardsOf(times)) {
+      rows.forEach((row, i) => {
+        const rec = by.get(row.name) || {
+          name: row.name, laps: 0, records: 0, podiums: 0,
+        };
+        rec.laps += 1;
+        if (i === 0) {
+          rec.records += 1;
+        }
+        if (i < 3) {
+          rec.podiums += 1;
+        }
+        by.set(row.name, rec);
+      });
+    }
   }
   return [...by.values()].sort((a, b) => b.records - a.records
     || b.podiums - a.podiums
@@ -1003,9 +1063,11 @@ function latestTimes(limit) {
     if (!times) {
       continue;
     }
-    times.forEach((row, i) => {
-      rows.push({ ...row, course, best: i === 0 });
-    });
+    for (const board of boardsOf(times)) {
+      board.forEach((row, i) => {
+        rows.push({ ...row, course, best: i === 0 });
+      });
+    }
   }
   rows.sort((a, b) => String(b.postedUtc || '').localeCompare(String(a.postedUtc || '')));
   return rows.slice(0, limit);
@@ -1074,7 +1136,7 @@ function paintRail() {
 
 function paintStats() {
   const n = state.courses.length;
-  const times = state.courses.reduce((sum, t) => sum + (t.times || 0), 0);
+  const times = state.courses.reduce((sum, t) => sum + (t.times || 0) + (t.wing ? t.wing.times : 0), 0);
   const pilots = standings().length;
   const mast = byId('mast-stats');
   const spine = byId('spine-stats');
@@ -1140,13 +1202,13 @@ async function loadTimes(id) {
 }
 
 async function hydrate() {
-  const active = state.courses.filter((t) => (t.times || 0) > 0);
+  const active = state.courses.filter((t) => (t.times || 0) + (t.wing ? t.wing.times : 0) > 0);
   await Promise.all(active.map(async (track) => {
     try {
       const times = await loadTimes(track.id);
       const card = document.querySelector(`.card[data-id="${CSS.escape(track.id)}"]`);
       if (card) {
-        paintPodium(card, times);
+        paintPodium(card, boardTimes(track, times));
       }
     } catch (e) {
       /* The record from the list payload is still on the tile. */
@@ -1238,7 +1300,9 @@ function showCraft(craft, { write = true } = {}) {
 function paintCraftCounts() {
   const by = Object.fromEntries(TRACK_CLASSES.map((cls) => [cls, 0]));
   for (const t of state.courses) {
-    by[classOf(t)] += 1;
+    for (const cls of TRACK_CLASSES) {
+      by[cls] += flownBy(t, cls) ? 1 : 0;
+    }
   }
   for (const cls of TRACK_CLASSES) {
     const cell = byId(`craft-${cls}-count`);
@@ -1520,7 +1584,10 @@ function paintSheetAdmin(track) {
     return;
   }
   host.append(el('div', 'kicker', str('app.admin')));
-  const held = track.times || 0;
+  /* Every time on the track, both boards of a map track: removing it takes
+   * all of them, whichever board the reader was looking at. */
+  const raw = state.courses.find((t) => t.id === track.id) || track;
+  const held = (raw.times || 0) + (raw.wing ? raw.wing.times : 0);
   host.append(el('p', null, held
     ? str('app.taking_this_off_the_board_takes', { plural: plural(held, 'posted time', 'posted times') })
     : str('app.taking_this_off_the_board_cannot')));
@@ -1876,14 +1943,14 @@ async function paintSheet(track) {
 
   paintSheetAdmin(track);
 
-  const held = timesFor(track.id) || [];
+  const held = boardTimes(track, timesFor(track.id)) || [];
   paintHero(byId('sheet-hero'), track, held);
   paintBoard(byId('sheet-board'), track, held);
   paintPlans(byId('sheet'));
 
   if (!timesFor(track.id) && (track.times || 0) > 0) {
     try {
-      const times = await loadTimes(track.id);
+      const times = boardTimes(track, await loadTimes(track.id));
       if (state.openId === track.id) {
         paintHero(byId('sheet-hero'), track, times);
         paintBoard(byId('sheet-board'), track, times);
