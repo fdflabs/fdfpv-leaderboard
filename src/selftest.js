@@ -80,6 +80,14 @@ async function signedTime(identity, trackId, name, lap, extra = {}) {
   return JSON.stringify({ name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, ...extra });
 }
 
+/* A plane's lap on a map track: the same post naming its aircraft, which
+ * the signature covers too. */
+async function signedPlaneTime(identity, trackId, name, lap, craft) {
+  const lapMs = Math.round(lap.lapMs);
+  const auth = await identity.signTime({ trackId, lapMs, ghost: lap.ghost, craft });
+  return JSON.stringify({ name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, craft });
+}
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 let failed = 0;
 
@@ -1075,6 +1083,72 @@ async function testHttp() {
       body: JSON.stringify({ author: 'Ada Rook', document: mapTrackDocument({ id: 'trk-5e6f7081', map: 'city' }) }),
     });
     check('a map track on the town is refused over HTTP', cityPub.status === 400, `${cityPub.status}`);
+
+    /*
+     * PLANES ON A MAP TRACK. A ring of plane sized gates (the two wide gates
+     * and the air race pylon pair) takes every fixed wing, and a plane's lap
+     * names its aircraft and goes on a board of its own beside the quads'.
+     */
+    console.log('\nplanes on a map track');
+    const postLap = (id, body) => fetch(`http://127.0.0.1:3199/api/tracks/${id}/times`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+    const wideDoc = mapTrackDocument({
+      id: 'trk-6f708192', name: 'Wide ring', radius: 70, types: ['wideGate5', 'pylonPair', 'wideGate3'],
+    });
+    const widePub = await fetch('http://127.0.0.1:3199/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ author: 'Ada Rook', document: wideDoc }),
+    });
+    check('publish a ring of plane sized gates', widePub.status === 201, `${widePub.status}`);
+    const wideRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-6f708192');
+    check('the listing names every fixed wing as fitting it', Array.isArray(wideRow.planes) && wideRow.planes.includes('sky1800')
+      && wideRow.planes.includes('bramor2300') && wideRow.planes.includes('timber1500f'), JSON.stringify(wideRow.planes));
+    check('with an empty plane board beside the quads\'', wideRow.wing && wideRow.wing.times === 0 && wideRow.wing.best === null, JSON.stringify(wideRow.wing));
+    const fieldPlaneRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-1a2b3c4d');
+    check('a field track has no plane board and no plane', fieldPlaneRow.planes.length === 0 && fieldPlaneRow.wing === null, JSON.stringify({ planes: fieldPlaneRow.planes, wing: fieldPlaneRow.wing }));
+    const wideSlow = honestLap(wideDoc, { speed: 18 });
+    const wideFast = honestLap(wideDoc, { speed: 24 });
+    const skyPost = await postLap('trk-6f708192', await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, 'sky1800'));
+    const skyBody = await skyPost.json();
+    check('a Skyhunter\'s lap is checked and kept, first on the plane board', skyPost.status === 201 && skyBody.rank === 1 && skyBody.times === 1 && skyBody.craft === 'sky1800',
+      `${skyPost.status} ${JSON.stringify(skyBody).slice(0, 160)}`);
+    const quadPost = await postLap('trk-6f708192', await signedTime(boKey, 'trk-6f708192', 'Bo', wideFast));
+    const quadBody = await quadPost.json();
+    check('a quad\'s lap on the same gates is first on its own board, not ranked with the plane', quadPost.status === 201 && quadBody.rank === 1 && quadBody.times === 1 && quadBody.craft === null,
+      `${quadPost.status} ${JSON.stringify(quadBody).slice(0, 160)}`);
+    const floatPost = await postLap('trk-6f708192', await signedPlaneTime(boKey, 'trk-6f708192', 'Bo', wideFast, 'timber1500f'));
+    const floatBody = await floatPost.json();
+    check('the Timber on floats, faster, takes first on the plane board', floatPost.status === 201 && floatBody.rank === 1 && floatBody.times === 2,
+      `${floatPost.status} ${JSON.stringify(floatBody).slice(0, 160)}`);
+    const wideSheet = await fetch('http://127.0.0.1:3199/api/tracks/trk-6f708192').then((r) => r.json());
+    check('the sheet carries every time with the plane that flew it', wideSheet.times.length === 3
+      && wideSheet.times.filter((t) => t.craft).map((t) => t.craft).join() === 'timber1500f,sky1800'
+      && wideSheet.times.filter((t) => !t.craft).length === 1, JSON.stringify(wideSheet.times.map((t) => [t.name, t.lapMs, t.craft])));
+    check('the quads\' record is the quad\'s, and the planes\' the plane\'s',
+      wideSheet.best && wideSheet.best.name === 'Bo' && wideSheet.times.find((t) => !t.craft).lapMs === wideSheet.best.lapMs
+      && wideSheet.wing.times === 2 && wideSheet.wing.best.lapMs === floatBody.lapMs, JSON.stringify({ best: wideSheet.best, wing: wideSheet.wing, times: wideSheet.times.length }));
+    const wideListed = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-6f708192');
+    check('and the listing counts each board apart', wideListed.times === 1 && wideListed.wing.times === 2, JSON.stringify({ times: wideListed.times, wing: wideListed.wing }));
+    const floatGhost = await fetch(`http://127.0.0.1:3199/api/tracks/trk-6f708192/times/${floatBody.id}/ghost`).then((r) => r.json());
+    check('a plane\'s ghost is served back to chase', floatGhost.ghost === wideFast.ghost);
+    const unsignedCraft = await postLap('trk-6f708192', await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, { craft: 'bramor2300' }));
+    check('a quad\'s signed lap given a plane afterwards is refused: the plane is under the signature', unsignedCraft.status === 401, `${unsignedCraft.status}`);
+    const quadNamed = await postLap('trk-6f708192', await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, '5inch'));
+    const quadNamedBody = await quadNamed.json();
+    check('a lap naming a quad is refused by the lap check', quadNamed.status === 422 && /not a fixed wing/.test(quadNamedBody.error), `${quadNamed.status} ${quadNamedBody.error}`);
+    const badCraft = await postLap('trk-6f708192', JSON.stringify({ ...JSON.parse(await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow)), craft: 'Sky Hunter!' }));
+    check('a craft that is not an airframe id is refused before anything else', badCraft.status === 400, `${badCraft.status}`);
+    const ringForSky = honestLap(ringDoc);
+    const skyOnRing = await postLap('trk-4d5e6f70', await signedPlaneTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', ringForSky, 'sky1800'));
+    const skyOnRingBody = await skyOnRing.json();
+    check('a Skyhunter\'s lap through five inch gates is refused: it does not fit', skyOnRing.status === 422 && /does not fit/.test(skyOnRingBody.error), `${skyOnRing.status} ${skyOnRingBody.error}`);
+    const skyOnField = await postLap('trk-1a2b3c4d', await signedPlaneTime(boKey, 'trk-1a2b3c4d', 'Bo', boLap, 'sky1800'));
+    const skyOnFieldBody = await skyOnField.json();
+    check('and a lap naming a plane on a field track is refused', skyOnField.status === 422 && /field track/.test(skyOnFieldBody.error), `${skyOnField.status} ${skyOnFieldBody.error}`);
     /* ---------------------------------------------------------------- */
     console.log('\nlive rooms');
     const nextMessage = (ws, ms = 3000) => new Promise((resolve, reject) => {
@@ -1860,8 +1934,10 @@ async function testHttp() {
     );
     check('the board facts count the tracks that are actually on the board',
       stats.board.tracks === live.tracks.length);
+    /* Both boards of a map track: the listing counts the quads' and the
+     * planes' apart, and the facts count every time. */
     check('and the times posted on them',
-      stats.board.times === live.tracks.reduce((sum, t) => sum + (t.times || 0), 0));
+      stats.board.times === live.tracks.reduce((sum, t) => sum + (t.times || 0) + (t.wing ? t.wing.times : 0), 0));
     check('and at least the pilots holding a record', stats.board.pilots >= namedPilots.size);
     check('and nobody has been back another day inside one test run',
       stats.board.pilotsOnMoreThanOneDay === 0);

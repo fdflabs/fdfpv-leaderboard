@@ -29,6 +29,7 @@ import { randomBytes } from 'node:crypto';
 import {
   creditOf, hashEditKey, mapOf, planFromDocument, trackClassOf, STATS_COUNTRY_UNKNOWN,
 } from './validate.js';
+import { planesFor } from '../vendor/fdfpv/src/game/verify.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -65,7 +66,21 @@ function summaryTime(row) {
     threeMs: row.threeMs == null ? null : row.threeMs,
     postedUtc: row.postedUtc,
     hasGhost: Boolean(row.ghost),
+    /* The fixed wing a plane's lap was flown on, which puts it on the
+     * plane board; null for every other time, which is the quads' board on
+     * a map track and the only board on a field track. */
+    craft: row.craft || null,
   };
+}
+
+/*
+ * THE TWO BOARDS ON A MAP TRACK. A time naming a plane is on the plane
+ * board and every other time on the track's own. Ranks, counts and the
+ * best lap are each board's alone, so a plane's lap is never ranked under a
+ * quad's and the quads' record is exactly what it was before planes flew.
+ */
+function sameBoard(a, b) {
+  return Boolean(a.craft) === Boolean(b.craft);
 }
 
 function bugLimit(raw) {
@@ -161,8 +176,9 @@ const CONFLICT = {
 };
 
 export function summaryOf(track, times) {
-  const ranked = [...times].sort(byLap);
+  const ranked = times.filter((t) => !t.craft).sort(byLap);
   const best = ranked[0] || null;
+  const planes = times.filter((t) => t.craft).sort(byLap);
   return {
     id: track.id,
     name: track.name,
@@ -178,6 +194,9 @@ export function summaryOf(track, times) {
      * track, read off the document the same way. The simulator lists a map
      * track only where it can seat that world. */
     map: mapOf(track.document),
+    /* The fixed wings that fit every gate, which is who may race it on the
+     * plane board, and that board's count and record. See planeBoardOf. */
+    ...planeBoardOf(track.document, planes.length, planes[0]),
     /* The designer, and the series the track belongs to, read off the
      * document the same way. Empty on a track whose builder left the credit
      * block alone, which is most of them. See creditOf in validate.js. */
@@ -201,6 +220,24 @@ export function summaryOf(track, times) {
      * is not served from yesterday's cache. */
     hasGif: Boolean(track.gif),
     gifUtc: track.gifUtc || null,
+  };
+}
+
+/*
+ * `planes` and `wing` for a summary: the fixed wings the simulator's own
+ * rule lets through every gate of a map track (its src/game/verify.js
+ * planesFor, vendored like the lap check, so this list and the check that
+ * refuses a plane that does not fit can never disagree), and the plane
+ * board's count and best lap. A field track has no plane board, and says
+ * so with an empty list and a null. Derived on every read, like the map.
+ */
+export function planeBoardOf(document, times, best) {
+  if (!mapOf(document)) {
+    return { planes: [], wing: null };
+  }
+  return {
+    planes: planesFor(document),
+    wing: { times, best: best ? { name: best.name, lapMs: best.lapMs } : null },
   };
 }
 
@@ -596,8 +633,8 @@ class FileStore {
     });
   }
 
-  async addTime({ trackId, name, lapMs, threeMs, ghost, key }) {
-    return this.lock(() => this.addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key }));
+  async addTime({ trackId, name, lapMs, threeMs, ghost, key, craft }) {
+    return this.lock(() => this.addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key, craft }));
   }
 
   /*
@@ -631,7 +668,7 @@ class FileStore {
     return false;
   }
 
-  async addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key }) {
+  async addTimeUnlocked({ trackId, name, lapMs, threeMs, ghost, key, craft }) {
     const track = this.data.tracks[trackId];
     if (!track) {
       return { error: 'That track is not on the board.', status: 404 };
@@ -642,15 +679,16 @@ class FileStore {
     }
     const row = {
       id, name, lapMs, threeMs: threeMs == null ? null : threeMs, ghost: ghost || null, key: key || null, postedUtc: nowIso(),
+      craft: craft || null,
     };
     const list = this.data.times[trackId] || [];
     list.push(row);
     this.data.times[trackId] = list;
     await this.flush();
-    const ranked = [...list].sort(byLap);
+    const ranked = list.filter((t) => sameBoard(t, row)).sort(byLap);
     const rank = ranked.findIndex((t) => t === row) + 1;
     return {
-      id, name, lapMs, threeMs: row.threeMs, postedUtc: row.postedUtc, rank, times: ranked.length,
+      id, name, lapMs, threeMs: row.threeMs, postedUtc: row.postedUtc, rank, times: ranked.length, craft: row.craft,
     };
   }
 
@@ -961,18 +999,24 @@ class PgStore {
              (gif IS NOT NULL) AS has_gif
       FROM tracks ORDER BY updated_utc DESC
     `);
+    /* One best and one count per board: `plane` is false for the track's
+     * own board and true for the plane board on a map track (sameBoard). */
     const bests = await this.pool.query(`
-      SELECT DISTINCT ON (track_id) track_id, name, lap_ms
+      SELECT DISTINCT ON (track_id, craft IS NOT NULL) track_id, craft IS NOT NULL AS plane, name, lap_ms
       FROM times
-      ORDER BY track_id, lap_ms ASC, posted_utc ASC
+      ORDER BY track_id, craft IS NOT NULL, lap_ms ASC, posted_utc ASC
     `);
-    const counts = await this.pool.query('SELECT track_id, COUNT(*)::int AS n FROM times GROUP BY track_id');
-    const bestBy = new Map(bests.rows.map((r) => [r.track_id, { name: r.name, lapMs: r.lap_ms }]));
-    const nBy = new Map(counts.rows.map((r) => [r.track_id, r.n]));
+    const counts = await this.pool.query(
+      'SELECT track_id, craft IS NOT NULL AS plane, COUNT(*)::int AS n FROM times GROUP BY track_id, craft IS NOT NULL',
+    );
+    const on = (r) => `${r.track_id}${r.plane ? '#wing' : ''}`;
+    const bestBy = new Map(bests.rows.map((r) => [on(r), { name: r.name, lapMs: r.lap_ms }]));
+    const nBy = new Map(counts.rows.map((r) => [on(r), r.n]));
     return tracks.rows.map((row) => ({
       ...rowToSummary(row),
       times: nBy.get(row.id) || 0,
       best: bestBy.get(row.id) || null,
+      ...planeBoardOf(row.document, nBy.get(`${row.id}#wing`) || 0, bestBy.get(`${row.id}#wing`)),
     }));
   }
 
@@ -988,18 +1032,22 @@ class PgStore {
     }
     const times = await this.pool.query(
       `SELECT public_id AS id, name, lap_ms AS "lapMs", three_ms AS "threeMs", posted_utc AS "postedUtc",
-              (ghost IS NOT NULL) AS "hasGhost"
+              (ghost IS NOT NULL) AS "hasGhost", craft
        FROM times WHERE track_id = $1 ORDER BY lap_ms ASC, posted_utc ASC`,
       [id],
     );
     /* `best` too. The file store's getTrack returns it through summaryOf
      * and the board's track sheet reads it, so leaving it out here made
-     * the same track render differently depending on the backend. */
+     * the same track render differently depending on the backend. Each
+     * board's own, as there. */
     const rows = times.rows;
+    const quads = rows.filter((r) => !r.craft);
+    const planes = rows.filter((r) => r.craft);
     return {
       ...rowToSummary(found.rows[0]),
       times: rows,
-      best: rows[0] ? { name: rows[0].name, lapMs: rows[0].lapMs } : null,
+      best: quads[0] ? { name: quads[0].name, lapMs: quads[0].lapMs } : null,
+      ...planeBoardOf(found.rows[0].document, planes.length, planes[0]),
     };
   }
 
@@ -1170,13 +1218,13 @@ class PgStore {
     return { error: 'That name belongs to another pilot. Pick another name, or import their pilot key.', status: 403 };
   }
 
-  async addTime({ trackId, name, lapMs, threeMs, ghost, key }) {
+  async addTime({ trackId, name, lapMs, threeMs, ghost, key, craft }) {
     /* The public id is random, so an insert can collide with an existing
      * row's unique index. The whole transaction retries on a fresh id, the
      * same shape as addBug's loop; six failures in a row is not luck, it is
      * a broken random source, and deserves the throw. */
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const result = await this.addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key });
+      const result = await this.addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key, craft });
       if (result !== null) {
         return result;
       }
@@ -1184,7 +1232,7 @@ class PgStore {
     throw new Error('Could not allocate a time id.');
   }
 
-  async addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key }) {
+  async addTimeOnce({ trackId, name, lapMs, threeMs, ghost, key, craft }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -1194,11 +1242,11 @@ class PgStore {
         return { error: 'That track is not on the board.', status: 404 };
       }
       const inserted = await client.query(
-        `INSERT INTO times (track_id, public_id, name, lap_ms, three_ms, ghost, pilot_key, posted_utc)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `INSERT INTO times (track_id, public_id, name, lap_ms, three_ms, ghost, pilot_key, craft, posted_utc)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
          RETURNING id, public_id AS "publicId", name, lap_ms AS "lapMs",
-                   three_ms AS "threeMs", posted_utc AS "postedUtc"`,
-        [trackId, newTimeId(), name, lapMs, threeMs == null ? null : threeMs, ghost || null, key || null],
+                   three_ms AS "threeMs", posted_utc AS "postedUtc", craft`,
+        [trackId, newTimeId(), name, lapMs, threeMs == null ? null : threeMs, ghost || null, key || null, craft || null],
       );
       /*
        * Ranked against the stored row, by its id, and entirely inside
@@ -1211,14 +1259,19 @@ class PgStore {
        * database and cannot lose precision.
        */
       const rankRow = await client.query(
-        `WITH mine AS (SELECT lap_ms, posted_utc FROM times WHERE id = $2)
+        `WITH mine AS (SELECT lap_ms, posted_utc, craft FROM times WHERE id = $2)
          SELECT COUNT(*)::int AS n FROM times, mine
          WHERE times.track_id = $1
+           AND (times.craft IS NULL) = (mine.craft IS NULL)
            AND (times.lap_ms < mine.lap_ms
                 OR (times.lap_ms = mine.lap_ms AND times.posted_utc <= mine.posted_utc))`,
         [trackId, inserted.rows[0].id],
       );
-      const count = await client.query('SELECT COUNT(*)::int AS n FROM times WHERE track_id = $1', [trackId]);
+      /* Ranked and counted on its own board (sameBoard). */
+      const count = await client.query(
+        'SELECT COUNT(*)::int AS n FROM times WHERE track_id = $1 AND (craft IS NULL) = ($2::text IS NULL)',
+        [trackId, craft || null],
+      );
       await client.query('COMMIT');
       return {
         id: inserted.rows[0].publicId,
@@ -1228,6 +1281,7 @@ class PgStore {
         postedUtc: inserted.rows[0].postedUtc,
         rank: rankRow.rows[0].n,
         times: count.rows[0].n,
+        craft: inserted.rows[0].craft || null,
       };
     } catch (e) {
       try {
@@ -1632,6 +1686,9 @@ export function rowToSummary(row) {
     hasLogo: row.has_logo,
     trackClass: trackClassOf(row.document),
     map: mapOf(row.document),
+    /* The fixed wings that fit and an empty plane board; listTracks and
+     * getTrack put the board's own count and record over it. */
+    ...planeBoardOf(row.document, 0, null),
     /* The designer and the series, read off the stored document. The twin
      * of the same line in summaryOf, and the reason the pair is now checked
      * against each other below: this one was forgotten for a deploy, so the
