@@ -1297,6 +1297,14 @@ const server = http.createServer(async (req, res) => {
      * stack from pg or the filesystem, and echoing it told the internet
      * about the schema and the paths. */
     if (e && e.status) {
+      /* A body refused part way is still arriving, and readBody left it
+       * unread. On a kept alive socket the client's next request then met
+       * that tail and was reset, which a report with screenshots made
+       * easy to reach. Closing after the answer makes the next request
+       * start clean. */
+      if (e.status === 413) {
+        res.setHeader('connection', 'close');
+      }
       send(res, e.status, { error: e.message });
       return;
     }
