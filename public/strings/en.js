@@ -102,6 +102,8 @@ export default {
   "bugs.back_to_tracks_and_statistics": "Back to Tracks and Statistics",
   "bugs.bearer": "Bearer {t}",
   "bugs.context": "Context",
+  "bugs.image_n": "Image {n}",
+  "bugs.images": "Images",
   "bugs.in_progress": "In progress",
   "bugs.load_the_list": "Load the list.",
   "bugs.no_tickets_in_this_filter": "No tickets in this filter.",

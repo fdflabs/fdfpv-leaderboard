@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS bugs (
 CREATE INDEX IF NOT EXISTS bugs_status_submitted
   ON bugs (status, submitted_utc DESC);
 
+-- Screenshots a tester pasted into the report. Additive, like the table
+-- above: an existing database gains it at the next start and no ticket is
+-- rewritten. A table of its own rather than a column on bugs, so listing
+-- and opening tickets never reads an image, and each one is fetched alone
+-- by (bug_id, n). BYTEA for the reason tracks.gif is: they are served as
+-- bytes. `type` is read off the magic bytes in src/validate.js, never taken
+-- from the sender. Bounds (four, a mebibyte each) live there too.
+CREATE TABLE IF NOT EXISTS bug_images (
+  bug_id TEXT NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+  n SMALLINT NOT NULL CHECK (n BETWEEN 1 AND 4),
+  type TEXT NOT NULL,
+  bytes BYTEA NOT NULL,
+  PRIMARY KEY (bug_id, n)
+);
+
 -- Tags on a track. Additive: an existing row gets the empty array, which
 -- reads as "untagged" everywhere. TEXT[] rather than a join table because a
 -- track wears at most five of a closed vocabulary and nothing ever asks the

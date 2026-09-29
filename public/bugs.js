@@ -143,9 +143,64 @@ function block(title, body) {
   return wrap;
 }
 
+/*
+ * THE SCREENSHOTS, fetched with the same bearer header as the ticket and
+ * shown from blob addresses. An <img src> pointing at the API would go out
+ * with no header and be refused, which is the point: tickets are private.
+ * Each thumbnail is a link to its own blob, so a click opens it full size
+ * in a tab of its own. The blobs are let go when the sheet is repainted.
+ */
+let shotUrls = [];
+
+function releaseShots() {
+  for (const u of shotUrls) {
+    URL.revokeObjectURL(u);
+  }
+  shotUrls = [];
+}
+
+function paintShots(t) {
+  const wrap = el('div', 'block');
+  wrap.append(el('h3', null, str('bugs.images')));
+  const row = el('div', 'shots');
+  wrap.append(row);
+  for (const img of t.images) {
+    const label = str('bugs.image_n', { n: img.n });
+    const link = el('a', 'shot');
+    link.target = '_blank';
+    link.title = label;
+    link.append(el('span', 'shot-label', label));
+    row.append(link);
+    fetch(here(`api/bugs/${encodeURIComponent(t.id)}/images/${img.n}`), { headers: headers() })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(str('app.the_board_answered', { status: res.status }));
+        }
+        return res.blob();
+      })
+      .then((blob) => {
+        if (state.current !== t) {
+          return;
+        }
+        const u = URL.createObjectURL(blob);
+        shotUrls.push(u);
+        link.href = u;
+        const pic = document.createElement('img');
+        pic.src = u;
+        pic.alt = label;
+        link.prepend(pic);
+      })
+      .catch((e) => {
+        link.append(el('span', 'shot-err', e.message || String(e)));
+      });
+  }
+  return wrap;
+}
+
 function paintSheet() {
   const host = document.getElementById('sheet');
   host.textContent = '';
+  releaseShots();
   const t = state.current;
   if (!t) {
     host.append(el('div', 'empty', str('bugs.pick_a_ticket')));
@@ -165,6 +220,9 @@ function paintSheet() {
   host.append(block('Expected', t.expected));
   host.append(block('Steps', t.steps));
   host.append(block('Resolution', t.resolution));
+  if (t.images && t.images.length) {
+    host.append(paintShots(t));
+  }
   const ctx = el('div', 'block');
   ctx.append(el('h3', null, str('bugs.context')));
   const pre = el('pre', 'ctx', JSON.stringify(t.context || {}, null, 2));

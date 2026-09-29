@@ -105,6 +105,12 @@ function summaryBug(row) {
   };
 }
 
+/*
+ * A ticket's screenshots travel as what they are and how big, never as
+ * bytes: each is fetched on its own at /api/bugs/:id/images/:n, behind the
+ * same gate as the ticket. `row.images` is that list in both stores, n
+ * counting from one because the form labels them Image 1 to Image 4.
+ */
 function fullBug(row) {
   return {
     ...summaryBug(row),
@@ -113,6 +119,7 @@ function fullBug(row) {
     steps: row.steps || '',
     context: row.context && typeof row.context === 'object' ? row.context : {},
     resolution: row.resolution || '',
+    images: (row.images || []).map((img, i) => ({ n: i + 1, type: img.type, size: img.size })),
   };
 }
 
@@ -791,6 +798,12 @@ class FileStore {
       steps: inspected.steps,
       reporter: inspected.reporter,
       context: inspected.context || {},
+      /* Base64 in the JSON, the way this store keeps a track's animation:
+       * the file store is for a checkout, where four screenshots in one
+       * document cost nothing anybody will notice. */
+      images: (inspected.images || []).map((img) => ({
+        type: img.type, size: img.bytes.length, data: Buffer.from(img.bytes).toString('base64'),
+      })),
       resolution: '',
       submittedUtc,
       updatedUtc: submittedUtc,
@@ -798,6 +811,12 @@ class FileStore {
     this.data.bugs[id] = row;
     await this.flush();
     return fullBug(row);
+  }
+
+  async getBugImage(id, n) {
+    const row = this.data.bugs && this.data.bugs[id];
+    const img = row && Array.isArray(row.images) ? row.images[n - 1] : null;
+    return img ? { type: img.type, bytes: Buffer.from(img.data, 'base64') } : null;
   }
 
   async updateBug(id, patch) {
@@ -1418,14 +1437,41 @@ class PgStore {
        FROM bugs WHERE id = $1`,
       [id],
     );
-    return found.rowCount ? fullBug(found.rows[0]) : null;
+    if (!found.rowCount) {
+      return null;
+    }
+    return fullBug({ ...found.rows[0], images: await this.bugImageList(this.pool, id) });
   }
 
+  async bugImageList(db, id) {
+    const found = await db.query(
+      'SELECT type, octet_length(bytes) AS size FROM bug_images WHERE bug_id = $1 ORDER BY n',
+      [id],
+    );
+    return found.rows;
+  }
+
+  async getBugImage(id, n) {
+    const found = await this.pool.query(
+      'SELECT type, bytes FROM bug_images WHERE bug_id = $1 AND n = $2',
+      [id, n],
+    );
+    return found.rowCount ? found.rows[0] : null;
+  }
+
+  /*
+   * The ticket and its screenshots in one transaction, so a ticket is never
+   * on the board without the images its reporter saw attached, and an
+   * image is never stored for a ticket that failed to land.
+   */
   async addBug(inspected) {
+    const images = inspected.images || [];
     for (let i = 0; i < 6; i += 1) {
       const id = newBugId();
+      const client = await this.pool.connect();
       try {
-        const inserted = await this.pool.query(
+        await client.query('BEGIN');
+        const inserted = await client.query(
           `INSERT INTO bugs (
             id, status, kind, title, what, expected, steps, reporter, context,
             resolution, submitted_utc, updated_utc
@@ -1437,12 +1483,29 @@ class PgStore {
             inspected.steps, inspected.reporter, inspected.context || {},
           ],
         );
-        return fullBug(inserted.rows[0]);
+        for (const [k, img] of images.entries()) {
+          await client.query(
+            'INSERT INTO bug_images (bug_id, n, type, bytes) VALUES ($1, $2, $3, $4)',
+            [id, k + 1, img.type, img.bytes],
+          );
+        }
+        await client.query('COMMIT');
+        return fullBug({
+          ...inserted.rows[0],
+          images: images.map((img) => ({ type: img.type, size: img.bytes.length })),
+        });
       } catch (e) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (ignored) {
+          /* Connection may already be dead. */
+        }
         if (e.code === '23505') {
           continue;
         }
         throw e;
+      } finally {
+        client.release();
       }
     }
     throw new Error('Could not allocate a ticket id.');
@@ -1471,8 +1534,9 @@ class PgStore {
                    resolution, submitted_utc AS "submittedUtc", updated_utc AS "updatedUtc"`,
         [id, nextStatus, nextResolution],
       );
+      const images = await this.bugImageList(client, id);
       await client.query('COMMIT');
-      return fullBug(updated.rows[0]);
+      return fullBug({ ...updated.rows[0], images });
     } catch (e) {
       try {
         await client.query('ROLLBACK');

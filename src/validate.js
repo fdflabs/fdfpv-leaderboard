@@ -963,6 +963,10 @@ export function inspectBugCreate(body) {
   if (ctx.error) {
     return ctx;
   }
+  const shots = inspectBugImages(body.images);
+  if (shots.error) {
+    return shots;
+  }
   return {
     kind,
     title,
@@ -971,7 +975,86 @@ export function inspectBugCreate(body) {
     steps,
     reporter: named || 'Anonymous',
     context: ctx.context,
+    images: shots.images,
   };
+}
+
+/*
+ * SCREENSHOTS ON A TICKET, a stranger's upload like a card animation is, so
+ * bounded the same way: by count, by size each and together, and by what
+ * the bytes are rather than by what the sender says they are.
+ *
+ * The simulator pastes, downscales to 1920 on the long edge and re-encodes
+ * to WebP or JPEG under a million bytes before it sends, so a mebibyte each
+ * is headroom over the client's own target, not an invitation. Four is the
+ * form's limit too. The total is what BUG_BODY_MAX in src/server.js is
+ * derived from, so a report this function would accept is never refused
+ * earlier for its size with a message about something else.
+ *
+ * The type stored is the one read off the magic bytes. A declared type, a
+ * data: prefix, is only stripped: an SVG or an HTML page sent as a "PNG"
+ * would be served to the admin's browser with whatever type was trusted,
+ * and the admin's tab holds the board's only credential.
+ */
+export const MAX_BUG_IMAGES = 4;
+export const MAX_BUG_IMAGE_BYTES = 1_048_576;
+export const MAX_BUG_IMAGES_BYTES = MAX_BUG_IMAGES * MAX_BUG_IMAGE_BYTES;
+const MAX_BUG_IMAGE_BASE64_CHARS = Math.ceil(MAX_BUG_IMAGE_BYTES / 3) * 4;
+const BUG_IMAGE_PREFIX_RE = /^data:image\/(png|jpeg|webp);base64,/;
+
+export function imageTypeOf(bytes) {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
+    return 'image/png';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+  return null;
+}
+
+export function inspectBugImages(raw) {
+  if (raw == null) {
+    return { images: [] };
+  }
+  if (!Array.isArray(raw)) {
+    return { error: 'Images have to be a list.' };
+  }
+  if (raw.length > MAX_BUG_IMAGES) {
+    return { error: 'Attach at most four images.' };
+  }
+  const images = [];
+  let total = 0;
+  for (const [i, item] of raw.entries()) {
+    const n = i + 1;
+    const packed = String(item ?? '').replace(BUG_IMAGE_PREFIX_RE, '').trim();
+    if (!packed) {
+      return { error: `Image ${n} is empty.` };
+    }
+    if (packed.length > MAX_BUG_IMAGE_BASE64_CHARS) {
+      return { error: `Image ${n} is larger than a megabyte.` };
+    }
+    if (!GIF_BASE64_RE.test(packed)) {
+      return { error: `Image ${n} is not base64.` };
+    }
+    const bytes = Buffer.from(packed, 'base64');
+    if (bytes.length > MAX_BUG_IMAGE_BYTES) {
+      return { error: `Image ${n} is larger than a megabyte.` };
+    }
+    const type = imageTypeOf(bytes);
+    if (!type) {
+      return { error: `Image ${n} is not a PNG, JPEG or WebP.` };
+    }
+    total += bytes.length;
+    if (total > MAX_BUG_IMAGES_BYTES) {
+      return { error: 'The images are too large together.' };
+    }
+    images.push({ type, bytes });
+  }
+  return { images };
 }
 
 export function inspectBugPatch(body) {
