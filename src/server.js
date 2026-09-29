@@ -433,22 +433,45 @@ function recordBugHit(ip) {
  * to the publish wording, so a tester whose bug context ran long was told
  * their track was too large to publish, from a form with no track in it.
  */
+/*
+ * PAST THE CAP, THE REST IS READ AND THROWN AWAY, THEN REFUSED.
+ *
+ * Killing the socket at the cap meant the client saw a connection reset
+ * instead of the message, so an oversized publish looked like the board
+ * being down. Pausing and answering at once was the next attempt, and it
+ * left the unread tail on the socket: the next request on that kept alive
+ * connection, from a browser or from Caddy's pool on the VM, met the tail
+ * and failed, and closing the connection instead made Caddy answer 502
+ * while the upload was still arriving over a real network. Draining keeps
+ * nothing in memory and leaves the connection clean for the 413.
+ *
+ * Draining is bounded at DRAIN_FACTOR times the cap. Past that the answer
+ * goes out at once with Connection: close, and whoever is streaming that
+ * much garbage gets the reset they earned.
+ */
+const DRAIN_FACTOR = 4;
+
 async function readBody(req, limit = 660_000, tooBig = 'That track is too large to publish.') {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) {
-      /* Pause, do not destroy. Killing the socket here meant the client saw
-       * a connection reset instead of the message, so an oversized publish
-       * looked like the board being down. The error path answers, and the
-       * request is left for Node to tear down after the response. */
+    if (size <= limit) {
+      chunks.push(chunk);
+      continue;
+    }
+    if (size > limit * DRAIN_FACTOR) {
       req.pause();
       const err = new Error(tooBig);
       err.status = 413;
+      err.close = true;
       throw err;
     }
-    chunks.push(chunk);
+  }
+  if (size > limit) {
+    const err = new Error(tooBig);
+    err.status = 413;
+    throw err;
   }
   return Buffer.concat(chunks).toString('utf8');
 }
@@ -1341,12 +1364,9 @@ const server = http.createServer(async (req, res) => {
      * stack from pg or the filesystem, and echoing it told the internet
      * about the schema and the paths. */
     if (e && e.status) {
-      /* A body refused part way is still arriving, and readBody left it
-       * unread. On a kept alive socket the client's next request then met
-       * that tail and was reset, which a report with screenshots made
-       * easy to reach. Closing after the answer makes the next request
-       * start clean. */
-      if (e.status === 413) {
+      /* Only a body readBody gave up draining: the rest of it is still on
+       * the socket, so the socket cannot carry another request. */
+      if (e.close) {
         res.setHeader('connection', 'close');
       }
       send(res, e.status, { error: e.message });

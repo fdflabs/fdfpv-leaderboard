@@ -2155,6 +2155,11 @@ async function testBugImages(databaseUrl = '') {
     check('a fifth image is refused', five.status === 400);
     const huge = await report(Array(4).fill(`${b64(PNG_1PX)}${'A'.repeat(1_500_000)}`));
     check('a body past what four capped images can be is a 413', huge.status === 413);
+    /* Past the drain ceiling the board stops reading and closes, so the
+     * client may see the 413 or a reset; either way the server lives on. */
+    const flood = await report([`${b64(PNG_1PX)}${'A'.repeat(24_000_000)}`]).then((r) => r.status, () => 'reset');
+    check('a body past the drain ceiling is refused without taking the board down',
+      flood === 413 || flood === 'reset', String(flood));
     const listed = await fetch(`${B}/api/bugs`, { headers: asAdmin }).then((r) => r.json());
     check('refused reports stored nothing', listed.bugs.filter((b) => b.title === 'Pasted a screenshot here').length === 1);
     const plain = await report(undefined, 'A report with no images');
