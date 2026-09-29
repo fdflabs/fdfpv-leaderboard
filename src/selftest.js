@@ -2052,10 +2052,10 @@ function testOrigins() {
   check('a track hash does not change the answer',
     guessSimOrigin(...at('http://127.0.0.1:3180/#course=trk-1a2b3c4d')) === 'http://127.0.0.1:8000');
 
-  check('the /board mount finds its sibling /sim',
-    guessSimOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example/sim');
+  check('the /board mount on the VM finds the simulator on GitHub Pages',
+    guessSimOrigin(...at('https://129.151.39.48/board/')) === 'https://fdflabs.github.io/fdfpv');
   check('the bug page under the mount answers the same',
-    guessSimOrigin(...at('https://fdfpv.example/board/bugs')) === 'https://fdfpv.example/sim');
+    guessSimOrigin(...at('https://129.151.39.48/board/bugs')) === 'https://fdflabs.github.io/fdfpv');
 
   /*
    * The one case that cannot be derived, and must NOT be guessed: a board
@@ -2066,7 +2066,7 @@ function testOrigins() {
   check('a board on its own host declines to guess',
     guessSimOrigin(...at('https://fdfpv-board.onrender.com/')) === null);
   check('a public host at the root declines to guess',
-    guessSimOrigin(...at('https://fdfpv.example/')) === null);
+    guessSimOrigin(...at('https://129.151.39.48/')) === null);
 
   check('a missing location is not a crash', guessSimOrigin(null, null) === null);
 
@@ -2080,10 +2080,10 @@ function testOrigins() {
     landingOrigin(...at('http://127.0.0.1:3180/')) === 'http://127.0.0.1:8080');
   check('localhost by name, same answer',
     landingOrigin(...at('http://localhost:3180/')) === 'http://localhost:8080');
-  check('the /board mount hangs off the front door',
-    landingOrigin(...at('https://fdfpv.example/board/')) === 'https://fdfpv.example');
+  check('the /board mount on the VM names the published front door, not the VM',
+    landingOrigin(...at('https://129.151.39.48/board/')) === 'https://fdflabs.github.io/fdfpv');
   check('the bug page under the mount answers the same',
-    landingOrigin(...at('https://fdfpv.example/board/bugs')) === 'https://fdfpv.example');
+    landingOrigin(...at('https://129.151.39.48/board/bugs')) === 'https://fdflabs.github.io/fdfpv');
   check('a board on its own host names the front door rather than declining',
     landingOrigin(...at('https://fdfpv-board.onrender.com/'))
       === 'https://fdflabs.github.io/fdfpv');

@@ -46,9 +46,9 @@ way back to the front door, and it opens in this tab rather than the
 simulator's: it is a way back, and a way back that leaves this page open
 behind it is not one. Where the front door is comes from `public/origins.js`
 without asking the server, the same way the simulator's address does. A
-checkout finds it on `http://127.0.0.1:8080`, the `/board` mount finds
-whatever it hangs off, and anything else is `https://fdfpv.example`, which is
-the one line a fork changes.
+checkout finds it on `http://127.0.0.1:8080`, and anything else, the
+production `/board` mount included, is `https://fdflabs.github.io/fdfpv`,
+the simulator's own GitHub Pages site, which is the one line a fork changes.
 
 ## What a time on the board means
 
@@ -114,6 +114,38 @@ docker compose up -d
 DATABASE_URL=postgres://fdfpv:fdfpv@127.0.0.1:5432/fdfpvboard npm start
 ```
 
+## Host on the owner's VM
+
+Production. Since 2026-09-29 the board runs on the same Oracle Cloud VM as
+the simulator's tracks and rooms servers, mounted at
+**https://129.151.39.48/board/**, with its API at
+`https://129.151.39.48/board/api/...`. The simulator's `deploy/vm/` holds
+everything: the `fdfpv-board` systemd unit, the Caddyfile that strips the
+`/board` prefix before a request reaches this process, Postgres 16 from the
+distribution, and `deploy-board.sh`, which puts this repository's checked
+out commit on the VM without touching the other two servers. Read
+`deploy/vm/README.md` in the simulator for the commands.
+
+What it sets, in `/etc/fdfpv/board.env` (root, mode 600) and the unit:
+
+| Variable | Value on the VM |
+| --- | --- |
+| `DATABASE_URL` | `postgresql:///fdfpvboard?host=/run/postgresql&user=fdfpv-board`, peer authentication over the Unix socket as the `fdfpv-board` system user, so there is no database password to keep |
+| `BOARD_HOST`, `PORT` | `127.0.0.1`, `3180`: loopback only, Caddy is the way in |
+| `SIM_ORIGIN` | `https://fdflabs.github.io/fdfpv` |
+| `BOARD_PUBLIC_ORIGIN` | `https://129.151.39.48/board`, because a forwarded host cannot carry the mount's path |
+| `BOARD_TRUST_PROXY` | `1`: Caddy overwrites `X-Forwarded-For` with the connecting address and strips any country header a client sends |
+| `BUGS_TOKEN`, `BOARD_ADMIN_TOKEN`, `BOARD_SESSION_SECRET` | generated on the VM |
+| `BOARD_ADMINS` | one owner entry, its password generated on the desktop and kept beside the tracks admin secret, never in git |
+
+Why Postgres rather than the file store, on a box that could hold either:
+the file store rewrites the whole JSON document, every ghost in it, on
+every write, and a statistics heartbeat is a write, so the cost of a write
+grows with the board; and it renames without an fsync, so a power cut can
+leave an empty file that the next start reads as a fresh board and the
+next write makes permanent. Postgres writes one row, commits through its
+WAL, and is the store this code was built to run on in production.
+
 ## Host on Render
 
 `render.yaml` here is a blueprint for a Node web service plus a Postgres
@@ -123,7 +155,7 @@ pick this repo. That is both halves of the board.
 Then set one thing by hand, under the service's **Environment**:
 
 ```
-SIM_ORIGIN = https://<the simulator's static site>   # or https://fdfpv.example/sim
+SIM_ORIGIN = https://fdflabs.github.io/fdfpv
 ```
 
 No trailing slash. Until it is set the board runs fine but its Fly and
@@ -143,7 +175,7 @@ Two things about hosting here that are easy to get wrong:
 makes the board write `https://` Fly links from behind Render's TLS
 termination rather than `http://` ones a browser refuses as mixed content.
 Leave `BOARD_PUBLIC_ORIGIN` unset unless a custom domain confuses that, or
-the board is mounted under a path such as `https://fdfpv.example/board`, where a
+the board is mounted under a path such as `https://129.151.39.48/board`, where a
 forwarded host cannot carry the path and this is the only way to say it.
 
 The full walkthrough, including the simulator's static site and the order
@@ -229,7 +261,7 @@ is the other way in and is what a script uses, because a script has no
 browser to sign in from:
 
 ```bash
-curl -X POST https://fdfpv.example/board/api/tracks/trk-xxxxxxxx/remove \
+curl -X POST https://129.151.39.48/board/api/tracks/trk-xxxxxxxx/remove \
   -H "Authorization: Bearer $BOARD_ADMIN_TOKEN"
 ```
 
