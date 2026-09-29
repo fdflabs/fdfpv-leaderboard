@@ -347,10 +347,16 @@ export const MAP_IDS = ['swiss2', 'alps'];
  * so an element it cannot place is not a map track's element: it is a hand
  * edit, and the simulator would build it into a world with no idea where
  * its openings are. `pylon` is the one marker, scored through the square
- * beside it; the rest are openings.
+ * beside it; the rest are openings. The hoops are the sky hoops, and the
+ * last three are the retired sizes, which the builder no longer offers but
+ * still loads and flies, so a track saved with one still publishes.
+ * src/selftest.js compares this list with the pinned simulator's, so the
+ * next type added there fails the board's test rather than a pilot's
+ * publish.
  */
 export const MAP_ELEMENT_TYPES = [
   'gate', 'flaggedGate', 'doubleStack', 'ladder', 'tower', 'wideGate3', 'wideGate5', 'pylonPair', 'pylon',
+  'hoop175', 'hoop250', 'hoop30', 'hoop6', 'hoop12', 'hoop20',
 ];
 const MAP_MARKERS = new Set(['pylon']);
 
@@ -1119,9 +1125,12 @@ export const RUN_ID_RE = /^run-[0-9a-f]{8}$/;
  * README says so rather than implying otherwise.
  */
 
-/* The map a run was flown on. One today, and it is a list rather than a
- * constant so the second one is a line here and not a migration. */
-export const RUN_MAPS = ['city'];
+/* The map a run was flown on: the simulator's freestyle worlds, MIRRORS the
+ * `mode: 'freestyle'` entries of fdfpv/src/maps/registry.js, and
+ * src/selftest.js holds the two together. The freestyle town this list
+ * used to name was removed from the simulator on 2026-09-28, and every run
+ * posted from the valleys after that was refused here. */
+export const RUN_MAPS = ['alps', 'swiss2', 'yellowstone'];
 
 /*
  * The two physics models the simulator offers, which is not a cosmetic

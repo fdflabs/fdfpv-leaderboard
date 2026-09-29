@@ -52,6 +52,11 @@ import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js'
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(root, 'public');
 const port = Number(process.env.PORT || 3180);
+/* Every interface by default, which is what Render needs. Behind a proxy
+ * on the same machine, as on the owner's VM, it is 127.0.0.1, so the only
+ * way in is through the proxy that sets the forwarded headers
+ * BOARD_TRUST_PROXY believes. */
+const listenHost = process.env.BOARD_HOST || '0.0.0.0';
 const simOrigin = (process.env.SIM_ORIGIN || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 const boardPublic = (process.env.BOARD_PUBLIC_ORIGIN || '').replace(/\/+$/, '');
 
@@ -1304,7 +1309,7 @@ const server = http.createServer(async (req, res) => {
 attachLive(server, store);
 
 if (process.env.BOARD_LISTEN !== '0') {
-  server.listen(port, '0.0.0.0', () => {
+  server.listen(port, listenHost, () => {
     console.log(`FDFPV leaderboard: http://127.0.0.1:${port}/`);
     console.log(`Store: ${store.kind}. Simulator: ${simOrigin}`);
   });

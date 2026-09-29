@@ -42,8 +42,13 @@ export function isLoopback(hostname) {
  *
  *   loopback       the simulator is served by scripts/serve.js on port 8000,
  *                  which is what DEPLOY.md says and what every checkout does.
- *   a /board mount the simulator is its sibling at /sim, which is the
- *                  production layout: fdfpv.example/board and fdfpv.example/sim.
+ *   a /board mount the production layout: the board is mounted at /board on
+ *                  the owner's VM (https://129.151.39.48/board, behind Caddy,
+ *                  see deploy/vm in the simulator's repository), and the
+ *                  simulator is its GitHub Pages site, PRODUCTION_SIM_ORIGIN.
+ *                  The VM serves no simulator of its own, so the mount's
+ *                  host says nothing about where the simulator is; the mount
+ *                  says only that this is the production board.
  *
  * Anything else, a board on its own host with the simulator on another one,
  * cannot be derived from here and returns null. A guess would be worse than
@@ -52,8 +57,15 @@ export function isLoopback(hostname) {
  * case only the server can answer.
  *
  * `here` is the board page's own directory, HERE in app.js, so that a board
- * at /board/ and a bug page at /board/bugs both answer /board.
+ * at /board/ and a bug page at /board/bugs both answer the same.
  */
+export const PRODUCTION_SIM_ORIGIN = 'https://fdflabs.github.io/fdfpv';
+
+function isBoardMount(here) {
+  const path = String((here && here.pathname) || '/').replace(/\/+$/, '');
+  return /\/board$/.test(path);
+}
+
 export function guessSimOrigin(location, here) {
   if (!location || !here) {
     return null;
@@ -63,11 +75,7 @@ export function guessSimOrigin(location, here) {
     const protocol = location.protocol === 'https:' ? 'https:' : 'http:';
     return `${protocol}//${host || '127.0.0.1'}:8000`;
   }
-  const path = String(here.pathname || '/').replace(/\/+$/, '');
-  if (/\/board$/.test(path)) {
-    return `${location.origin}${path.replace(/\/board$/, '/sim')}`;
-  }
-  return null;
+  return isBoardMount(here) ? PRODUCTION_SIM_ORIGIN : null;
 }
 
 /*
@@ -87,17 +95,16 @@ export function guessSimOrigin(location, here) {
  * one product and the two files must not disagree about where its front door
  * is.
  *
- * The two derivable layouts are the ones guessSimOrigin already knows:
- *
- *   loopback       the landing page is served by its own scripts/serve.js on
- *                  port 8080, which is what DEPLOY.md says.
- *   a /board mount the landing page is what the mount hangs off, which is the
- *                  production layout: fdfpv.example/board sits under fdfpv.example.
+ * The one derivable layout is loopback, where the landing page is served by
+ * its own scripts/serve.js on port 8080, which is what DEPLOY.md says. Every
+ * other address, the /board mount on the VM included, gets the published
+ * front door, which today is the simulator's own GitHub Pages site: there is
+ * no separate landing site deployed.
  */
-export const PRODUCTION_LANDING_ORIGIN = 'https://fdflabs.github.io/fdfpv';
+export const PRODUCTION_LANDING_ORIGIN = PRODUCTION_SIM_ORIGIN;
 export const LOCAL_LANDING_PORT = 8080;
 
-export function landingOrigin(location, here) {
+export function landingOrigin(location) {
   if (!location) {
     return PRODUCTION_LANDING_ORIGIN;
   }
@@ -105,12 +112,6 @@ export function landingOrigin(location, here) {
   if (isLoopback(host)) {
     const protocol = location.protocol === 'https:' ? 'https:' : 'http:';
     return `${protocol}//${host || '127.0.0.1'}:${LOCAL_LANDING_PORT}`;
-  }
-  const path = String((here && here.pathname) || '/').replace(/\/+$/, '');
-  if (/\/board$/.test(path)) {
-    /* An empty remainder is the production case and leaves the bare origin,
-     * which is exactly right: fdfpv.example/board hangs off fdfpv.example. */
-    return `${location.origin}${path.replace(/\/board$/, '')}`;
   }
   return PRODUCTION_LANDING_ORIGIN;
 }
