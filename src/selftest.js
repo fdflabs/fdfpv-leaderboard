@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 import {
   inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName, MAP_IDS,
   creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
-  inspectStatsEvent, normaliseCountry, statsDay,
+  inspectStatsEvent, normaliseCountry, statsDay, MAP_ELEMENT_TYPES, RUN_MAPS,
 } from './validate.js';
 import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
@@ -28,6 +28,9 @@ import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js'
 import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
 import { mapTrackDocument } from '../vendor/fdfpv/tests/lib/maptrack.js';
 import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identity.js';
+import { BUILD_TYPES } from '../vendor/fdfpv/src/builder/course.js';
+import { MAPS } from '../vendor/fdfpv/src/maps/registry.js';
+import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
 
 /*
  * Documents with two gates, for the routes that post times. A course of one
@@ -383,8 +386,34 @@ async function testValidate() {
   const withEl = (fn) => ({ ...ring, elements: ring.elements.map((el, i) => (i === 1 ? fn({ ...el }) : el)) });
   check('refuses an element the in-sim builder does not place', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'flag' }))).error));
   check('refuses a label on a map track', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'label' }))).error));
-  check('accepts every type the builder places', ['gate', 'flaggedGate', 'doubleStack', 'ladder', 'tower', 'wideGate3', 'wideGate5', 'pylonPair', 'pylon']
+  check('accepts every type the builder places', BUILD_TYPES
     .every((type) => !inspectDocument(withEl((el) => ({ ...el, type }))).error));
+
+  /*
+   * THE MIRRORS, HELD TO WHAT THEY MIRROR. validate.js copies three closed
+   * lists out of the simulator rather than importing them, and each copy
+   * went stale once without a test noticing: the sky hoops made every hoop
+   * track unpublishable, and removing the freestyle town refused every run
+   * from the valleys. These compare each copy with the pinned simulator, so
+   * moving vendor/fdfpv forward fails here first.
+   */
+  const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+  check('the map track element types are the builder\'s BUILD_TYPES',
+    sameSet(MAP_ELEMENT_TYPES, BUILD_TYPES), `${MAP_ELEMENT_TYPES.join()} vs ${BUILD_TYPES.join()}`);
+  const buildable = MAPS.filter((m) => m.build).map((m) => m.id);
+  check('the worlds are the registry\'s buildable maps', sameSet(MAP_IDS, buildable), `${MAP_IDS.join()} vs ${buildable.join()}`);
+  const freestyle = MAPS.filter((m) => m.mode === 'freestyle').map((m) => m.id);
+  check('the run maps are the registry\'s freestyle maps', sameSet(RUN_MAPS, freestyle), `${RUN_MAPS.join()} vs ${freestyle.join()}`);
+
+  /* A ring of sky hoops, built with the builder's own functions, is a map
+   * track and a lap through it is a lap by the simulator's own detector. */
+  const hoops = mapTrackDocument({ id: 'trk-7a8b9c0d', types: ['hoop250', 'hoop175', 'hoop30'], radius: 60 });
+  const hoopsOut = inspectDocument(hoops);
+  check('accepts a ring of sky hoops', !hoopsOut.error, hoopsOut.error);
+  check('and numbers every hoop on its plan', hoopsOut.plan && hoopsOut.plan.numbers.map((n) => n.n).join() === '1,2,3');
+  const hoopLap = syntheticLapBytes(hoops);
+  const hoopCheck = checkLap(hoops, hoopLap.bytes, Math.round(hoopLap.lapMs));
+  check('and a lap flown through the hoops verifies', hoopCheck.ok === true, JSON.stringify(hoopCheck).slice(0, 160));
   check('refuses a gate outside the world across it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, x: 3001 } }))).error));
   check('refuses a gate outside the world along it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, y: -3001 } }))).error));
   check('refuses a gate three kilometres up', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, z: 3001 } }))).error));
@@ -1444,7 +1473,7 @@ async function testHttp() {
 
     const aRun = (over) => ({
       name: 'Ada Rook',
-      map: 'city',
+      map: 'alps',
       style: 'expert',
       score: 24800,
       durationMs: 120000,
