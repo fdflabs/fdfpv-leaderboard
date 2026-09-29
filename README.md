@@ -91,6 +91,19 @@ Fly link from this page.
 npm test
 ```
 
+The HTTP pass runs against the file store. Production is Postgres, so give
+the suite an empty scratch database as well and it runs the same pass a
+second time against that; unset, it says `skip`:
+
+```bash
+docker run -d --rm --name board-selftest-pg -p 127.0.0.1:55432:5432 \
+  -e POSTGRES_USER=selftest -e POSTGRES_PASSWORD=selftest -e POSTGRES_DB=selftest postgres:16
+BOARD_SELFTEST_DATABASE_URL=postgres://selftest:selftest@127.0.0.1:55432/selftest npm test
+```
+
+The database has to be empty: the pass counts from zero and drops nothing,
+so a second run wants a fresh one (`createdb`, or a new container).
+
 ## Postgres, when you want it
 
 Set `DATABASE_URL` and the same process uses the schema in `schema.sql`.

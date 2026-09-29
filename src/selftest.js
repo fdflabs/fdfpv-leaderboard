@@ -851,6 +851,12 @@ async function testStore() {
   await rm(legacyDir, { recursive: true, force: true });
 }
 
+function sortedJson(value) {
+  return JSON.stringify(value, (key, v) => (v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]]))
+    : v));
+}
+
 function waitFor(child, needle, ms = 8000) {
   return new Promise((resolve, reject) => {
     let buf = '';
@@ -868,8 +874,17 @@ function waitFor(child, needle, ms = 8000) {
   });
 }
 
-async function testHttp() {
-  console.log('http');
+/*
+ * The HTTP pass runs against the file store always, and a second time
+ * against Postgres when BOARD_SELFTEST_DATABASE_URL names one, because the
+ * production board is the Postgres store and nothing else here reaches it.
+ * The database must be EMPTY, a fresh one made for this run: the pass
+ * asserts counts from zero, and it never drops anything, so pointing it at
+ * a board with data fails rather than harms it. Unset says `skip`, the way
+ * BOARD_SELFTEST_PASSWORD does, rather than passing quietly.
+ */
+async function testHttp(databaseUrl = '') {
+  console.log(databaseUrl ? '\nhttp, against Postgres' : 'http');
   const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
   const child = spawn(process.execPath, [join(root, 'src', 'server.js')], {
     cwd: root,
@@ -877,7 +892,7 @@ async function testHttp() {
       ...process.env,
       PORT: '3199',
       BOARD_FILE: join(dir, 'board.json'),
-      DATABASE_URL: '',
+      DATABASE_URL: databaseUrl,
       SIM_ORIGIN: 'http://127.0.0.1:8000',
       BOARD_ADMIN_TOKEN: ADMIN_TOKEN,
       BOARD_ADMINS: `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`,
@@ -892,7 +907,7 @@ async function testHttp() {
   try {
     await waitFor(child, 'FDFPV leaderboard');
     const health = await fetch('http://127.0.0.1:3199/api/health').then((r) => r.json());
-    check('health', health.ok === true && health.store === 'file');
+    check('health', health.ok === true && health.store === (databaseUrl ? 'postgres' : 'file'));
     const created = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1060,8 +1075,11 @@ async function testHttp() {
     check('and a field track in the same listing names none', (mapList.tracks || []).find((t) => t.id === 'trk-1a2b3c4d').map === null);
     const ringServed = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/document').then((r) => r.json());
     const servedDoc = ringServed.document || ringServed;
+    /* Compared with sorted keys, because Postgres keeps a document as JSONB,
+     * which hands its keys back in its own order. Nothing reads a document by
+     * key order: the simulator's layoutFingerprint goes through toPlain. */
     check('its document is served back whole', servedDoc.schemaVersion === 4 && servedDoc.map === 'swiss2'
-      && JSON.stringify(servedDoc.elements) === JSON.stringify(ringDoc.elements));
+      && sortedJson(servedDoc.elements) === sortedJson(ringDoc.elements));
     const ringLap = honestLap(ringDoc);
     const ringTime = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
       method: 'POST',
@@ -2330,5 +2348,10 @@ await testValidate();
 await testStore();
 await testStats();
 await testHttp();
+if (process.env.BOARD_SELFTEST_DATABASE_URL) {
+  await testHttp(process.env.BOARD_SELFTEST_DATABASE_URL);
+} else {
+  console.log('\nhttp, against Postgres\n  skip  BOARD_SELFTEST_DATABASE_URL is not set');
+}
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
