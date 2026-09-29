@@ -201,9 +201,10 @@ to create things in, is in
 | GET | `/api/config` | `{ simOrigin, boardOrigin }` |
 | POST | `/api/stats/events` | Add one counted event. Answers 204 and stores no identifier |
 | GET | `/api/stats` | The statistics page's numbers. Cached twenty seconds |
-| POST | `/api/bugs` | Tester submit `{ kind, title, what, expected?, steps?, reporter?, context? }` |
+| POST | `/api/bugs` | Tester submit `{ kind, title, what, expected?, steps?, reporter?, context?, images? }`. `images` is up to four screenshots, base64 or a `data:` URL each |
 | GET | `/api/bugs` | Ticket summaries, newest first. `?status=open` `?kind=visual` |
-| GET | `/api/bugs/:id` | One full ticket, context included |
+| GET | `/api/bugs/:id` | One full ticket, context included, and `images: [{ n, type, size }]` |
+| GET | `/api/bugs/:id/images/:n` | Screenshot `n` (1 to 4) of that ticket, as its bytes. Same gate as the ticket |
 | POST | `/api/bugs/:id` | Update `{ status, resolution }` |
 
 A first publish returns an `editKey`. Keep it in the browser that sent
@@ -383,7 +384,31 @@ Kinds: `crash`, `blocking`, `wrong`, `visual`, `feel`, `other`.
 Statuses: `open`, `in_progress`, `fixed`, `wontfix`, `duplicate`.
 
 Submit is public. Listing and updating need `BUGS_TOKEN` when that
-environment variable is set. Locally it is unset, so the tests and a
+environment variable is set.
+
+### Screenshots
+
+The simulator's form takes up to four images, pasted with Ctrl+V, dropped
+on the form or chosen from a file, and sends them inside the same JSON as
+the report, base64 encoded. Base64 in the JSON rather than multipart
+because every other route here is JSON, the card animation already travels
+that way, and a multipart parser is either a second dependency or a
+hand written one; the third it costs on the wire is paid on a few hundred
+kilobytes a report, because the browser downscales to 1920 on the long
+edge and re-encodes to WebP or JPEG under a million bytes first.
+
+The board checks them where they arrive (`inspectBugImages` in
+`src/validate.js`): at most four, at most a mebibyte each and four
+together, and each has to be a PNG, JPEG or WebP by its first bytes. The
+type stored is the one those bytes say, never the one declared. The body
+cap on the route is derived from those numbers.
+
+They are stored with the ticket, in Postgres as `bug_images` rows of
+`BYTEA` written in the ticket's own transaction, and in the file store as
+base64 beside it. Reading one needs exactly what reading the ticket needs,
+and anonymous reads are a 401 wherever `BUGS_TOKEN` is set. The inbox
+fetches each with the bearer header and shows it from a blob: a thumbnail
+that opens full size in a new tab. Locally it is unset, so the tests and a
 local agent can read tickets with no header.
 
 ```bash

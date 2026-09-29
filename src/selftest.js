@@ -21,6 +21,7 @@ import {
   inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName, MAP_IDS,
   creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
   inspectStatsEvent, normaliseCountry, statsDay, MAP_ELEMENT_TYPES, RUN_MAPS,
+  inspectBugImages, MAX_BUG_IMAGE_BYTES,
 } from './validate.js';
 import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
@@ -149,6 +150,17 @@ const ADMIN_TOKEN = 'selftest-admin-token';
  */
 const ADMIN_EMAIL = 'boardkeeper@example.com';
 const ADMIN_PASSWORD = 'selftest-password-42';
+
+/* Screenshots for the bug form's attachments. A real one pixel PNG, so the
+ * round trip is a real image's bytes; the JPEG and WebP only have to carry
+ * their magic, which is all the board reads. */
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+const JPEG_HEAD = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60, 7)]);
+const WEBP_HEAD = Buffer.concat([Buffer.from('RIFF\x40\x00\x00\x00WEBPVP8 ', 'latin1'), Buffer.alloc(60, 3)]);
+const b64 = (buf) => buf.toString('base64');
 
 function roomDoc(id = 'trk-2b3c4d5e') {
   const room = sampleDoc(id, {
@@ -837,6 +849,39 @@ async function testStore() {
   check('a fixed ticket leaves the open list', stillOpen.length === 0);
   const missing = await store.updateBug('bug-00000000', { status: 'open' });
   check('updating a missing ticket is a 404', missing.status === 404);
+
+  const kinds = inspectBugImages([
+    `data:image/png;base64,${b64(PNG_1PX)}`, b64(JPEG_HEAD), `data:image/webp;base64,${b64(WEBP_HEAD)}`,
+  ]);
+  check('PNG, JPEG and WebP screenshots are read by their magic',
+    !kinds.error && kinds.images.map((i) => i.type).join() === 'image/png,image/jpeg,image/webp');
+  const lying = inspectBugImages([`data:image/png;base64,${b64(JPEG_HEAD)}`]);
+  check('the stored type is the bytes\' own, not the one declared', !lying.error && lying.images[0].type === 'image/jpeg');
+  check('text sent as an image is refused',
+    /not a PNG, JPEG or WebP/.test(inspectBugImages([b64(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))]).error || ''));
+  check('an image over a mebibyte is refused',
+    /larger than a megabyte/.test(inspectBugImages([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]).error || ''));
+  check('a fifth image is refused',
+    /at most four/.test(inspectBugImages(Array(5).fill(b64(PNG_1PX))).error || ''));
+  check('images that are not a list are refused', Boolean(inspectBugImages('nope').error));
+  check('a report with no images has an empty list', inspectBugCreate({
+    kind: 'other', title: 'No pictures here', what: 'Twenty characters or more of words.',
+  }).images.length === 0);
+  const shot = await store.addBug(inspectBugCreate({
+    kind: 'visual',
+    title: 'Screenshot attached here',
+    what: 'The picture shows it better than twenty words do.',
+    images: [b64(PNG_1PX), b64(JPEG_HEAD)],
+  }));
+  check('a ticket lists its images by number, type and size',
+    shot.images.length === 2 && shot.images[0].n === 1 && shot.images[0].type === 'image/png'
+    && shot.images[0].size === PNG_1PX.length && shot.images[1].type === 'image/jpeg');
+  const back = await store.getBugImage(shot.id, 1);
+  check('the file store hands a screenshot back byte for byte', Boolean(back) && back.type === 'image/png' && back.bytes.equals(PNG_1PX));
+  check('an image a ticket does not have is null', (await store.getBugImage(shot.id, 3)) === null);
+  const shotAfter = await store.updateBug(shot.id, { status: 'in_progress' });
+  check('an update keeps the ticket\'s images', shotAfter.images.length === 2);
+  check('an old ticket without images reads as none', (await store.getBug(filed.id)).images.length === 0);
   await rm(dir, { recursive: true, force: true });
 
   const legacyDir = await mkdtemp(join(tmpdir(), 'fdfpv-board-legacy-'));
@@ -2030,6 +2075,102 @@ async function testHttp(databaseUrl = '') {
 
 
 /*
+ * SCREENSHOTS ON A TICKET, over the wire, on a server with BUGS_TOKEN set,
+ * because the question is who may read them and testHttp's server leaves
+ * the inbox open the way a checkout does. Runs against the file store and,
+ * when the suite has one, against Postgres after testHttp, whose counts
+ * from zero it does not disturb: it looks its own tickets up by id.
+ */
+async function testBugImages(databaseUrl = '') {
+  console.log(databaseUrl ? '\nbug screenshots, against Postgres' : '\nbug screenshots');
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
+  const B = 'http://127.0.0.1:3198';
+  const child = spawn(process.execPath, [join(root, 'src', 'server.js')], {
+    cwd: root,
+    env: {
+      ...process.env,
+      PORT: '3198',
+      BOARD_FILE: join(dir, 'board.json'),
+      DATABASE_URL: databaseUrl,
+      BUGS_TOKEN: 'selftest-bugs-token',
+      BOARD_ADMINS: `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const report = (images, title = 'Pasted a screenshot here') => fetch(`${B}/api/bugs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'visual', title, what: 'The screenshot shows the thing twenty words cannot.', images,
+    }),
+  });
+  try {
+    await waitFor(child, 'FDFPV leaderboard');
+    const login = await fetch(`${B}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    }).then((r) => r.json());
+    const asAdmin = { authorization: `Bearer ${login.token}` };
+
+    const filed = await report([`data:image/png;base64,${b64(PNG_1PX)}`, b64(WEBP_HEAD)]);
+    const ticket = await filed.json();
+    check('a report carries its screenshots in', filed.status === 201 && ticket.images.length === 2,
+      `${filed.status} ${JSON.stringify(ticket).slice(0, 160)}`);
+    const one = await fetch(`${B}/api/bugs/${ticket.id}`, { headers: asAdmin }).then((r) => r.json());
+    check('the admin\'s ticket lists them',
+      one.images.map((i) => `${i.n}:${i.type}:${i.size}`).join() === `1:image/png:${PNG_1PX.length},2:image/webp:${WEBP_HEAD.length}`);
+    const img = await fetch(`${B}/api/bugs/${ticket.id}/images/1`, { headers: asAdmin });
+    const bytes = Buffer.from(await img.arrayBuffer());
+    check('the signed in admin gets the image back byte for byte',
+      img.status === 200 && img.headers.get('content-type') === 'image/png' && bytes.equals(PNG_1PX));
+    check('served with nosniff and never cached',
+      img.headers.get('x-content-type-options') === 'nosniff' && /no-store/.test(img.headers.get('cache-control') || ''));
+    const byToken = await fetch(`${B}/api/bugs/${ticket.id}/images/2`, {
+      headers: { authorization: 'Bearer selftest-bugs-token' },
+    });
+    check('BUGS_TOKEN reads it too, as it reads the ticket', byToken.status === 200 && byToken.headers.get('content-type') === 'image/webp');
+    const anonImage = await fetch(`${B}/api/bugs/${ticket.id}/images/1`);
+    check('an anonymous read of a screenshot is a 401', anonImage.status === 401);
+    const anonTicket = await fetch(`${B}/api/bugs/${ticket.id}`);
+    check('and of the ticket', anonTicket.status === 401);
+    const wrongToken = await fetch(`${B}/api/bugs/${ticket.id}/images/1`, { headers: { authorization: 'Bearer nope' } });
+    check('a wrong token is a 401', wrongToken.status === 401);
+    const none = await fetch(`${B}/api/bugs/${ticket.id}/images/3`, { headers: asAdmin });
+    check('an image the ticket does not have is a 404', none.status === 404);
+    const outside = await fetch(`${B}/api/bugs/${ticket.id}/images/9`, { headers: asAdmin });
+    check('an image number past four is a 400', outside.status === 400);
+    const kept = await fetch(`${B}/api/bugs/${ticket.id}`, {
+      method: 'POST',
+      headers: { ...asAdmin, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'in_progress' }),
+    }).then((r) => r.json());
+    check('marking the ticket keeps its screenshots', kept.status === 'in_progress' && kept.images.length === 2);
+
+    const text = await report([b64(Buffer.from('<html><script>alert(1)</script></html>'))]);
+    check('a page sent as an image is refused', text.status === 400 && /PNG, JPEG or WebP/.test((await text.json()).error));
+    const big = await report([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]);
+    check('an image over the cap is refused', big.status === 400 && /megabyte/.test((await big.json()).error));
+    const five = await report(Array(5).fill(b64(PNG_1PX)));
+    check('a fifth image is refused', five.status === 400);
+    const huge = await report(Array(4).fill(`${b64(PNG_1PX)}${'A'.repeat(1_500_000)}`));
+    check('a body past what four capped images can be is a 413', huge.status === 413);
+    const listed = await fetch(`${B}/api/bugs`, { headers: asAdmin }).then((r) => r.json());
+    check('refused reports stored nothing', listed.bugs.filter((b) => b.title === 'Pasted a screenshot here').length === 1);
+    const plain = await report(undefined, 'A report with no images');
+    const plainBody = await plain.json();
+    check('a report without images still lands', plain.status === 201 && plainBody.images.length === 0);
+
+    const bugsJs = await fetch(`${B}/bugs.js`).then((r) => r.text());
+    check('the inbox fetches screenshots with the header, not a bare src',
+      bugsJs.includes('/images/${img.n}') && bugsJs.includes('createObjectURL'));
+  } finally {
+    child.kill('SIGTERM');
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/*
  * The links a visitor clicks must be right whether or not /api/config
  * answers. bindLinks used to run only after that request came back, so one
  * failure left every cross-origin href on the loopback address baked into
@@ -2348,8 +2489,10 @@ await testValidate();
 await testStore();
 await testStats();
 await testHttp();
+await testBugImages();
 if (process.env.BOARD_SELFTEST_DATABASE_URL) {
   await testHttp(process.env.BOARD_SELFTEST_DATABASE_URL);
+  await testBugImages(process.env.BOARD_SELFTEST_DATABASE_URL);
 } else {
   console.log('\nhttp, against Postgres\n  skip  BOARD_SELFTEST_DATABASE_URL is not set');
 }

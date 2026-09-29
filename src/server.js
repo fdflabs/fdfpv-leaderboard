@@ -41,7 +41,7 @@ import {
   inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectAuth, inspectGif, inspectRun,
   inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
-  BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
+  BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_BUG_IMAGE_BYTES, MAX_BUG_IMAGES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
   TIME_ID_RE, TRACK_ID_RE,
 } from './validate.js';
 import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
@@ -452,6 +452,15 @@ async function readBody(req, limit = 660_000, tooBig = 'That track is too large 
   }
   return Buffer.concat(chunks).toString('utf8');
 }
+
+/*
+ * A report's body: 40 kB of words and context, as it always was, plus the
+ * base64 of four screenshots at their cap and a data: prefix each. Derived
+ * from the caps in src/validate.js rather than written as a round number,
+ * so it cannot drift under them. Five and a half megabytes, which is what
+ * Caddy in front of the VM passes too: it sets no body limit of its own.
+ */
+const BUG_BODY_MAX = 40_000 + MAX_BUG_IMAGES * (Math.ceil(MAX_BUG_IMAGE_BYTES / 3) * 4 + 64);
 
 async function handleApi(req, res, url) {
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -1172,7 +1181,7 @@ async function handleApi(req, res, url) {
     }
     let body;
     try {
-      body = JSON.parse(await readBody(req, 40_000, 'That report is too large.'));
+      body = JSON.parse(await readBody(req, BUG_BODY_MAX, 'That report is too large.'));
     } catch (e) {
       if (e && e.status) {
         throw e;
@@ -1187,6 +1196,41 @@ async function handleApi(req, res, url) {
     }
     recordBugHit(ip);
     send(res, 201, await store.addBug(inspected));
+    return;
+  }
+
+  /*
+   * A screenshot on a ticket, behind the gate the ticket itself is behind:
+   * a signed in admin, or BUGS_TOKEN. It is fetched by the inbox with the
+   * bearer header and shown from a blob, never by a bare <img src>, because
+   * an <img> cannot carry the header and a token in a query string ends up
+   * in a history. The type is the one validate.js read off the bytes, and
+   * nosniff holds the browser to it.
+   */
+  const bugImage = path.match(/^\/api\/bugs\/([^/]+)\/images\/([0-9]+)$/);
+  if (req.method === 'GET' && bugImage) {
+    if (!bugsAuthorized(req, url)) {
+      send(res, 401, { error: 'A token is needed to read tickets.' });
+      return;
+    }
+    const id = bugIdFrom(bugImage[1]);
+    const n = Number(bugImage[2]);
+    if (!id || !Number.isInteger(n) || n < 1 || n > MAX_BUG_IMAGES) {
+      send(res, 400, { error: 'That address is not usable.' });
+      return;
+    }
+    const found = await store.getBugImage(id, n);
+    if (!found) {
+      send(res, 404, { error: 'That ticket has no such image.' });
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': found.type,
+      'content-length': found.bytes.length,
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+    });
+    res.end(found.bytes);
     return;
   }
 
@@ -1297,6 +1341,14 @@ const server = http.createServer(async (req, res) => {
      * stack from pg or the filesystem, and echoing it told the internet
      * about the schema and the paths. */
     if (e && e.status) {
+      /* A body refused part way is still arriving, and readBody left it
+       * unread. On a kept alive socket the client's next request then met
+       * that tail and was reset, which a report with screenshots made
+       * easy to reach. Closing after the answer makes the next request
+       * start clean. */
+      if (e.status === 413) {
+        res.setHeader('connection', 'close');
+      }
       send(res, e.status, { error: e.message });
       return;
     }
