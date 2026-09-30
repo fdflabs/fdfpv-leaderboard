@@ -1,6 +1,8 @@
-# FDFPV Leaderboard
+# Paraguayan Drone Combat Simulator Leaderboard
 
-The public board for [FDFPV](https://github.com/fdflabs/fdfpv), a GPLv3 fork of
+The public board for the
+[Paraguayan Drone Combat Simulator](https://github.com/fdflabs/fdfpv)
+(repository name fdfpv), a GPLv3 fork of
 [WebFPVSimulator](https://github.com/fdflabs/fdfpv).
 Every published course lives here, with the times flown on it.
 
@@ -41,7 +43,7 @@ A Fly link looks like this:
 The simulator fetches `/api/tracks/{id}/document`, builds the world, and
 offers to post a lap time back here under the pilot's name.
 
-The **FDFPV** mark, in the masthead and again in the sticky spine, is the
+The name's mark, in the masthead and again in the sticky spine, is the
 way back to the front door, and it opens in this tab rather than the
 simulator's: it is a way back, and a way back that leaves this page open
 behind it is not one. Where the front door is comes from `public/origins.js`
