@@ -317,6 +317,14 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   const src = (name) => new URL(`${assetBase}/${name}`, document.baseURI).href;
   host.textContent = '';
 
+  /* FDFPV is fdflabs.com's fork; every credit below is the upstream's and stays as it was. */
+  const by = el('p', 'credits-lede');
+  by.append(
+    document.createTextNode(str('credits.fdfpv_by')),
+    link('https://fdflabs.com', 'fdflabs.com'),
+  );
+  host.append(by);
+
   const lede = el('p', 'credits-lede', str('credits.a_browser_fpv_racing_simulator_the'));
   host.append(lede);
 

@@ -127,6 +127,7 @@ export default {
   "credits.cumber_and_hotspur": "Cumber and Hotspur",
   "credits.dutch_drone_squad": "Dutch Drone Squad",
   "credits.eight_tracks_six_builders_read_off": "Eight tracks, six builders, read off the official animations.",
+  "credits.fdfpv_by": "FDFPV by ",
   "credits.from_the_dutch_drone_gods_at": ", from the Dutch drone gods at ",
   "credits.grok": "Grok",
   "credits.is_gplv3_so_this_is_too": " is GPLv3, so this is too.",

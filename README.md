@@ -4,6 +4,11 @@ The public board for [FDFPV](https://github.com/fdflabs/fdfpv), a GPLv3 fork of
 [WebFPVSimulator](https://github.com/fdflabs/fdfpv).
 Every published course lives here, with the times flown on it.
 
+Made by [fdflabs.com](https://fdflabs.com). The board is fdflabs.com's GPLv3
+fork of Mathew Harvey's
+[WebFPVSimulator-LeaderBoard](https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard);
+see NOTICE for the origin of this fork and the Credits section below.
+
 The page has two tabs. **Tracks and times** is the board itself. **Site
 statistics** is a page of counters about the product: how many are flying
 now, pilots and laps by day, which countries, which sponsors' links people
@@ -434,6 +439,24 @@ On a host with `BUGS_TOKEN` set, add
 `-H "Authorization: Bearer $BUGS_TOKEN"` to the GET and update calls.
 Testers never need that token, and neither does an admin signed in on the
 board: the same tab's session opens this inbox too.
+
+## Credits
+
+The board is made by [fdflabs.com](https://fdflabs.com). It stands on
+other people's work, and each of them keeps their credit:
+
+- Mathew Harvey's
+  [WebFPVSimulator-LeaderBoard](https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard),
+  the upstream this is a fork of. Every upstream file keeps its GPLv3
+  header and copyright line.
+- [NOTICE](NOTICE): the origin of this fork and its licence.
+- The credits roll, whose live copy is the simulator's `#credits` and
+  whose fallback here is `public/credits.js`: the upstream maker, the beta
+  test pilots, Betaflight, Track Draw and the Dutch Drone Squad, the
+  RaceGOW5 track builders, and the AI tools it was built with.
+- The simulator's own [Credits](https://github.com/fdflabs/fdfpv#credits)
+  section lists the rest: its NOTICE, the war mode audio credits and the
+  map data attributions.
 
 ## Licence
 
