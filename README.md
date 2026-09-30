@@ -1,7 +1,7 @@
 # FDFPV Leaderboard
 
 The public board for [FDFPV](https://github.com/fdflabs/fdfpv), a GPLv3 fork of
-[WebFPVSimulator](https://github.com/fdflabs/fdfpv).
+[WebFPVSimulator](https://github.com/Mathew-Harvey/WebFPVSimulator).
 Every published course lives here, with the times flown on it.
 
 Made by [fdflabs.com](https://fdflabs.com). The board is fdflabs.com's GPLv3
