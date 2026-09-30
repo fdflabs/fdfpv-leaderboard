@@ -666,6 +666,33 @@ class FileStore {
     });
   }
 
+  /* Every name and time of one pilot key given to another (src/pilotkeys.js
+   * says when). { names, times }: how many moved. */
+  async moveKey(from, to) {
+    return this.lock(async () => {
+      let names = 0;
+      let times = 0;
+      for (const have of Object.values(this.data.pilots)) {
+        if (have.key === from) {
+          have.key = to;
+          names += 1;
+        }
+      }
+      for (const list of Object.values(this.data.times)) {
+        for (const row of list) {
+          if (row.key === from) {
+            row.key = to;
+            times += 1;
+          }
+        }
+      }
+      if (names || times) {
+        await this.flush();
+      }
+      return { names, times };
+    });
+  }
+
   hasTimeId(id) {
     for (const list of Object.values(this.data.times)) {
       if (list.some((row) => row.id === id)) {
@@ -1235,6 +1262,22 @@ class PgStore {
       return { claimed: false };
     }
     return { error: 'That name belongs to another pilot. Pick another name, or import their pilot key.', status: 403 };
+  }
+
+  async moveKey(from, to) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const names = await client.query('UPDATE pilots SET public_key = $2 WHERE public_key = $1', [from, to]);
+      const times = await client.query('UPDATE times SET pilot_key = $2 WHERE pilot_key = $1', [from, to]);
+      await client.query('COMMIT');
+      return { names: names.rowCount, times: times.rowCount };
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   async addTime({ trackId, name, lapMs, threeMs, ghost, key, craft }) {

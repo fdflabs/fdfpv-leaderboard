@@ -192,6 +192,8 @@ to create things in, is in
 | POST | `/api/tracks` | Publish `{ author, document, editKey? }` |
 | POST | `/api/tracks/:id/times` | Post `{ name, lapMs, ghost, key, sig }`. The ghost is required and is checked against the track: 422 with the reason if it did not fly the course. `key` and `sig` are the pilot's key and its signature over the post; the first key seen for a name owns the name, and another key posting under it is a 403. A fixed wing's lap on a track built inside a world adds `craft`, the plane's airframe id, which the signature covers and which puts the time on the track's plane board; the lap check refuses a plane that does not fit every gate |
 | WS | `/api/live/:id?name=` | Live room for that track: pilots on it see each other. Binary frames are relayed with the sender's id in front; text frames are `welcome`, `join` and `leave` |
+| POST | `/api/pilots` | Claim `{ name, key, sig }` ahead of any time: `sig` is the key's signature over `fdfpv-name/v1`, a newline and the name (src/pilotkeys.js). 201 claimed, 200 already this key's, 403 another key's. The simulator's optional sign-in claims a callsign here before its accounts server keeps it |
+| POST | `/api/pilots/link` | Hand every name and time of pilot key `from` to key `to`: `{ from, fromSig, to, toSig }`, both signatures over `fdfpv-link/v1`, `from` and `to` on lines of their own. Answers `{ names, times }` moved. The simulator sends it when a computer signs in holding a key other than the account's |
 | GET | `/api/tracks/:id/times/:timeId/ghost` | That time's recorded lap, `{ id, name, lapMs, ghost }` |
 | GET | `/api/tracks/:id/gif` | That room's card animation, as `image/gif` |
 | POST | `/api/tracks/:id/gif` | Upload `{ gif, editKey? }`. Rooms only |

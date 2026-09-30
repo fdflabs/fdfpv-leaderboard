@@ -2067,6 +2067,65 @@ async function testHttp(databaseUrl = '') {
     const anon = await fetch(`${B}/api/stats`).then((r) => r.json());
     check('the public read does not carry the list of sponsors',
       anon.sponsors === undefined);
+
+    /* ---------------------------------------------------------------- */
+    /* A callsign claimed ahead of a time, and a key handed on           */
+    /* ---------------------------------------------------------------- */
+
+    console.log('\na callsign claimed ahead of a time, and a key handed on');
+    const enc = (text) => new TextEncoder().encode(text);
+    const cara = createIdentity(memoryStorage());
+    const dan = createIdentity(memoryStorage());
+    const eve = createIdentity(memoryStorage());
+    const claim = async (identity, name, signed = name) => {
+      const auth = await identity.signBytes(enc(`fdfpv-name/v1\n${signed}`));
+      return fetch(`${B}/api/pilots`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, ...auth }),
+      });
+    };
+    let said = await claim(cara, 'Maverick');
+    check('a pilot key claims a name before any time', said.status === 201);
+    said = await claim(cara, 'Maverick');
+    check('claiming it again is a no-op', said.status === 200);
+    said = await claim(eve, 'maverick');
+    check('another key cannot claim it, case and all', said.status === 403);
+    said = await claim(eve, 'Iceman', 'Viper');
+    check('a signature over another name claims nothing', said.status === 401);
+    const keysDoc = { ...lapDoc(), id: 'trk-5e6f7a8b', name: 'Pilot keys' };
+    const keysTrack = await fetch(`${B}/api/tracks`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ author: 'Maverick', document: keysDoc }),
+    });
+    check('a track for the next laps is published', keysTrack.status === 201, `${keysTrack.status}`);
+    const keysLap = honestLap(keysDoc);
+    const lapPost = (identity, name) => signedTime(identity, keysDoc.id, name, keysLap)
+      .then((body) => fetch(`${B}/api/tracks/${keysDoc.id}/times`, { method: 'POST', headers: { 'content-type': 'application/json' }, body }));
+    said = await lapPost(eve, 'Maverick');
+    check('a time under a claimed name from another key is refused', said.status === 403);
+    said = await lapPost(cara, 'Maverick');
+    check('the claiming key posts under it', said.status === 201, `${said.status}`);
+    const link = async (from, to, signers = [from, to]) => {
+      const fromKey = await from.publicKey();
+      const toKey = await to.publicKey();
+      const message = enc(`fdfpv-link/v1\n${fromKey}\n${toKey}`);
+      const a = await signers[0].signBytes(message);
+      const b = await signers[1].signBytes(message);
+      return fetch(`${B}/api/pilots/link`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ from: fromKey, fromSig: a.sig, to: toKey, toSig: b.sig }),
+      });
+    };
+    said = await link(cara, eve, [eve, eve]);
+    check('a link the old key did not sign moves nothing', said.status === 401);
+    said = await link(cara, eve, [cara, cara]);
+    check('nor one the new key did not sign', said.status === 401);
+    said = await link(cara, dan);
+    const moved = await said.json();
+    check('a link both keys signed moves the names and the times', said.status === 200 && moved.names === 1 && moved.times === 1, JSON.stringify(moved));
+    said = await lapPost(dan, 'Maverick');
+    check('the new key posts under the name', said.status === 200 || said.status === 201, `${said.status}`);
+    said = await lapPost(cara, 'Maverick');
+    check('and the old key no longer can', said.status === 403);
   } finally {
     child.kill('SIGTERM');
     await rm(dir, { recursive: true, force: true });
