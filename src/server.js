@@ -46,6 +46,7 @@ import {
 } from './validate.js';
 import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
 import { verifyTimeSignature } from '../vendor/fdfpv/src/share/identity.js';
+import { keyLinkMessage, nameClaimMessage, verifyKeySignature } from './pilotkeys.js';
 import { attachLive } from './live.js';
 import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js';
 
@@ -1123,6 +1124,72 @@ async function handleApi(req, res, url) {
   /* ---------------------------------------------------------------- */
   /* The freestyle board                                                */
   /* ---------------------------------------------------------------- */
+
+  /*
+   * A NAME CLAIMED AHEAD OF A TIME, and A KEY HANDED ON: the simulator's
+   * optional sign-in, src/pilotkeys.js says why. Both ride the bug route's
+   * flood gate under their own label, twenty in ten minutes from one
+   * address: a pilot picks a callsign or signs in a computer now and then.
+   */
+  if (req.method === 'POST' && (path === '/api/pilots' || path === '/api/pilots/link')) {
+    const ip = clientIp(req);
+    if (bugFlooded(`pilot:${ip}`, 20)) {
+      send(res, 429, { error: 'Too many name changes from here. Try again shortly.' });
+      return;
+    }
+    let body;
+    try {
+      body = JSON.parse(await readBody(req, 4_000, 'That request is too large.'));
+    } catch (e) {
+      if (e && e.status) {
+        throw e;
+      }
+      send(res, 400, { error: e.message || 'That request was not JSON.' });
+      return;
+    }
+    recordBugHit(`pilot:${ip}`);
+    if (!body || typeof body !== 'object') {
+      send(res, 400, { error: 'That request was not usable.' });
+      return;
+    }
+    if (path === '/api/pilots') {
+      const name = normaliseName(body.name);
+      if (!name) {
+        send(res, 400, { error: 'A pilot name is 2 to 24 letters, numbers, spaces, dots, underscores or hyphens.' });
+        return;
+      }
+      const auth = inspectAuth(body);
+      if (auth.error) {
+        send(res, 400, { error: auth.error });
+        return;
+      }
+      if (!(await verifyKeySignature({ key: auth.key, sig: auth.sig, message: nameClaimMessage(name) }))) {
+        send(res, 401, { error: 'That signature does not match this name.' });
+        return;
+      }
+      const claim = await store.claimName(name, auth.key);
+      if (claim.error) {
+        send(res, claim.status || 403, { error: claim.error });
+        return;
+      }
+      send(res, claim.claimed ? 201 : 200, { name, claimed: claim.claimed });
+      return;
+    }
+    const from = inspectAuth({ key: body.from, sig: body.fromSig });
+    const to = inspectAuth({ key: body.to, sig: body.toSig });
+    if (from.error || to.error || from.key === to.key) {
+      send(res, 400, { error: 'A link names two different pilot keys, each with its signature.' });
+      return;
+    }
+    const message = keyLinkMessage(from.key, to.key);
+    if (!(await verifyKeySignature({ key: from.key, sig: from.sig, message }))
+      || !(await verifyKeySignature({ key: to.key, sig: to.sig, message }))) {
+      send(res, 401, { error: 'Both pilot keys must sign a link.' });
+      return;
+    }
+    send(res, 200, await store.moveKey(from.key, to.key));
+    return;
+  }
 
   if (req.method === 'GET' && path === '/api/runs') {
     const map = url.searchParams.get('map') || '';
