@@ -953,6 +953,8 @@ async function testHttp(databaseUrl = '') {
     await waitFor(child, 'FDFPV leaderboard');
     const health = await fetch('http://127.0.0.1:3199/api/health').then((r) => r.json());
     check('health', health.ok === true && health.store === (databaseUrl ? 'postgres' : 'file'));
+    const version = await fetch('http://127.0.0.1:3199/api/version').then((r) => r.json());
+    check('a checkout with no REVISION says so: both commits null', version.commit === null && version.fdfpv === null, JSON.stringify(version));
     const created = await fetch('http://127.0.0.1:3199/api/tracks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -75,6 +75,34 @@ const MIME = new Map([
   ['.ico', 'image/x-icon'],
 ]);
 
+/*
+ * WHAT IS RUNNING, for GET /api/version. The simulator's
+ * deploy/vm/deploy-board.sh writes REVISION beside src/ before it restarts
+ * the board, "<board commit> vendor/fdfpv <simulator commit>", and it is
+ * read once, here, so the answer names the code this process loaded and
+ * not whatever a later deploy copied over it without a restart. A checkout
+ * or a host that deploys some other way has no file, and both are null. A
+ * file that is there but is not that line stops the board at start: a
+ * deploy that wrote it wrong is a bug to see, not a version to guess.
+ */
+async function readRevision() {
+  let text;
+  try {
+    text = await readFile(join(root, 'REVISION'), 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return { commit: null, fdfpv: null };
+    }
+    throw e;
+  }
+  const m = text.trim().match(/^([0-9a-f]{40}) vendor\/fdfpv ([0-9a-f]{40})$/);
+  if (!m) {
+    throw new Error(`REVISION is not "<commit> vendor/fdfpv <commit>": ${JSON.stringify(text.slice(0, 120))}`);
+  }
+  return { commit: m[1], fdfpv: m[2] };
+}
+const revision = await readRevision();
+
 const store = await openStore();
 const bugsToken = String(process.env.BUGS_TOKEN || '');
 /*
@@ -491,6 +519,11 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && path === '/api/health') {
     send(res, 200, { ok: true, store: store.kind });
+    return;
+  }
+
+  if (req.method === 'GET' && path === '/api/version') {
+    send(res, 200, revision);
     return;
   }
 
