@@ -34,8 +34,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tracks and Statistics, FDFPV</title>
-    <meta name="description" content="Every published FDFPV track, and the lap times flown on it." />
+    <title>Tracks and Statistics, Paraguayan Drone Combat Simulator</title>
+    <meta name="description" content="Every published Paraguayan Drone Combat Simulator track, and the lap times flown on it." />
     <!--
       A link to this page posted anywhere renders a 1200 by 630 card, and
       og.png is a frame of the real shell rather than a drawing of one, so it
@@ -49,20 +49,20 @@
     -->
     <link rel="canonical" href="https://129.151.39.48/board/" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="FDFPV" />
+    <meta property="og:site_name" content="Paraguayan Drone Combat Simulator" />
     <meta property="og:url" content="https://129.151.39.48/board/" />
-    <meta property="og:title" content="Tracks and Statistics, FDFPV" />
-    <meta property="og:description" content="Every published FDFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
+    <meta property="og:title" content="Tracks and Statistics, Paraguayan Drone Combat Simulator" />
+    <meta property="og:description" content="Every published Paraguayan Drone Combat Simulator track, and the lap times flown on it. Pick one, fly it, and see where you land." />
     <meta property="og:image" content="https://129.151.39.48/board/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="The race field in the FDFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
+    <meta property="og:image:alt" content="The race field in the Paraguayan Drone Combat Simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Tracks and Statistics, FDFPV" />
-    <meta name="twitter:description" content="Every published FDFPV track, and the lap times flown on it. Pick one, fly it, and see where you land." />
+    <meta name="twitter:title" content="Tracks and Statistics, Paraguayan Drone Combat Simulator" />
+    <meta name="twitter:description" content="Every published Paraguayan Drone Combat Simulator track, and the lap times flown on it. Pick one, fly it, and see where you land." />
     <meta name="twitter:image" content="https://129.151.39.48/board/og.png" />
-    <meta name="twitter:image:alt" content="The race field in the FDFPV simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
+    <meta name="twitter:image:alt" content="The race field in the Paraguayan Drone Combat Simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
 
     <!--
       Mint, which is what this page paints a record in, and the one accent of
@@ -242,15 +242,44 @@
         align-items: end;
       }
 
-      .brand h1 {
-        margin: 0;
-        font-size: clamp(38px, 6.4vw, 68px);
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        line-height: 0.92;
-        text-shadow: 3px 3px 0 rgba(20, 28, 20, 0.82);
+      /*
+       * The name, as the simulator's title and loading screen set it (the
+       * .lockup rules in its index.html): PARAGUAYAN thin and spaced over a
+       * rule, DRONE COMBAT bold and condensed, SIMULATOR between two rules,
+       * and Paraguay's red, white and blue as one slash down the left. The
+       * simulator stacks DRONE over COMBAT; a masthead over a table keeps
+       * them on one line. Every part is in the heading's em.
+       */
+      .brand h1 { display: flex; margin: 0; font-size: clamp(34px, 5vw, 56px); }
+      .brand h1 a.home {
+        position: relative; display: inline-flex; flex-direction: column;
+        padding-left: 0.62em; line-height: 1; color: #f7f2e6;
       }
-      .brand h1 .fpv { color: var(--sakura); }
+      .lockup-slash {
+        position: absolute; left: 0.2em; top: 0.02em; bottom: 0.02em;
+        width: 0.07em;
+        transform: skewX(-14deg);
+        background: linear-gradient(180deg, #d52b1e 0 33.4%, #f4f1ea 33.4% 66.6%, #0038a8 66.6% 100%);
+        box-shadow: 0 0 0.16em rgba(0, 0, 0, 0.45);
+      }
+      .lockup-over, .lockup-under {
+        display: flex; align-items: center; gap: 0.9em;
+        font-size: max(0.24em, 9px); font-weight: 500; line-height: 1;
+        letter-spacing: 0.42em; text-transform: uppercase; white-space: nowrap;
+        color: rgba(243, 234, 212, 0.9);
+      }
+      .lockup-over::after, .lockup-under::before, .lockup-under::after {
+        content: ""; flex: 1; min-width: 1.5em; height: 1px;
+        background: rgba(243, 234, 212, 0.42);
+      }
+      .lockup-under::before { margin-right: 0.42em; }
+      .lockup-name {
+        margin: 0.1em 0 0.09em;
+        font-family: "Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow", "Roboto Condensed", sans-serif-condensed, var(--ui);
+        font-stretch: condensed; font-weight: 700;
+        line-height: 0.84; letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
+        text-shadow: 0 0.03em 0 rgba(8, 10, 9, 0.55), 0 0.08em 0.3em rgba(0, 0, 0, 0.5);
+      }
 
       /* The mark is a link and must not look like one until it is pointed
          at: a masthead that arrives underlined is not a masthead. So it
@@ -366,13 +395,18 @@
         align-items: center;
         gap: 20px;
       }
+      /* The spine's mark is the name's middle and its slash: the whole
+         name is the masthead's, and the spine has a search field to fit. */
       .spine-mark {
+        position: relative;
+        padding-left: 14px;
         font-size: 14px;
         font-weight: 800;
         letter-spacing: 0.12em;
+        text-transform: uppercase;
         flex: 0 0 auto;
       }
-      .spine-mark .fpv { color: var(--sakura); }
+      .spine-mark .lockup-slash { left: 3px; width: 3px; }
       .spine-stats {
         font-family: var(--mono);
         font-size: 12px;
@@ -2236,7 +2270,7 @@
           is a way back, and a way back that leaves the page you are
           leaving open behind it is not one.
         -->
-        <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a></h1>
+        <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page"><span class="lockup-slash" aria-hidden="true"></span><span class="lockup-over">Paraguayan</span> <span class="lockup-name">Drone Combat</span> <span class="lockup-under">Simulator</span></a></h1>
         <div class="eyebrow"><span data-str="html.tracks_and_statistics">Tracks and statistics</span></div>
         <p class="invite">
           <span data-str="html.every_published_track_and_the_times">Every published track, and the times flown on it. Open one, fly it in
@@ -2283,7 +2317,7 @@
     <div class="spine">
       <div class="chequer" aria-hidden="true"></div>
       <div class="spine-inner">
-        <a class="spine-mark" id="spine-home" href="http://127.0.0.1:8080/" title="Back to the front page">FD<span class="fpv">FPV</span></a>
+        <a class="spine-mark" id="spine-home" href="http://127.0.0.1:8080/" title="Back to the front page" aria-label="Paraguayan Drone Combat Simulator"><span class="lockup-slash" aria-hidden="true"></span>Drone Combat</a>
         <span class="spine-stats" id="spine-stats"></span>
         <nav class="links">
           <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
@@ -2470,7 +2504,7 @@
 
     <footer>
       <p>
-        <span data-str="html.fdfpv_tracks_and_statistics_every_published">FDFPV Tracks and Statistics. Every published track and every named
+        <span data-str="html.fdfpv_tracks_and_statistics_every_published">Paraguayan Drone Combat Simulator, tracks and statistics. Every published track and every named
         time lives here. The simulator itself keeps nothing: a track you build stays
         in your browser until you publish it. Free software under GPLv3.</span>
       </p>

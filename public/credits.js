@@ -317,7 +317,7 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   const src = (name) => new URL(`${assetBase}/${name}`, document.baseURI).href;
   host.textContent = '';
 
-  /* FDFPV is fdflabs.com's fork; every credit below is the upstream's and stays as it was. */
+  /* The board is fdflabs.com's fork; every credit below is the upstream's and stays as it was. */
   const by = el('p', 'credits-lede');
   by.append(
     document.createTextNode(str('credits.fdfpv_by')),
