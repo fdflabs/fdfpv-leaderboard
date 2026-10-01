@@ -140,6 +140,12 @@ What it sets, in `/etc/fdfpv/board.env` (root, mode 600) and the unit:
 | `BUGS_TOKEN`, `BOARD_ADMIN_TOKEN`, `BOARD_SESSION_SECRET` | generated on the VM |
 | `BOARD_ADMINS` | one owner entry, its password generated on the desktop and kept beside the tracks admin secret, never in git |
 
+`deploy-board.sh` also writes the commit it put there to `REVISION`
+beside `src/`, and `GET /api/version` answers what the process read from
+it at start: `{"commit":"<this repository>","fdfpv":"<vendor/fdfpv>"}`,
+both null on a host with no such file. Compare it with `git rev-parse
+origin/main` to know whether the VM runs current main.
+
 Why Postgres rather than the file store, on a box that could hold either:
 the file store rewrites the whole JSON document, every ghost in it, on
 every write, and a statistics heartbeat is a write, so the cost of a write
