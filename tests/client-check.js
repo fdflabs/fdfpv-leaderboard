@@ -187,6 +187,11 @@ function scenes(trackIds) {
     { name: 'sheet-room', path: `/#track=${room}`, ready: `!document.getElementById('sheet').hidden` },
     { name: 'sheet-wing', path: `/#track=${wing}`, ready: `!document.getElementById('sheet').hidden` },
     { name: 'sheet-ring', path: `/#track=${ring}`, ready: `!document.getElementById('sheet').hidden` },
+    /* The roll is filled at load into a sheet nothing on the board opens
+     * any more (#credits now goes to the simulator's page), so the scene
+     * opens it by hand: what is in it is still the page's to keep. */
+    { name: 'credits', path: '/', act: `document.getElementById('credits-sheet').hidden = false`,
+      ready: `document.querySelectorAll('#credits-roll .credit').length > 0` },
     { name: 'stats', path: '/#stats', ready: `!document.getElementById('view-stats').hidden` },
     { name: 'admin', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden` },
     { name: 'admin-sheet', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
