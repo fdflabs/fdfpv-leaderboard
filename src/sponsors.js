@@ -1,192 +1,122 @@
 /*
- * sponsors.js: the sponsors this board mints links for, and the only
- * vocabulary a `utm_source` can take.
+ * sponsors.js: the sponsors the board makes links for, and with them the
+ * only words a visit's `utm_source` can be counted as.
  *
- * A SPONSOR LINK IS A SLUG, NOT A STRING SOMEBODY TYPED.
+ * The statistics page shows where visitors came from. Storing whatever
+ * `utm_source` said would let anybody with curl add rows to a public page,
+ * a thousand invented sources making a thousand rows nobody can clean. So
+ * a source is a sponsor slug written down by the host, or `direct` when
+ * there is none, or `other`, one row however many strangers arrive. It is
+ * a list rather than a rule ("anything slug shaped") for the reason the
+ * admin whitelist is: a rule is something a stranger can satisfy.
  *
- * The statistics page counts where its visitors came from, and the obvious
- * way to do that is to store whatever `utm_source` said. That is also the
- * way to let any stranger with curl add a row to a public page: a thousand
- * posts carrying a thousand invented sources is a thousand rows in a table
- * nobody can clean, each one printed under a heading that says "where
- * pilots came from". So a source is a slug on THIS list or it is `other`,
- * and `other` is one row however many strangers arrive.
+ * A sponsor's link is `{simulator}/?utm_source=<slug>&utm_medium=sponsor`,
+ * minted in the Admin panel. It opens the simulator, so a pilot arriving
+ * from a sponsor is flying in one click. The browser keeps the slug thirty
+ * days and sends it as one of these few words on its events: it says
+ * which poster somebody walked past, never who they are.
  *
- * It is a list of sponsors, not a rule about them, for the same reason
- * src/admin.js is a list of addresses: a rule ("anything that looks like a
- * slug") is a rule somebody else can satisfy.
+ * This file is part of the Paraguayan Drone Combat Simulator.
  *
- * WHAT A LINK IS. `{sim}/?utm_source=<slug>&utm_medium=sponsor`, minted by
- * the Admin panel and copied by whoever looks after the board. It points at
- * the simulator rather than the front door because a pilot arriving from a
- * sponsor should be flying in one click. `utm_medium` and `utm_campaign`
- * are for the sponsor's own reporting and are never read here.
- *
- * WHAT IT IS NOT. It is not a tracking identifier and it cannot become one.
- * The slug is stored in the visitor's own browser for thirty days and rides
- * on the events that browser sends as one of a handful of known words. It
- * says which poster somebody walked past, not who they are.
- *
- * This file is part of WebFPVLeaderboard.
- *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
  *
- * WebFPVLeaderboard is distributed in the hope that it will be useful, but
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY, without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
 
-/*
- * The shape of a slug, which is the same on both sides of the wire: the
- * simulator checks it before storing what it read out of a query, and this
- * file checks it again before believing anything that arrives. Lower case
- * so that a poster printed in capitals and a link typed in lower case are
- * one sponsor rather than two rows.
- */
+/* A slug as both ends of the wire check it (the simulator before keeping
+ * what it read from a query, this board before believing a post). Lower
+ * case, so a poster in capitals and a link in lower case are one sponsor. */
 export const SOURCE_RE = /^[a-z0-9-]{2,32}$/;
 
-/*
- * The two keys that are not sponsors and are always in the table.
- *
- * `direct` is an arrival carrying no source at all, which is most of them.
- * `other` is an arrival carrying a source this board has never heard of,
- * folded into one row on purpose. Neither can be a sponsor slug, because
- * SOURCE_RE would accept both words: they are excluded below.
- */
+/* The two keys that are never sponsors and always have a row: an arrival
+ * with no source, and one with a source this board does not know. */
 export const SOURCE_DIRECT = 'direct';
 export const SOURCE_OTHER = 'other';
-const RESERVED = new Set([SOURCE_DIRECT, SOURCE_OTHER]);
 
-/*
- * The built-in list, which is empty, and that is the right default.
- *
- * An empty list is a board with no sponsors: every arrival is `direct` or
- * `other`, the statistics page prints those two rows, and the Admin panel
- * says there is nobody to mint a link for. A made up example sponsor here
- * would ship a name that is not a sponsor onto a public page, and somebody
- * would have to notice it was fictional.
- *
- * BOARD_SPONSORS is how a host names its own, the same shape BOARD_ADMINS
- * uses and for the same reason: one entry per line or comma separated, and
- * setting it REPLACES this rather than adding to it.
- *
- *   BOARD_SPONSORS=rotorriot:Rotor Riot,fpvshop:The FPV Shop
- *
- * The slug is what travels in a link and must not change once a poster is
- * printed. The name is what the page prints and can.
- */
-const DEFAULT_SPONSORS = [];
+/* Printed on a public page, so bounded and stripped of control and format
+ * characters (no paragraph, no direction override). Letters of any
+ * alphabet stay. */
+const DISPLAY_MAX_CHARS = 40;
 
-/* A display name is printed on a public page, so it is bounded and stripped
- * of control and format characters. It reaches the DOM through textContent
- * either way; this is so a name cannot be a paragraph or carry a direction
- * override. Letters of any alphabet stay: a sponsor called Café FPV is
- * called that. */
-const NAME_MAX = 40;
-
-function cleanName(raw) {
-  return String(raw ?? '')
-    .replace(/\p{C}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, NAME_MAX);
+function displayName(raw) {
+  return raw.replace(/\p{C}/gu, '').replace(/\s+/g, ' ').trim().slice(0, DISPLAY_MAX_CHARS);
 }
 
 /*
- * Parse the environment's list, or the built-in one. Entries that do not
- * parse are DROPPED rather than throwing: a typo in one sponsor's row
- * should cost that sponsor its link, not take the whole board down on
- * boot. The count is what the Admin panel prints, so a dropped row is
- * visible to whoever set it.
+ * BOARD_SPONSORS, as `slug:Display Name` entries split by newlines or
+ * commas, in the host's order; it is the whole list, and none ship (a
+ * made up sponsor would put a fictional name on a public page). The slug
+ * travels in printed links so it must never change; the name can. A row
+ * with no name prints its slug. A row that does not parse is dropped
+ * rather than stopping the board, and the Admin panel's count shows it.
  */
-function parseSponsors(raw) {
-  const text = String(raw ?? '').trim();
-  const entries = text
-    ? text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-    : DEFAULT_SPONSORS;
-  const out = [];
-  const seen = new Set();
+function readSponsors(text) {
+  const bySlug = new Map();
+  const entries = String(text ?? '').split(/[\n,]+/).map((e) => e.trim()).filter((e) => e !== '');
   for (const entry of entries) {
-    const at = entry.indexOf(':');
-    const slug = (at < 0 ? entry : entry.slice(0, at)).trim().toLowerCase();
-    if (!SOURCE_RE.test(slug) || RESERVED.has(slug) || seen.has(slug)) {
+    const colon = entry.indexOf(':');
+    const slug = (colon === -1 ? entry : entry.slice(0, colon)).trim().toLowerCase();
+    const reserved = slug === SOURCE_DIRECT || slug === SOURCE_OTHER;
+    if (!SOURCE_RE.test(slug) || reserved || bySlug.has(slug)) {
       continue;
     }
-    /* A row with no name at all is legal and prints its own slug, because a
-     * sponsor whose link works and whose heading reads "rotorriot" is
-     * better than a sponsor with no link. */
-    const name = cleanName(at < 0 ? '' : entry.slice(at + 1)) || slug;
-    seen.add(slug);
-    out.push({ slug, name });
+    const name = colon === -1 ? '' : displayName(entry.slice(colon + 1));
+    bySlug.set(slug, { slug, name: name || slug });
   }
-  return out;
+  return bySlug;
 }
 
-const SPONSORS = parseSponsors(process.env.BOARD_SPONSORS);
-const BY_SLUG = new Map(SPONSORS.map((s) => [s.slug, s]));
+const SPONSORS = readSponsors(process.env.BOARD_SPONSORS);
 
-/* Every sponsor, in the order the host wrote them. A copy, so a caller
- * cannot rearrange the list the rest of the process reads. */
+/* Copies, so no caller can rearrange what the rest of the process reads. */
 export function sponsorList() {
-  return SPONSORS.map((s) => ({ ...s }));
+  return [...SPONSORS.values()].map((s) => ({ slug: s.slug, name: s.name }));
 }
 
 export function sponsorCount() {
-  return SPONSORS.length;
+  return SPONSORS.size;
 }
 
 export function isSponsorSlug(slug) {
-  return BY_SLUG.has(String(slug ?? ''));
+  return SPONSORS.has(String(slug ?? ''));
 }
 
-/*
- * What the page prints for a source key. A sponsor's name, or a sentence
- * for the two reserved keys. Never the raw key for something unknown,
- * because nothing unknown gets this far: see sourceKey.
- */
+const RESERVED_NAMES = new Map([[SOURCE_DIRECT, 'Direct'], [SOURCE_OTHER, 'Other']]);
+
+/* What the page prints for a stored source key. */
 export function sponsorName(key) {
   const slug = String(key ?? '');
-  if (slug === SOURCE_DIRECT) {
-    return 'Direct';
-  }
-  if (slug === SOURCE_OTHER) {
-    return 'Other';
-  }
-  const found = BY_SLUG.get(slug);
-  return found ? found.name : slug;
+  return RESERVED_NAMES.get(slug) ?? SPONSORS.get(slug)?.name ?? slug;
 }
 
 /*
- * THE FOLD, and it is the whole security property of this file.
- *
- * Whatever arrives becomes exactly one of: a slug on the list, `direct`, or
- * `other`. Nothing else is ever stored, so the sources table has at most
- * two rows more than the host wrote down, whatever anybody posts.
+ * The fold, and the reason this file exists: whatever arrives becomes a
+ * listed slug, `direct` or `other`, so the sources table can never hold
+ * more than two rows beyond what the host wrote down.
  */
 export function sourceKey(raw) {
-  if (raw == null || raw === '') {
+  if (raw === undefined || raw === null || raw === '') {
     return SOURCE_DIRECT;
   }
   const slug = String(raw).trim().toLowerCase();
-  if (slug === SOURCE_DIRECT) {
-    return SOURCE_DIRECT;
+  if (slug === SOURCE_DIRECT || isSponsorSlug(slug)) {
+    return slug;
   }
-  return isSponsorSlug(slug) ? slug : SOURCE_OTHER;
+  return SOURCE_OTHER;
 }
 
-/*
- * The link a sponsor is given. Built here rather than in the page so that
- * the shape lives in one file, and taking the simulator's origin as an
- * argument because only the server knows it.
- */
+/* The link a sponsor is handed. The simulator's origin is an argument
+ * because only the server's configuration knows it. */
 export function sponsorLink(simOrigin, slug) {
-  const base = String(simOrigin || '').replace(/\/+$/, '');
-  return `${base}/?utm_source=${encodeURIComponent(slug)}&utm_medium=sponsor`;
+  const origin = String(simOrigin || '').replace(/\/+$/, '');
+  return `${origin}/?utm_source=${encodeURIComponent(slug)}&utm_medium=sponsor`;
 }

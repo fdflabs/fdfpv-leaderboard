@@ -1,873 +1,689 @@
 /*
- * validate.js: names, times, and the track document this board will store.
+ * validate.js: what the board believes before it keeps anything.
  *
- * The document is the same schema.md object the simulator's track builder
- * writes. This file does not import that code. It checks the few things
- * the board must believe before it will keep a copy: a version it knows,
- * a stable id, a flying order, a logo that is an embedded image or
- * nothing, and on a track built inside a world, the world and a pose per
- * gate. The simulator is the reader that decides what a gate means.
+ * Every write the API takes passes through one function here first: a
+ * track document, a lap and its ghost, a freestyle run, a bug report and
+ * its screenshots, a statistics event. Each answers with the cleaned value
+ * the store will keep or with { error } holding the sentence the client is
+ * shown, and the simulator shows those sentences to a pilot as they are,
+ * so their wording is part of the API.
  *
- * This file is part of WebFPVLeaderboard.
+ * Several lists and formats here are mirrors of the simulator's copies of
+ * record (named where they appear). This repository does not import them
+ * at run time, on purpose: the board must keep refusing what it refused
+ * yesterday when somebody re-pins vendor/fdfpv, and src/selftest.js is
+ * what holds each mirror against the pinned simulator.
  *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * This file is part of the Paraguayan Drone Combat Simulator.
+ *
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
  *
- * WebFPVLeaderboard is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY, without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-
 import { createHash } from 'node:crypto';
 
-/* MIRRORS NAME_RE in fdfpv/src/share/pilot.js. This copy is the
- * one that decides; the simulator's is a prediction of it so a pilot is told
- * before they upload. Two repos, so change both. */
+const refuse = (error) => ({ error });
+
+function plainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/* A whole number in [0, max] rounded from the claim, or null. */
+function wholeUpTo(raw, max) {
+  return finiteNumber(raw) && raw >= 0 && raw <= max ? Math.round(raw) : null;
+}
+
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/* Multi-line free text as stored: Windows line ends folded, ends trimmed. */
+function prose(raw) {
+  return String(raw ?? '').replace(/\r\n/g, '\n').trim();
+}
+
+/* ================================================================== */
+/* Pilots and times                                                    */
+/* ================================================================== */
+
+/* The simulator's src/share/pilot.js carries the same pattern so a pilot
+ * hears about a bad name before uploading. That copy predicts; this one
+ * decides. Change both together. */
 export const NAME_RE = /^[A-Za-z0-9._\- ]{2,24}$/;
 export const TRACK_ID_RE = /^trk-[0-9a-f]{8}$/;
 export const TIME_ID_RE = /^tm-[0-9a-f]{8}$/;
-/*
- * 560_000, up from 420_000, and the number is derived rather than picked.
- * A track carries up to five sponsors' logos now instead of one, sharing a
- * 384 kB budget (BRANDING_MAX_CHARS in the simulator's
- * src/trackbuilder/model.js). The old cap was one 256 kB logo plus about
- * 158 kB of headroom for the track itself; this is the new branding budget
- * plus the same headroom, so exactly as much room is left for gates as
- * before. See also the publish body limit in server.js, which has to be
- * above this or a track that fits is refused before it is read.
- */
-const MAX_DOCUMENT_CHARS = 560_000;
-const MAX_LAP_MS = 3_600_000;
 
+/* An hour. No lap on any track is near it, and a number past it is not a
+ * lap but a stopwatch left running. */
+const LAP_CEILING_MS = 60 * 60 * 1000;
+
+/* Inner whitespace closes up to one space, so "Ana  Maria" and "Ana Maria"
+ * are one pilot rather than two rows that look the same. */
 export function normaliseName(raw) {
-  const name = String(raw ?? '').trim().replace(/\s+/g, ' ');
-  return NAME_RE.test(name) ? name : null;
+  const tidy = String(raw ?? '').trim().replace(/\s+/g, ' ');
+  return NAME_RE.test(tidy) ? tidy : null;
 }
 
 export function normaliseLapMs(raw) {
-  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 1 || raw > MAX_LAP_MS) {
+  if (!finiteNumber(raw) || raw < 1 || raw > LAP_CEILING_MS) {
     return null;
   }
   return Math.round(raw);
 }
 
 /*
- * The fastest THREE CONSECUTIVE laps of the run, in milliseconds, or null.
- *
- * RaceGOW is scored on three consecutive laps where MultiGP's time trial is
- * scored on one, so a time posted from a room carries both and a time posted
- * from the field carries the lap alone. Optional everywhere: absent, null and
- * unusable all mean the same thing, which is that this run did not put three
- * clean laps together.
- *
- * Bounded against the lap it arrived with rather than against a constant.
- * Three laps of a run cannot be faster than three of its own best lap, and
- * the posted lap IS the best lap, so anything under 3 x lapMs is not a
- * measurement, it is a claim the run's own numbers contradict.
+ * The best three consecutive laps of a run, optional. A room is scored on
+ * three in a row and a field on one, so a time from a room carries both.
+ * Anything faster than three of the run's own best lap is a contradiction
+ * of the run's own numbers, so it reads as absent, which is what absent,
+ * null and garbage all mean here: no clean three.
  */
 export function normaliseThreeMs(raw, lapMs) {
-  if (raw == null) {
-    return null;
-  }
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+  if (!finiteNumber(raw)) {
     return null;
   }
   const ms = Math.round(raw);
-  if (ms < 1 || ms > MAX_LAP_MS * 3) {
-    return null;
-  }
-  if (lapMs != null && ms < lapMs * 3) {
-    return null;
-  }
-  return ms;
+  const tooFast = lapMs != null && ms < lapMs * 3;
+  return ms >= 1 && ms <= LAP_CEILING_MS * 3 && !tooFast ? ms : null;
 }
 
 /*
- * The aircraft a time names, which only a plane's lap on a track built
- * inside a world does: the simulator files those on the plane board and
- * every other time posts none. Returns { craft } with null for a time that
- * names nothing, or { error }. This is the SHAPE of an airframe id and no
- * more; whether it is a fixed wing that fits the track's gates is the lap
- * check's question (the simulator's src/game/verify.js), which reads the
- * stored document and the simulator's own aircraft.
+ * The airframe a plane's lap names. Only the shape is judged here; whether
+ * that airframe is a wing that fits the track's gates is the lap check's
+ * question in the simulator's src/game/verify.js, which the server asks.
  */
-const CRAFT_RE = /^[a-z0-9]{1,32}$/;
+const AIRFRAME_ID = /^[a-z0-9]{1,32}$/;
 
 export function inspectCraft(raw) {
-  if (raw == null || raw === '') {
+  if (raw === undefined || raw === null || raw === '') {
     return { craft: null };
   }
-  if (typeof raw !== 'string' || !CRAFT_RE.test(raw)) {
-    return { error: 'That is not an aircraft this board knows.' };
+  return typeof raw === 'string' && AIRFRAME_ID.test(raw)
+    ? { craft: raw }
+    : refuse('That is not an aircraft this board knows.');
+}
+
+/*
+ * A time's pilot key and signature as the simulator's src/share/identity.js
+ * makes them: a raw 65 byte P-256 key and a 64 byte signature, base64. The
+ * shape is all that is read here; the server checks the signature itself.
+ */
+const PILOT_KEY = /^[A-Za-z0-9+/]{87}=$/;
+const PILOT_SIG = /^[A-Za-z0-9+/]{86}==$/;
+
+export function inspectAuth(body) {
+  const key = typeof body.key === 'string' ? body.key : '';
+  const sig = typeof body.sig === 'string' ? body.sig : '';
+  if (key === '' && sig === '') {
+    return refuse('A time on the board is signed by the pilot key the simulator keeps. Post from there.');
   }
-  return { craft: raw };
+  if (!PILOT_KEY.test(key)) {
+    return refuse('That pilot key is not usable.');
+  }
+  return PILOT_SIG.test(sig) ? { key, sig } : refuse('That signature is not usable.');
 }
 
-function isObject(value) {
-  return value != null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/* ------------------------------------------------------------------ */
-/* Ghost laps                                                          */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* Ghosts                                                              */
+/* ================================================================== */
 
 /*
- * MIRRORS the wire format in fdfpv/src/share/ghostdata.js, the
- * same arrangement as NAME_RE above: the simulator's module is the copy of
- * record and encodes; this is the board's own reading of the header so it
- * never stores a blob the simulator could not replay. Two repos, so a
- * format change lands in both.
+ * The replay a time is posted with, in the simulator's ghost format (its
+ * src/share/ghostdata.js encodes it and is the copy of record). The board
+ * reads the 32 byte header and refuses a blob the simulator could not play
+ * back, then stores the base64 untouched.
  *
- * The caps are the simulator's: 30 Hz grid, ten minutes of lap, 20 bytes a
- * sample. The largest legitimate blob is therefore ~360 KB of bytes, which
- * is ~480 KB of base64; the character cap sits just above that and well
- * under the route's body limit.
+ *   bytes 0-7    "FPVGHST1"
+ *   then six little endian u32: version, sample rate in Hz, sample count,
+ *   lap duration in ms, split count, reserved
+ *   then a u32 per split and 20 bytes per sample
+ *
+ * At the simulator's limits (30 Hz, ten minutes) a ghost is about 360 kB,
+ * 480 kB as base64, which is what the character cap sits just above.
  */
-const GHOST_MAGIC = 'FPVGHST1';
-const GHOST_VERSION = 1;
-const GHOST_HEADER_BYTES = 32;
-const GHOST_SAMPLE_BYTES = 20;
-const GHOST_MAX_MS = 600_000;
-const GHOST_MAX_SPLITS = 256;
 export const GHOST_MAX_CHARS = 500_000;
-/* How far the blob's own duration may sit from the lap time it was posted
- * with. The simulator writes the same rounded number to both, so anything
- * past rounding slack is a blob for a different lap. */
-const GHOST_LAP_SLACK_MS = 250;
+const GHOST_HEAD = 32;
+const GHOST_SAMPLE = 20;
+const GHOST_SPLITS_MAX = 256;
+/* The simulator writes one rounded number to both the lap and the blob,
+ * so more than rounding apart means the blob is another lap's. */
+const GHOST_LAP_TOLERANCE_MS = 250;
 
-const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+function readGhostHead(bytes) {
+  return {
+    magic: bytes.toString('latin1', 0, 8),
+    version: bytes.readUInt32LE(8),
+    rateHz: bytes.readUInt32LE(12),
+    samples: bytes.readUInt32LE(16),
+    durationMs: bytes.readUInt32LE(20),
+    splits: bytes.readUInt32LE(24),
+  };
+}
 
-/*
- * A posted ghost, judged: { ghost } with the base64 exactly as it will be
- * stored, or { error } with the reason. lapMs is the already-normalised
- * lap the ghost arrived beside.
- */
+/* The first rule a header breaks, as the sentence for it, or null. */
+function ghostFault(bytes, lapMs) {
+  const h = readGhostHead(bytes);
+  /* The last sample, plus one step, has to reach the finish line, or the
+   * replay goes blank just before it. */
+  const reach = ((h.samples - 1) * 1000) / h.rateHz + 1000 / h.rateHz;
+  const rules = [
+    [() => h.magic === 'FPVGHST1', 'That ghost recording is not in the ghost format.'],
+    [() => h.version === 1, 'That ghost recording is from an unknown format version.'],
+    [() => h.rateHz >= 1 && h.rateHz <= 240, 'That ghost recording claims an unusable sample rate.'],
+    [() => h.samples >= 2, 'That ghost recording is too short to replay.'],
+    [() => h.durationMs >= 1 && h.durationMs <= 600_000, 'That ghost recording claims an unusable duration.'],
+    [() => h.splits <= GHOST_SPLITS_MAX, 'That ghost recording claims too many splits.'],
+    [() => bytes.length === GHOST_HEAD + h.splits * 4 + h.samples * GHOST_SAMPLE,
+      'That ghost recording does not match its own header.'],
+    [() => !(reach < h.durationMs), 'That ghost recording ends before its lap does.'],
+    [() => lapMs == null || Math.abs(h.durationMs - lapMs) <= GHOST_LAP_TOLERANCE_MS,
+      'That ghost recording does not match the lap time beside it.'],
+  ];
+  const broken = rules.find(([holds]) => !holds());
+  return broken ? broken[1] : null;
+}
+
 export function inspectGhost(raw, lapMs) {
-  if (raw == null || raw === '') {
+  if (raw === undefined || raw === null || raw === '') {
     return { ghost: null };
   }
   if (typeof raw !== 'string') {
-    return { error: 'A ghost has to be a base64 string.' };
+    return refuse('A ghost has to be a base64 string.');
   }
   if (raw.length > GHOST_MAX_CHARS) {
-    return { error: 'That ghost recording is too large.' };
+    return refuse('That ghost recording is too large.');
   }
-  if (raw.length < 44 || raw.length % 4 !== 0 || !BASE64_RE.test(raw)) {
-    return { error: 'That ghost recording is not usable base64.' };
+  /* 44 characters is the shortest base64 that can hold the header. */
+  if (raw.length < 44 || raw.length % 4 !== 0 || !BASE64.test(raw)) {
+    return refuse('That ghost recording is not usable base64.');
   }
   const bytes = Buffer.from(raw, 'base64');
-  if (bytes.length < GHOST_HEADER_BYTES) {
-    return { error: 'That ghost recording is shorter than its header.' };
+  if (bytes.length < GHOST_HEAD) {
+    return refuse('That ghost recording is shorter than its header.');
   }
-  if (bytes.toString('latin1', 0, 8) !== GHOST_MAGIC) {
-    return { error: 'That ghost recording is not in the ghost format.' };
-  }
-  if (bytes.readUInt32LE(8) !== GHOST_VERSION) {
-    return { error: 'That ghost recording is from an unknown format version.' };
-  }
-  const rateHz = bytes.readUInt32LE(12);
-  const count = bytes.readUInt32LE(16);
-  const durationMs = bytes.readUInt32LE(20);
-  const splitCount = bytes.readUInt32LE(24);
-  if (rateHz < 1 || rateHz > 240) {
-    return { error: 'That ghost recording claims an unusable sample rate.' };
-  }
-  if (count < 2) {
-    return { error: 'That ghost recording is too short to replay.' };
-  }
-  if (durationMs < 1 || durationMs > GHOST_MAX_MS) {
-    return { error: 'That ghost recording claims an unusable duration.' };
-  }
-  if (splitCount > GHOST_MAX_SPLITS) {
-    return { error: 'That ghost recording claims too many splits.' };
-  }
-  const want = GHOST_HEADER_BYTES + splitCount * 4 + count * GHOST_SAMPLE_BYTES;
-  if (bytes.length !== want) {
-    return { error: 'That ghost recording does not match its own header.' };
-  }
-  /* The grid has to reach the finish, or replay near the line reads air. */
-  const stepMs = 1000 / rateHz;
-  if (((count - 1) * 1000) / rateHz + stepMs < durationMs) {
-    return { error: 'That ghost recording ends before its lap does.' };
-  }
-  if (lapMs != null && Math.abs(durationMs - lapMs) > GHOST_LAP_SLACK_MS) {
-    return { error: 'That ghost recording does not match the lap time beside it.' };
-  }
-  return { ghost: raw };
+  const fault = ghostFault(bytes, lapMs);
+  return fault ? refuse(fault) : { ghost: raw };
 }
 
-const LOGO_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+/* ================================================================== */
+/* Track documents                                                     */
+/* ================================================================== */
 
-/* The three caps on a track's branding, all of them the simulator's, from
- * LOGO_MAX_CHARS, LOGO_SLOTS and BRANDING_MAX_CHARS in its
- * src/trackbuilder/model.js. They live there because that is where an author
- * actually hits them; these copies exist so the board never holds a track
- * the tool that made it would not save. An earlier copy of the first one was
- * 280_000 rather than 256 KiB, and a logo between the two sizes was refused
- * by the builder and accepted here. Change all three together. */
+/*
+ * The largest document the board takes, as JSON characters. It is the
+ * simulator's branding budget (five logos sharing 384 kB) plus the 158 kB
+ * a track had beside its single logo before there were five, so a track's
+ * gates kept the same room. The publish route's body limit in server.js
+ * sits above this so a track that fits is never refused for the wrong
+ * reason.
+ */
+const DOCUMENT_MAX_CHARS = 560_000;
+const SCHEMA_VERSIONS = [1, 2, 3, 4];
+
+/*
+ * Sponsor logos. The three limits are the simulator's (LOGO_MAX_CHARS,
+ * LOGO_SLOTS and BRANDING_MAX_CHARS in its src/trackbuilder/model.js),
+ * copied so the board never holds a track the builder would refuse to
+ * save. They move together or not at all.
+ */
 const LOGO_MAX_CHARS = 256 * 1024;
 const LOGO_SLOTS = 5;
 const BRANDING_MAX_CHARS = 384 * 1024;
-
-function usableLogo(value) {
-  return typeof value === 'string' && value.length <= LOGO_MAX_CHARS && LOGO_RE.test(value);
-}
+const EMBEDDED_IMAGE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 
 /*
- * The sponsor logos a track carries, whichever way its document spells
- * them. Not to be confused with the plan's `marks`, which are the track's
- * own geometry: the builder calls the pictures sponsor logos and so does
- * every sentence the board shows an author.
- *
- * A schemaVersion 1 document has one `branding.logo`; a version 2 one has
- * `branding.logos`, a list of up to five { id, image, name }. Both are read,
- * because the board holds tracks published under the old spelling and they
- * have to keep working when their author republishes an unchanged copy.
- *
- * Returns { images } or { error }. The board does not repair a document: it
- * stores what it was given and the simulator is the reader that decides what
- * a gate means, so anything wrong here is refused with a sentence rather
- * than quietly dropped.
+ * Schema 1 spells branding as one `logo`; schema 2 on as `logos`, up to
+ * five entries, each an { image } or a bare string. Both are read, since
+ * tracks published under the old spelling are still on the board. A bad
+ * logo refuses the track rather than being dropped: the board stores what
+ * it was given or nothing.
  */
-function inspectBranding(document) {
-  const branding = document.branding;
-  if (branding == null) {
+function logoImage(entry) {
+  if (typeof entry === 'string') {
+    return entry;
+  }
+  return plainObject(entry) ? entry.image : null;
+}
+
+function sponsorLogos(document) {
+  const { branding } = document;
+  if (branding === undefined || branding === null) {
     return { images: [] };
   }
-  if (!isObject(branding)) {
-    return { error: 'That track\u2019s branding is not readable.' };
+  if (!plainObject(branding)) {
+    return refuse('That track’s branding is not readable.');
   }
-  const raw = Array.isArray(branding.logos)
-    ? branding.logos
-    : (branding.logo != null && branding.logo !== '' ? [{ image: branding.logo }] : []);
-  if (raw.length > LOGO_SLOTS) {
-    return { error: `A track carries at most ${LOGO_SLOTS} sponsor logos.` };
+  let images = [];
+  if (Array.isArray(branding.logos)) {
+    images = branding.logos.map(logoImage);
+  } else if (branding.logo != null && branding.logo !== '') {
+    images = [branding.logo];
   }
-  const images = [];
-  let spent = 0;
-  for (const entry of raw) {
-    const image = typeof entry === 'string' ? entry : (isObject(entry) ? entry.image : null);
-    if (!usableLogo(image)) {
-      return { error: 'A sponsor logo has to travel inside the track as an embedded image.' };
-    }
-    spent += image.length;
-    images.push(image);
+  if (images.length > LOGO_SLOTS) {
+    return refuse(`A track carries at most ${LOGO_SLOTS} sponsor logos.`);
   }
-  if (spent > BRANDING_MAX_CHARS) {
-    return { error: `A track\u2019s sponsor logos share ${Math.round(BRANDING_MAX_CHARS / 1024)} kB and these come to ${Math.round(spent / 1024)} kB.` };
+  const usable = (image) => typeof image === 'string' && image.length <= LOGO_MAX_CHARS && EMBEDDED_IMAGE.test(image);
+  if (!images.every(usable)) {
+    return refuse('A sponsor logo has to travel inside the track as an embedded image.');
+  }
+  const total = images.reduce((sum, image) => sum + image.length, 0);
+  if (total > BRANDING_MAX_CHARS) {
+    return refuse(`A track’s sponsor logos share ${Math.round(BRANDING_MAX_CHARS / 1024)} kB and these come to ${Math.round(total / 1024)} kB.`);
   }
   return { images };
 }
 
 /*
- * MIRRORS layoutFingerprint in fdfpv/src/share/listing.js. This is
- * the copy that decides whether a republished track keeps its times. The
- * hashes differ, the KEY LIST must not: field, elements, sequence.
- */
-/*
- * Element types that are painted on rather than flown through, so changing
- * them cannot change a lap.
- *
- * THIS IS WHY A SPONSOR DOES NOT WIPE A LEADERBOARD. Selling a place on an
- * existing track means adding a logo to a track people have already flown,
- * and if that counted as a layout change every time on this board would be
- * cleared the moment the deal was signed. Paint has no collider and is not
- * in the flying order, so a lap flown before it was painted is the same lap.
- *
- * MIRRORS LAYOUT_SKIP in fdfpv/src/share/listing.js. Written out
- * as a literal in both, rather than derived from the simulator's element
- * library, because this repository has no element library and the two lists
- * have to be edited together on purpose. A track with no painted logos
- * hashes to exactly what it hashed to before this filter existed, which is
- * what keeps every already published track's times.
- */
-const LAYOUT_SKIP = new Set(['groundLogo']);
-
-export function layoutHash(document) {
-  /*
-   * A MAP TRACK'S WORLD IS PART OF ITS LAYOUT. Its positions are absolute in
-   * the world it names, so the same gates on swiss2 and on alps are two
-   * different races, and a republish onto another world has to clear the
-   * times rather than carry laps flown somewhere else. The poses are already
-   * in the hash: each element's orientation travels inside `elements`.
-   *
-   * Only a map track carries the key, and it goes in front of the others,
-   * so every version 1 to 3 document hashes byte for byte what it always
-   * did and no published field track loses a time to this line. MIRRORS
-   * layoutFingerprint in fdfpv/src/share/listing.js.
-   */
-  const payload = {
-    ...(mapOf(document) ? { map: document.map } : {}),
-    field: document.field ?? {},
-    elements: (document.elements ?? []).filter((el) => !(isObject(el) && LAYOUT_SKIP.has(el.type))),
-    sequence: document.sequence ?? [],
-  };
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-}
-
-export function hashEditKey(key) {
-  return createHash('sha256').update(String(key)).digest('hex');
-}
-
-/* Drawn as nothing on a plan card. A waypoint pins the flying order with
- * nothing standing on the field, a label is an authoring note, and a ground
- * logo is paint: all three drew as gates once, which is how a championship
- * plan turned into a scatter of bars that are not on the track. */
-const PLAN_SKIP = new Set(['label', 'waypoint', 'groundLogo']);
-const PLAN_APERTURE = new Set([
-  'gate', 'flaggedGate', 'doubleStack', 'flaggedDoubleStack', 'ladder', 'tower', 'diveGate',
-]);
-
-/* ------------------------------------------------------------------ */
-/* Map tracks                                                          */
-/* ------------------------------------------------------------------ */
-
-/*
- * THE WORLDS A TRACK CAN STAND IN, AND WHY IT IS A CLOSED LIST.
- *
- * A schemaVersion 4 document is a track built inside one of the simulator's
- * own worlds with its in-sim builder (src/builder/ there), and `map` names
- * the world. That string picks a world for every pilot who presses Fly, so
- * it is refused unless it is one the builder can build on. swiss2 and alps
- * are the two; the town and Yellowstone are held back by the owner. MIRRORS
- * the `build: true` entries of fdfpv/src/maps/registry.js: a world added
- * there is a line here, deployed first.
+ * The worlds a schema 4 track may stand in: the simulator's src/maps/
+ * registry.js entries marked `build: true`. The name picks the world every
+ * pilot who presses Fly loads, so it is a closed list. A world added there
+ * is added here first and deployed first.
  */
 export const MAP_IDS = ['swiss2', 'alps'];
 
 /*
- * What the in-sim builder places, MIRRORS BUILD_TYPES in
- * fdfpv/src/builder/course.js. A map track is made only by that builder,
- * so an element it cannot place is not a map track's element: it is a hand
- * edit, and the simulator would build it into a world with no idea where
- * its openings are. `pylon` is the one marker, scored through the square
- * beside it; the rest are openings. The hoops are the sky hoops, and the
- * last three are the retired sizes, which the builder no longer offers but
- * still loads and flies, so a track saved with one still publishes.
- * src/selftest.js compares this list with the pinned simulator's, so the
- * next type added there fails the board's test rather than a pilot's
- * publish.
+ * What the simulator's in-world builder can place (BUILD_TYPES in its
+ * src/builder/course.js). Anything else on a schema 4 track is a hand edit
+ * the simulator would not know the openings of. `pylon` is scored through
+ * the square beside it; the three retired hoop sizes still load and fly,
+ * so old tracks carrying them still publish. src/selftest.js compares this
+ * with the pinned simulator.
  */
 export const MAP_ELEMENT_TYPES = [
   'gate', 'flaggedGate', 'doubleStack', 'ladder', 'tower', 'wideGate3', 'wideGate5', 'pylonPair', 'pylon',
   'hoop175', 'hoop250', 'hoop30', 'hoop6', 'hoop12', 'hoop20',
 ];
-const MAP_MARKERS = new Set(['pylon']);
 
 /*
- * Where a map track's elements may stand, metres in the document frame
- * (x and y across the world with its centre at the origin, z up from the
- * world's zero). Both worlds are the same 6000 m square (FIELD in the
- * simulator's src/maps/alps/terrain.js, which swiss2 builds through), so
- * anything past 3000 m from the centre is outside the world. The floor is
- * at zero and the lake 1.5 m under it; the ridges stand 1400 m over the
- * floor with the peaks on top. A hundred metres under the floor and three
- * kilometres over it holds every place the builder's free camera can hang
- * a gate with a wide margin, and refuses a number that is not a place.
+ * Where a schema 4 element may stand, metres from the world's centre. Both
+ * worlds are 6000 m squares (FIELD in the simulator's src/maps/alps/
+ * terrain.js), the floor is z 0 with the lake just under it and the peaks
+ * about 1.4 km up. The vertical band is wide on purpose: it is there to
+ * refuse a number that is not a place, not to second guess the builder.
  */
-const MAP_HALF = 3000;
-const MAP_Z_MIN = -100;
-const MAP_Z_MAX = 3000;
+const WORLD_HALF_M = 3000;
+const WORLD_FLOOR_M = -100;
+const WORLD_CEILING_M = 3000;
 
-/*
- * The most elements, and steps in the flying order, a map track may carry.
- * Derived rather than picked: a lap's ghost carries one split per scored
- * step and GHOST_MAX_SPLITS (below) is 256, so a track with more steps than
- * that could never carry a lap to this board. A field track has no count
- * cap because it predates this and its document size caps it; a map track
- * starts with one.
- */
-const MAP_MAX_STEPS = GHOST_MAX_SPLITS;
+/* A schema 4 track's step budget is the ghost's split budget: one split
+ * per scored step, so a longer track could never post a lap. */
+const WORLD_STEPS_MAX = GHOST_SPLITS_MAX;
 
-/* How far a stored orientation may sit from unit length. The builder
- * writes six decimal places of a normalised quaternion, which is within a
- * few millionths; a thousandth is rounding with room, not a second pose. */
-const QUAT_SLACK = 1e-3;
+/* The builder stores a unit quaternion to six places; a thousandth off
+ * unit length is rounding, more is not a rotation. */
+const UNIT_TOLERANCE = 1e-3;
 
-function finite(v) {
-  return typeof v === 'number' && Number.isFinite(v);
-}
-
-/* The world a stored document stands in, or null for a field track. A
- * version 4 document that passed inspectDocument always names one. */
 export function mapOf(document) {
-  return isObject(document) && document.schemaVersion === 4 && MAP_IDS.includes(document.map) ? document.map : null;
+  if (!plainObject(document) || document.schemaVersion !== 4) {
+    return null;
+  }
+  return MAP_IDS.includes(document.map) ? document.map : null;
 }
 
-/*
- * The checks a map track needs on top of every track's: a known world, the
- * builder's own element types, and a pose per element that is a place in
- * that world and a rotation. Returns null when it holds, or the sentence.
- */
-function inspectMapTrack(document) {
+function standsInWorld(p) {
+  return Math.abs(p.x) <= WORLD_HALF_M && Math.abs(p.y) <= WORLD_HALF_M
+    && p.z >= WORLD_FLOOR_M && p.z <= WORLD_CEILING_M;
+}
+
+function isRotation(q) {
+  return plainObject(q) && [q.w, q.x, q.y, q.z].every(finiteNumber)
+    && Math.abs(Math.hypot(q.w, q.x, q.y, q.z) - 1) <= UNIT_TOLERANCE;
+}
+
+/* The sentence for the first way a schema 4 element is wrong, or null. */
+function worldElementFault(el) {
+  if (!plainObject(el) || !MAP_ELEMENT_TYPES.includes(el.type)) {
+    return 'A track built in a world carries only the gates its builder places.';
+  }
+  const p = el.position;
+  if (!plainObject(p) || ![p.x, p.y, p.z].every(finiteNumber)) {
+    return 'Every gate on a track built in a world needs a position.';
+  }
+  if (!standsInWorld(p)) {
+    return 'A gate on that track stands outside its world.';
+  }
+  return isRotation(el.orientation) ? null : 'Every gate on a track built in a world needs an orientation.';
+}
+
+/* What a schema 4 track needs beyond what every track needs. */
+function worldTrackFault(document) {
   if (!MAP_IDS.includes(document.map)) {
     return `A version 4 track names the world it stands in, and this board knows ${MAP_IDS.join(' and ')}.`;
   }
-  if (document.elements.length > MAP_MAX_STEPS || document.sequence.length > MAP_MAX_STEPS) {
-    return `A track built in a world carries at most ${MAP_MAX_STEPS} gates.`;
+  if (Math.max(document.elements.length, document.sequence.length) > WORLD_STEPS_MAX) {
+    return `A track built in a world carries at most ${WORLD_STEPS_MAX} gates.`;
   }
   for (const el of document.elements) {
-    if (!isObject(el) || !MAP_ELEMENT_TYPES.includes(el.type)) {
-      return 'A track built in a world carries only the gates its builder places.';
-    }
-    const p = el.position;
-    if (!isObject(p) || !finite(p.x) || !finite(p.y) || !finite(p.z)) {
-      return 'Every gate on a track built in a world needs a position.';
-    }
-    if (Math.abs(p.x) > MAP_HALF || Math.abs(p.y) > MAP_HALF || p.z < MAP_Z_MIN || p.z > MAP_Z_MAX) {
-      return 'A gate on that track stands outside its world.';
-    }
-    const q = el.orientation;
-    if (!isObject(q) || !finite(q.w) || !finite(q.x) || !finite(q.y) || !finite(q.z)
-      || Math.abs(Math.hypot(q.w, q.x, q.y, q.z) - 1) > QUAT_SLACK) {
-      return 'Every gate on a track built in a world needs an orientation.';
+    const fault = worldElementFault(el);
+    if (fault) {
+      return fault;
     }
   }
   return null;
 }
 
 /*
- * A map track's plan, framed on its own gates.
- *
- * The page draws a plan on a rectangle measured from its corner, and a map
- * track's positions are measured from the middle of a six kilometre world,
- * so drawn as they stand three gates would be a speck in one corner of an
- * empty square. The rectangle is instead the gates' own extent with a
- * margin, and every mark is moved into it. The builder's plane sized
- * openings draw as the gate they are at their own width, and its pylon as
- * the marker it is, because those are the drawings the page has.
- */
-function mapPlan(document, plan) {
-  if (!plan.marks.length) {
-    return { ...plan, map: document.map, width: 60, depth: 40 };
-  }
-  const xs = plan.marks.map((m) => m.x);
-  const ys = plan.marks.map((m) => m.y);
-  const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-  const margin = Math.max(10, span * 0.12);
-  const x0 = Math.min(...xs) - margin;
-  const y0 = Math.min(...ys) - margin;
-  const shift = (p) => ({ ...p, x: p.x - x0, y: p.y - y0 });
-  return {
-    ...plan,
-    map: document.map,
-    width: Math.max(...xs) + margin - x0,
-    depth: Math.max(...ys) + margin - y0,
-    marks: plan.marks.map((m) => shift({ ...m, type: MAP_MARKERS.has(m.type) ? 'cone' : 'gate' })),
-    path: plan.path.map(shift),
-    numbers: plan.numbers.map(shift),
-  };
-}
-
-/*
- * The track's class, normalised the way the simulator's
- * src/trackbuilder/elements.js normalises it: 'micro' is a RaceGOW room,
- * 'wing' is a fixed wing's airfield, and anything else is the sixty metre
- * field. A version 1 or 2 document has no such key and is a field, which
- * it is. MIRRORS TRACK_CLASSES there; the selftest checks the mirror.
- *
- * It is derived from the stored document on every read rather than kept in
- * a column, for the same reason the plan is: there is one copy of the truth
- * and no migration to get wrong.
+ * 'full' is the sixty metre field, 'micro' a RaceGOW room, 'wing' a fixed
+ * wing's airfield, as the simulator's src/trackbuilder/elements.js has it.
+ * Schema 1 and 2 carry no class and are fields. Read off the document every
+ * time rather than kept in a column: one copy of the truth.
  */
 export const TRACK_CLASSES = ['full', 'micro', 'wing'];
 
 export function trackClassOf(document) {
-  return isObject(document) && TRACK_CLASSES.includes(document.trackClass) ? document.trackClass : 'full';
+  if (plainObject(document) && TRACK_CLASSES.includes(document.trackClass)) {
+    return document.trackClass;
+  }
+  return 'full';
 }
 
 /*
- * WHO BUILT THE TRACK, WHICH IS NOT ALWAYS WHO PUBLISHED IT.
- *
- * A board track's `author` is the account that put it here. On a track
- * somebody built in their own living room those are the same person, and on
- * the eight RaceGOW5 rooms they are not: Skittles, AyyyKayyy, MrE, FPVBean,
- * Cumber and Hotspur and the Lego Dans designed them, and one person brought
- * all eight over. The builder writes that down in the document's `credit`
- * block, the publish has always sent it, and until now nothing on this board
- * read it back, so every one of those cards said "Built by" the wrong name.
- *
- * Derived from the stored document on every read, like the class and the
- * plan, so there is one copy of the truth and no migration. Drawn as text by
- * the page, never as markup.
+ * Who designed the track, which on the RaceGOW rooms is not who published
+ * it. Only a string is a name: String() of an object would put "[object
+ * Object]" on a card. Control characters become spaces and runs of space
+ * close up, so the API and the card agree on the text.
  */
+function creditLine(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  const flat = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return flat.slice(0, 80).trim();
+}
+
 export function creditOf(document) {
-  const c = isObject(document) && isObject(document.credit) ? document.credit : {};
-  /*
-   * A NAME IS A STRING, and nothing else is read as one. This used to
-   * String() whatever it found, and String() of an object is
-   * "[object Object]" and of an array is its elements joined with commas,
-   * either of which would go on a card as if somebody had typed it. Control
-   * characters go and runs of whitespace close up, so the summary the API
-   * serves and the text the card draws are the same name.
-   */
-  const text = (v) => (typeof v === 'string'
-    ? v.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
-    : '');
-  return { designer: text(c.designer), series: text(c.series) };
+  const credit = plainObject(document) && plainObject(document.credit) ? document.credit : {};
+  return { designer: creditLine(credit.designer), series: creditLine(credit.series) };
 }
 
-/* ------------------------------------------------------------------ */
-/* The card animation                                                  */
-/* ------------------------------------------------------------------ */
+/*
+ * Painted on, not flown through: a ground logo has no collider and is not
+ * in the flying order, so adding one cannot change a lap. Leaving it out
+ * of the layout hash is what lets a sponsor's logo go onto a track without
+ * wiping its times. The simulator's src/share/listing.js has the same list
+ * as LAYOUT_SKIP; both are literals and are edited together.
+ */
+const PAINT_TYPES = new Set(['groundLogo']);
 
 /*
- * A TRACK'S ANIMATION, WHICH THIS BOARD STORES AND DOES NOT MAKE.
- *
- * The board renders nothing. A GIF is one lap of the track flown past the
- * gates, drawn by the simulator's own src/trackbuilder/animate.js in a real
- * WebGL context, and it arrives here as bytes the way a logo arrives inside
- * a document. What happens below is therefore not a picture being made, it
- * is a stranger's upload being bounded.
- *
- * WHY ONLY A ROOM GETS ONE, and this is the rule rather than a default the
- * caller may override. A sixty metre field has a plan worth drawing: the
- * flown line through twenty gates, read at a glance, and public/plan.js
- * already draws it from the list payload at no cost at all. A RaceGOW room
- * is five metres across with three gates in it, so its plan is an almost
- * empty rectangle with a dot in the middle, which says nothing about a
- * track whose whole difficulty is vertical. The animation is what a reader
- * needs there and the plan is what a reader needs on a field.
- *
- * It is enforced here rather than in the page, so that the rule has one
- * home. Twenty nine field tracks silently gaining a quarter of a megabyte
- * each because some future publisher uploaded one anyway is exactly the
- * thing a rule in the page would not stop. If this is ever wanted on a
- * field track, this function is the one line to change.
+ * The fingerprint that decides whether a republished track keeps its
+ * times: field, elements and sequence, the same key list as the
+ * simulator's layoutFingerprint. A schema 4 track's world goes in front,
+ * because the same gates in another world are another race; no other
+ * track carries the key, so every schema 1 to 3 hash is unchanged.
  */
+export function layoutHash(document) {
+  const layout = {};
+  if (mapOf(document)) {
+    layout.map = document.map;
+  }
+  layout.field = document.field ?? {};
+  layout.elements = (document.elements ?? []).filter((el) => !plainObject(el) || !PAINT_TYPES.has(el.type));
+  layout.sequence = document.sequence ?? [];
+  return sha256(JSON.stringify(layout));
+}
 
-/* Two and a half megabytes of base64, which is about 1.8 MB of GIF. The
- * card animations this was written for come in between 20 and 70 kB at 16
- * by 10, so the cap is two orders of magnitude clear of the thing it is
- * meant to allow and still small enough to refuse a video somebody renamed. */
-export const MAX_GIF_BASE64_CHARS = 2_500_000;
+export function hashEditKey(key) {
+  return sha256(String(key));
+}
 
-const GIF_BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+/* Not drawn on a plan: a waypoint is an order pin with nothing standing,
+ * a label is an authoring note, a ground logo is paint. */
+const UNDRAWN_TYPES = new Set(['label', 'waypoint', 'groundLogo']);
+
+/* The field elements that are flown through, which earn a number badge
+ * and count as gates. */
+const OPENING_TYPES = new Set([
+  'gate', 'flaggedGate', 'doubleStack', 'flaggedDoubleStack', 'ladder', 'tower', 'diveGate',
+]);
+
+/* A positive size from an element's dims, or undefined so the page falls
+ * back to the type's default. `zeroOk` admits nought, which a start row's
+ * spacing can be. */
+function size(raw, zeroOk = false) {
+  const n = Number(raw);
+  return Number.isFinite(n) && (zeroOk ? n >= 0 : n > 0) ? n : undefined;
+}
 
 /*
- * GIF87a or GIF89a, and then the logical screen descriptor's own width and
- * height, little endian, which is the only place in the file those numbers
- * live. Reading them costs ten bytes and catches the two uploads that would
- * otherwise get through: a file that is not a GIF at all, and a GIF of one
- * pixel standing in for a track.
+ * One mark on the plan. The sizes are copied per element because each is
+ * editable in the builder: a ladder raised to five levels, a twenty metre
+ * barrier, a room's 0.711 m gate in a 5 m room. Drawn from defaults, they
+ * came out wrong while the card's own gate count was right.
  */
-function readGifHeader(bytes) {
-  if (bytes.length < 10) {
-    return null;
-  }
-  const magic = String.fromCharCode(...bytes.subarray(0, 6));
-  if (magic !== 'GIF89a' && magic !== 'GIF87a') {
-    return null;
-  }
+function planMark(el, type, flown) {
+  const dims = el.dims;
   return {
-    width: bytes[6] | (bytes[7] << 8),
-    height: bytes[8] | (bytes[9] << 8),
+    type,
+    x: Number(el.position.x) || 0,
+    y: Number(el.position.y) || 0,
+    yaw: Number(el.yaw) || 0,
+    seq: flown.has(el.id),
+    levels: size(dims?.levels),
+    w: size(dims?.width),
+    d: size(dims?.depth),
+    clearW: size(dims?.clearW),
+    pads: size(dims?.pads),
+    spacing: size(dims?.spacing, true),
+    padSize: size(dims?.padSize),
   };
 }
 
 /*
- * The upload, checked against the track it claims to be of.
- *
- * `document` is the stored track document, so the class rule above is read
- * off the copy of record rather than off anything the uploader said.
+ * A schema 4 plan, framed on its own gates. Its positions are metres from
+ * the middle of a six kilometre world, so drawn on the page's corner-origin
+ * rectangle they would be a speck. The frame is the gates' extent plus a
+ * margin, everything moves into it, and the builder's types draw as the
+ * two symbols the page has: a gate, or a cone for the pylon.
  */
-export function inspectGif({ base64, document }) {
-  if (trackClassOf(document) !== 'micro') {
-    return { error: 'This board keeps an animation for a room, not for a field track.' };
+function framedOnGates(document, plan) {
+  if (plan.marks.length === 0) {
+    return { ...plan, map: document.map, width: 60, depth: 40 };
   }
-  const packed = String(base64 || '').replace(/^data:image\/gif;base64,/, '').trim();
-  if (!packed) {
-    return { error: 'That upload carried no animation.' };
-  }
-  if (packed.length > MAX_GIF_BASE64_CHARS) {
-    return { error: 'That animation is too large for this board.' };
-  }
-  if (!GIF_BASE64_RE.test(packed)) {
-    return { error: 'That animation is not base64.' };
-  }
-  let bytes;
-  try {
-    bytes = Buffer.from(packed, 'base64');
-  } catch (e) {
-    return { error: 'That animation is not base64.' };
-  }
-  const head = readGifHeader(bytes);
-  if (!head) {
-    return { error: 'That upload is not a GIF.' };
-  }
-  /* Sixty four is under any framing this produces and over any tracking
-   * pixel; 4096 is over any card and under a frame buffer somebody is
-   * trying to store here. */
-  if (head.width < 64 || head.height < 64 || head.width > 4096 || head.height > 4096) {
-    return { error: 'That animation is not a usable size.' };
-  }
-  return { bytes, width: head.width, height: head.height };
+  const xs = plan.marks.map((m) => m.x);
+  const ys = plan.marks.map((m) => m.y);
+  const [left, right, near, far] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const margin = Math.max(10, Math.max(right - left, far - near) * 0.12);
+  const originX = left - margin;
+  const originY = near - margin;
+  const moved = (p) => ({ ...p, x: p.x - originX, y: p.y - originY });
+  return {
+    ...plan,
+    map: document.map,
+    width: right + margin - originX,
+    depth: far + margin - originY,
+    marks: plan.marks.map((m) => moved({ ...m, type: m.type === 'pylon' ? 'cone' : 'gate' })),
+    path: plan.path.map(moved),
+    numbers: plan.numbers.map(moved),
+  };
 }
 
+/*
+ * What a card draws: the marks standing on the field, the flown line
+ * through them, and a number per step of the flying order. A badge is per
+ * step, not per element, so a gate flown three times shows three numbers
+ * (`stack` says how many already sit on that spot, so the page can fan
+ * them out) and the last badge agrees with the gate count and the OSD.
+ */
 export function planFromDocument(document) {
-  const field = isObject(document.field) ? document.field : {};
-  /* On a map track every step the builder made is scored, a pylon's too,
-   * so every one gets its badge. */
-  const onMap = Boolean(mapOf(document));
-  const byId = new Map();
-  const sequenced = new Set();
-  for (const step of document.sequence || []) {
-    if (isObject(step) && typeof step.elementId === 'string' && step.elementId) {
-      sequenced.add(step.elementId);
+  const field = plainObject(document.field) ? document.field : {};
+  const inWorld = mapOf(document) !== null;
+  const steps = document.sequence || [];
+
+  const flown = new Set();
+  for (const step of steps) {
+    if (plainObject(step) && typeof step.elementId === 'string' && step.elementId !== '') {
+      flown.add(step.elementId);
     }
   }
+
+  const placed = new Map();
   const marks = [];
   for (const el of document.elements || []) {
-    if (!isObject(el) || !isObject(el.position)) {
+    if (!plainObject(el) || !plainObject(el.position)) {
       continue;
     }
-    if (typeof el.id === 'string' && el.id) {
-      byId.set(el.id, el);
+    if (typeof el.id === 'string' && el.id !== '') {
+      placed.set(el.id, el);
     }
     const type = String(el.type || 'gate');
-    /* A waypoint is a flying-order pin with nothing standing on the
-     * field. Drawing it as a gate was how championship plans turned into
-     * a scatter of bars that are not on the track. Labels are notes. */
-    if (PLAN_SKIP.has(type)) {
-      continue;
+    if (!UNDRAWN_TYPES.has(type)) {
+      marks.push(planMark(el, type, flown));
     }
-    /*
-     * The three numbers the drawer cannot guess. It used to reconstruct
-     * every size from a hard copy of the builder's type DEFAULTS, but each
-     * of these is editable per element: a ladder taken to five levels drew
-     * three arcs, a twenty metre barrier drew as four, and the gate count
-     * printed on the same card told the truth the picture did not.
-     * Undefined when the element does not carry one, so an older stored
-     * plan still falls back to the defaults.
-     */
-    const levels = Number(el.dims?.levels);
-    const barrierW = Number(el.dims?.width);
-    const barrierD = Number(el.dims?.depth);
-    /*
-     * THE GATE'S OWN OPENING, which is the fourth number of that family and
-     * the one that was missing. A gate is 1.524 m on a MultiGP field and
-     * 0.711 on a RaceGOW one, and an author can type any width into either,
-     * so a drawer that assumes one draws every track that is not that one
-     * wrongly: on a 5 by 6 m room it drew every gate a third of the width of
-     * the room.
-     */
-    const clearW = Number(el.dims?.clearW);
-    /* And the start line's length, which is a row rather than one number:
-     * how many stands, how far apart, and how big one is. Four at 1.5 m is a
-     * MultiGP grid; a RaceGOW start is a single 100 mm stand, because there
-     * are no heats and every pilot flies alone at home. */
-    const pads = Number(el.dims?.pads);
-    const spacing = Number(el.dims?.spacing);
-    const padSize = Number(el.dims?.padSize);
-    marks.push({
-      type,
-      x: Number(el.position.x) || 0,
-      y: Number(el.position.y) || 0,
-      yaw: Number(el.yaw) || 0,
-      seq: sequenced.has(el.id),
-      levels: Number.isFinite(levels) && levels > 0 ? levels : undefined,
-      w: Number.isFinite(barrierW) && barrierW > 0 ? barrierW : undefined,
-      d: Number.isFinite(barrierD) && barrierD > 0 ? barrierD : undefined,
-      clearW: Number.isFinite(clearW) && clearW > 0 ? clearW : undefined,
-      pads: Number.isFinite(pads) && pads > 0 ? pads : undefined,
-      spacing: Number.isFinite(spacing) && spacing >= 0 ? spacing : undefined,
-      padSize: Number.isFinite(padSize) && padSize > 0 ? padSize : undefined,
-    });
   }
+
   const path = [];
   const numbers = [];
-  const stacked = new Map();
-  let n = 0;
-  for (const step of document.sequence || []) {
-    if (!isObject(step)) {
-      continue;
-    }
-    const el = byId.get(step.elementId);
-    if (!el || !isObject(el.position)) {
+  const badgesAt = new Map();
+  for (const step of steps) {
+    const el = plainObject(step) ? placed.get(step.elementId) : undefined;
+    if (!el) {
       continue;
     }
     const x = Number(el.position.x) || 0;
     const y = Number(el.position.y) || 0;
-    const last = path[path.length - 1];
-    if (!last || last.x !== x || last.y !== y) {
+    const previous = path.at(-1);
+    if (!previous || previous.x !== x || previous.y !== y) {
       path.push({ x, y });
     }
     const type = String(el.type || '');
-    /*
-     * One badge per FLYING ORDER ENTRY, not per element. Numbering by
-     * element id gave a stacked gate flown three times a single badge and
-     * left the plan's last number short of the gate count printed on the
-     * same card, and short of what the simulator's own OSD counts down.
-     * `stack` is how many badges already sit on this exact spot, so the
-     * drawer can step them apart the way the builder does.
-     */
-    if ((PLAN_APERTURE.has(type) || (onMap && MAP_ELEMENT_TYPES.includes(type))) && el.id) {
+    const scored = OPENING_TYPES.has(type) || (inWorld && MAP_ELEMENT_TYPES.includes(type));
+    if (scored && el.id) {
       const spot = `${x},${y}`;
-      const stack = stacked.get(spot) || 0;
-      stacked.set(spot, stack + 1);
-      n += 1;
-      numbers.push({ n, x, y, stack });
+      const stack = badgesAt.get(spot) ?? 0;
+      badgesAt.set(spot, stack + 1);
+      numbers.push({ n: numbers.length + 1, x, y, stack });
     }
   }
-  const small = trackClassOf(document) === 'micro';
+
+  const trackClass = trackClassOf(document);
+  /* A room that forgot its field is a room, not a sixty metre field. */
+  const [fallbackW, fallbackD] = trackClass === 'micro' ? [5, 6] : [60, 40];
   const plan = {
-    /* The class travels with the plan, because the drawer has three sizes it
-     * cannot read off a mark: the marker symbol, and the two fallbacks a
-     * plan with no dimensions falls through to. public/plan.js reads it,
-     * and draws a wing plan with the field's sizes, which fit it. */
-    trackClass: trackClassOf(document),
-    /* A RaceGOW room when the document forgot to say, not a MultiGP field.
-     * Neither producer emits a plan without a field, so this is the last
-     * line rather than the usual one. */
-    width: Number(field.width) || (small ? 5 : 60),
-    depth: Number(field.depth) || (small ? 6 : 40),
+    trackClass,
+    width: Number(field.width) || fallbackW,
+    depth: Number(field.depth) || fallbackD,
     marks,
     path,
     numbers,
   };
-  return onMap ? mapPlan(document, plan) : plan;
+  return inWorld ? framedOnGates(document, plan) : plan;
 }
 
 /*
- * How many GATES a track has, which is not how long its flying order is.
- * A waypoint is an order pin with nothing standing on the field, and a
- * marker only scores when it carries clearance, so counting steps put a
- * number on the card that neither the plan's badges nor the simulator's own
- * count agreed with. Mirrors the station rules in the simulator's
- * src/game/trackdoc.js.
+ * Gates, which is not the length of the flying order: a waypoint step
+ * stands for nothing and a marker only scores with clearance, as in the
+ * simulator's src/game/trackdoc.js. In a world every step is scored, so
+ * there the order is the count.
  */
+const SCORED_CLEARANCE_M = 0.05;
+
 function gateCount(document) {
-  /* The in-sim builder gives every element exactly one step and every step
-   * is scored, a pylon's on the square beside it, so on a map track the
-   * flying order IS the gate count. */
   if (mapOf(document)) {
     return document.sequence.length;
   }
   const byId = new Map();
-  for (const el of document.elements || []) {
-    if (isObject(el) && typeof el.id === 'string' && el.id) {
+  for (const el of document.elements) {
+    if (plainObject(el) && typeof el.id === 'string' && el.id !== '') {
       byId.set(el.id, el);
     }
   }
-  let n = 0;
-  for (const step of document.sequence || []) {
-    if (!isObject(step)) {
-      continue;
-    }
+  return document.sequence.filter((step) => {
     const el = byId.get(step.elementId);
-    if (!el) {
-      continue;
-    }
-    const type = String(el.type || '');
-    if (PLAN_APERTURE.has(type)) {
-      n += 1;
-    } else if (Number(el.dims && el.dims.clearance) >= 0.05) {
-      n += 1;
-    }
-  }
-  return n;
+    return OPENING_TYPES.has(String(el.type || '')) || Number(el.dims?.clearance) >= SCORED_CLEARANCE_M;
+  }).length;
 }
 
-export function inspectDocument(raw) {
-  if (typeof raw === 'string' && raw.length > MAX_DOCUMENT_CHARS) {
-    return { error: 'That track is too large to publish.' };
+function parsedDocument(raw) {
+  if (typeof raw === 'string' && raw.length > DOCUMENT_MAX_CHARS) {
+    return refuse('That track is too large to publish.');
   }
-  const packed = typeof raw === 'string' ? raw : JSON.stringify(raw);
-  if (packed.length > MAX_DOCUMENT_CHARS) {
-    return { error: 'That track is too large to publish.' };
+  const json = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  if (json.length > DOCUMENT_MAX_CHARS) {
+    return refuse('That track is too large to publish.');
   }
-  let document = raw;
-  if (typeof raw === 'string') {
-    try {
-      document = JSON.parse(raw);
-    } catch (e) {
-      return { error: 'That track is not valid JSON.' };
-    }
+  if (typeof raw !== 'string') {
+    return { document: raw };
   }
-  if (!isObject(document)) {
-    return { error: 'That file is not a track document.' };
+  try {
+    return { document: JSON.parse(raw) };
+  } catch {
+    return refuse('That track is not valid JSON.');
   }
-  /*
-   * 1, 2 and 3.
-   *
-   * Version 2 is where a track grew from one logo to five, which is a
-   * branding change and nothing else: field, elements and sequence read
-   * identically, so a version 1 track already on this board keeps its times
-   * when its author republishes it from a newer builder.
-   *
-   * Version 3 is the track CLASS. A version 3 document carries
-   * `trackClass`, which is 'full' for the sixty metre field every track on
-   * this board has been until now, 'micro' for a RaceGOW room (a 65 mm
-   * whoop, 28 inch gates out of 26.7 mm PVC, and a whole track inside about
-   * 1.4 by 2.1 m) or 'wing' for a fixed wing's airfield (a 1000 mm wing,
-   * five metre gates over 400 by 300 m). Nothing else about the document
-   * moved, so a version 1 or 2 track keeps its times across a republish
-   * from a builder that writes 3, and every stored track reads as 'full',
-   * which is what it is.
-   */
-  /*
-   * And 4, a track built inside one of the simulator's worlds, which is the
-   * only kind of document a builder writes as 4: a field track is still
-   * written as 3. It names its world in `map` and every element stands at
-   * an absolute position with a full orientation, so it is read more
-   * strictly than a field track, below, once the checks every track shares
-   * have passed. Nothing about a version 1 to 3 document moved.
-   */
-  if (![1, 2, 3, 4].includes(document.schemaVersion)) {
-    return { error: 'This board accepts schemaVersion 1, 2, 3 and 4 tracks.' };
+}
+
+/* The checks every track shares, in order; the first sentence wins. */
+function trackFault(document) {
+  if (!plainObject(document)) {
+    return 'That file is not a track document.';
   }
-  const id = String(document.id || '');
-  if (!TRACK_ID_RE.test(id)) {
-    return { error: 'That track has no usable id.' };
+  if (!SCHEMA_VERSIONS.includes(document.schemaVersion)) {
+    return 'This board accepts schemaVersion 1, 2, 3 and 4 tracks.';
   }
-  const name = String(document.name || '').trim() || 'Untitled track';
-  /* The message named the field and then never looked at it, so a track
-   * with no field at all passed here and the board drew it on the 60 by 40
-   * default while the simulator flew it on whatever the document said. */
-  if (!isObject(document.field)) {
-    return { error: 'That track is missing its field.' };
+  if (!TRACK_ID_RE.test(String(document.id || ''))) {
+    return 'That track has no usable id.';
+  }
+  if (!plainObject(document.field)) {
+    return 'That track is missing its field.';
   }
   if (!Array.isArray(document.elements) || !Array.isArray(document.sequence)) {
-    return { error: 'That track is missing its elements or its flying order.' };
+    return 'That track is missing its elements or its flying order.';
   }
-  if (document.sequence.length < 1) {
-    return { error: 'A published track needs at least one gate in the flying order.' };
+  if (document.sequence.length === 0) {
+    return 'A published track needs at least one gate in the flying order.';
   }
-  const elementIds = new Set();
-  for (const el of document.elements) {
-    if (isObject(el) && typeof el.id === 'string' && el.id) {
-      elementIds.add(el.id);
-    }
+  const ids = new Set(document.elements
+    .filter((el) => plainObject(el) && typeof el.id === 'string' && el.id !== '')
+    .map((el) => el.id));
+  if (!document.sequence.every((step) => plainObject(step) && ids.has(step.elementId))) {
+    return 'That flying order names a gate that is not in the track.';
   }
-  for (const step of document.sequence) {
-    if (!isObject(step) || !elementIds.has(step.elementId)) {
-      return { error: 'That flying order names a gate that is not in the track.' };
-    }
+  return document.schemaVersion === 4 ? worldTrackFault(document) : null;
+}
+
+/*
+ * A track to publish, as the object or as its JSON text. Schema 1 is the
+ * original; 2 grew five logos; 3 added the class; 4 is built inside a
+ * world and read more strictly. 1 to 3 differ only in branding and class,
+ * so a track republished from a newer builder keeps its layout hash and
+ * its times. Returns the summary the store keeps beside the document.
+ */
+export function inspectDocument(raw) {
+  const parsed = parsedDocument(raw);
+  if (parsed.error) {
+    return parsed;
   }
-  if (document.schemaVersion === 4) {
-    const wrong = inspectMapTrack(document);
-    if (wrong) {
-      return { error: wrong };
-    }
+  const { document } = parsed;
+  const fault = trackFault(document);
+  if (fault) {
+    return refuse(fault);
   }
-  const branding = inspectBranding(document);
-  if (branding.error) {
-    return { error: branding.error };
+  const logos = sponsorLogos(document);
+  if (logos.error) {
+    return refuse(logos.error);
   }
+  const name = String(document.name || '').trim() || 'Untitled track';
   return {
     document,
-    id,
+    id: String(document.id),
     name: name.slice(0, 80),
-    /* Whether the board's listing shows this track as branded. One logo or
-     * five, the card says the same thing, so the flag stays a boolean. */
-    hasLogo: branding.images.length > 0,
-    logoCount: branding.images.length,
+    hasLogo: logos.images.length > 0,
+    logoCount: logos.images.length,
     gates: gateCount(document),
     elements: document.elements.length,
     trackClass: trackClassOf(document),
@@ -877,255 +693,253 @@ export function inspectDocument(raw) {
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Bug tickets                                                         */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* Card animations                                                     */
+/* ================================================================== */
+
+/*
+ * A room's card animation: a GIF the simulator's builder renders and
+ * uploads; the board only bounds it. Only a room gets one. A field's plan
+ * already says everything at a glance and costs nothing, while a room's
+ * plan is a near empty rectangle and its difficulty is vertical. The rule
+ * lives here, read off the stored document, so no uploader can add a
+ * quarter megabyte to every field card.
+ *
+ * The cap is about 1.8 MB of GIF, far above the 20 to 70 kB real ones and
+ * well under a renamed video.
+ */
+export const MAX_GIF_BASE64_CHARS = 2_500_000;
+const GIF_SIDE_MIN = 64;
+const GIF_SIDE_MAX = 4096;
+
+/* Width and height from the logical screen descriptor, or null when the
+ * bytes are not a GIF at all. */
+function gifSize(bytes) {
+  const magic = bytes.subarray(0, 6).toString('latin1');
+  if (bytes.length < 10 || (magic !== 'GIF87a' && magic !== 'GIF89a')) {
+    return null;
+  }
+  return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
+}
+
+export function inspectGif({ base64, document }) {
+  if (trackClassOf(document) !== 'micro') {
+    return refuse('This board keeps an animation for a room, not for a field track.');
+  }
+  const packed = String(base64 || '').replace(/^data:image\/gif;base64,/, '').trim();
+  if (packed === '') {
+    return refuse('That upload carried no animation.');
+  }
+  if (packed.length > MAX_GIF_BASE64_CHARS) {
+    return refuse('That animation is too large for this board.');
+  }
+  if (!BASE64.test(packed)) {
+    return refuse('That animation is not base64.');
+  }
+  const bytes = Buffer.from(packed, 'base64');
+  const dims = gifSize(bytes);
+  if (!dims) {
+    return refuse('That upload is not a GIF.');
+  }
+  /* Under 64 is a tracking pixel standing in for a track; over 4096 is a
+   * frame buffer, not a card. */
+  const fits = (side) => side >= GIF_SIDE_MIN && side <= GIF_SIDE_MAX;
+  if (!fits(dims.width) || !fits(dims.height)) {
+    return refuse('That animation is not a usable size.');
+  }
+  return { bytes, width: dims.width, height: dims.height };
+}
+
+/* ================================================================== */
+/* Bug reports                                                         */
+/* ================================================================== */
 
 export const BUG_ID_RE = /^bug-[0-9a-f]{8}$/;
 export const BUG_KINDS = ['crash', 'blocking', 'wrong', 'visual', 'feel', 'other'];
 export const BUG_STATUSES = ['open', 'in_progress', 'fixed', 'wontfix', 'duplicate'];
 
-const BUG_TITLE_MIN = 8;
-const BUG_TITLE_MAX = 120;
-const BUG_WHAT_MIN = 20;
-const BUG_WHAT_MAX = 4000;
-const BUG_NOTE_MAX = 2000;
-const BUG_RESOLUTION_MAX = 4000;
-const BUG_CONTEXT_CHARS = 8000;
 /*
- * 32, up from 24. The simulator's feel reports already attach twenty top
- * level keys (feelSnapshot in its src/ui/ui.js spreads bugSnapshot and adds
- * five of its own), so 24 left four keys of headroom before feedback
- * started bouncing with "too many fields", and the client has no check of
- * its own. The character cap above is still the real bound on size; this
- * one only exists to stop a pathological object of thousands of tiny keys.
+ * Whatever the simulator attaches about the session (map, GPU, browser),
+ * so whoever fixes the report need not ask. Bounded by size, and by key
+ * count only against an object of thousands of tiny keys: the simulator's
+ * feel reports already send about twenty, so 32 leaves room.
  */
-const BUG_CONTEXT_KEYS = 32;
+const CONTEXT_MAX_CHARS = 8000;
+const CONTEXT_MAX_KEYS = 32;
 
-function inspectContext(raw) {
-  if (raw == null || raw === '') {
+function reportContext(raw) {
+  if (raw === undefined || raw === null || raw === '') {
     return { context: {} };
   }
-  if (!isObject(raw)) {
-    return { error: 'Context has to be a JSON object.' };
+  if (!plainObject(raw)) {
+    return refuse('Context has to be a JSON object.');
   }
-  let packed;
+  let json;
   try {
-    packed = JSON.stringify(raw);
-  } catch (e) {
-    return { error: 'Context is not usable JSON.' };
+    json = JSON.stringify(raw);
+  } catch {
+    return refuse('Context is not usable JSON.');
   }
-  if (packed.length > BUG_CONTEXT_CHARS) {
-    return { error: 'That context is too large.' };
+  if (json.length > CONTEXT_MAX_CHARS) {
+    return refuse('That context is too large.');
   }
-  if (Object.keys(raw).length > BUG_CONTEXT_KEYS) {
-    return { error: 'That context has too many fields.' };
+  if (Object.keys(raw).length > CONTEXT_MAX_KEYS) {
+    return refuse('That context has too many fields.');
   }
-  return { context: JSON.parse(packed) };
+  return { context: JSON.parse(json) };
 }
 
 /*
- * A tester's report, as the board will store it. Kind, title and what
- * happened are required. The name can be blank, in which case it is stored
- * as Anonymous. Context is whatever the simulator attached: map, GPU,
- * browser. Agents read that so they do not have to ask.
+ * A tester's report. Kind, title and what happened are required; a blank
+ * name is stored as Anonymous, and a name that is given has to be a name.
  */
 export function inspectBugCreate(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return { error: 'That request was not a JSON object.' };
+  if (!plainObject(body)) {
+    return refuse('That request was not a JSON object.');
   }
   const kind = String(body.kind || 'other');
-  if (!BUG_KINDS.includes(kind)) {
-    return { error: 'Pick a kind: crash, blocking, wrong, visual, feel or other.' };
-  }
   const title = String(body.title ?? '').replace(/\s+/g, ' ').trim();
-  if (title.length < BUG_TITLE_MIN || title.length > BUG_TITLE_MAX) {
-    return { error: 'A title needs eight to one hundred and twenty characters.' };
+  const what = prose(body.what);
+  const expected = prose(body.expected);
+  const steps = prose(body.steps);
+  const reporter = normaliseName(body.reporter);
+  const fault = [
+    [!BUG_KINDS.includes(kind), 'Pick a kind: crash, blocking, wrong, visual, feel or other.'],
+    [title.length < 8 || title.length > 120, 'A title needs eight to one hundred and twenty characters.'],
+    [what.length < 20 || what.length > 4000, 'Say what happened, twenty to four thousand characters.'],
+    [expected.length > 2000, 'Expected result is too long.'],
+    [steps.length > 2000, 'Steps are too long.'],
+    [String(body.reporter ?? '').trim() !== '' && !reporter,
+      'A name is two to twenty four letters, numbers, spaces, dots, underscores or hyphens, or leave it blank.'],
+  ].find(([broken]) => broken);
+  if (fault) {
+    return refuse(fault[1]);
   }
-  const what = String(body.what ?? '').replace(/\r\n/g, '\n').trim();
-  if (what.length < BUG_WHAT_MIN || what.length > BUG_WHAT_MAX) {
-    return { error: 'Say what happened, twenty to four thousand characters.' };
-  }
-  const expected = String(body.expected ?? '').replace(/\r\n/g, '\n').trim();
-  if (expected.length > BUG_NOTE_MAX) {
-    return { error: 'Expected result is too long.' };
-  }
-  const steps = String(body.steps ?? '').replace(/\r\n/g, '\n').trim();
-  if (steps.length > BUG_NOTE_MAX) {
-    return { error: 'Steps are too long.' };
-  }
-  const named = normaliseName(body.reporter);
-  const rawName = String(body.reporter ?? '').trim();
-  if (rawName && !named) {
-    return { error: 'A name is two to twenty four letters, numbers, spaces, dots, underscores or hyphens, or leave it blank.' };
-  }
-  const ctx = inspectContext(body.context);
-  if (ctx.error) {
-    return ctx;
+  const context = reportContext(body.context);
+  if (context.error) {
+    return context;
   }
   const shots = inspectBugImages(body.images);
   if (shots.error) {
     return shots;
   }
   return {
-    kind,
-    title,
-    what,
-    expected,
-    steps,
-    reporter: named || 'Anonymous',
-    context: ctx.context,
+    kind, title, what, expected, steps,
+    reporter: reporter || 'Anonymous',
+    context: context.context,
     images: shots.images,
   };
 }
 
 /*
- * SCREENSHOTS ON A TICKET, a stranger's upload like a card animation is, so
- * bounded the same way: by count, by size each and together, and by what
- * the bytes are rather than by what the sender says they are.
- *
- * The simulator pastes, downscales to 1920 on the long edge and re-encodes
- * to WebP or JPEG under a million bytes before it sends, so a mebibyte each
- * is headroom over the client's own target, not an invitation. Four is the
- * form's limit too. The total is what BUG_BODY_MAX in src/server.js is
- * derived from, so a report this function would accept is never refused
- * earlier for its size with a message about something else.
- *
- * The type stored is the one read off the magic bytes. A declared type, a
- * data: prefix, is only stripped: an SVG or an HTML page sent as a "PNG"
- * would be served to the admin's browser with whatever type was trusted,
- * and the admin's tab holds the board's only credential.
+ * Screenshots on a report, bounded like any stranger's upload: count, size
+ * each and together, and the type read off the bytes. A declared type is
+ * only stripped, never believed, because these are served to the admin's
+ * browser, which holds the board's one credential, and an SVG sent as a
+ * "PNG" must not reach it as anything but refused. The simulator scales
+ * and re-encodes under a million bytes before sending, so a mebibyte each
+ * is headroom. BUG_BODY_MAX in server.js is derived from the total.
  */
 export const MAX_BUG_IMAGES = 4;
 export const MAX_BUG_IMAGE_BYTES = 1_048_576;
 export const MAX_BUG_IMAGES_BYTES = MAX_BUG_IMAGES * MAX_BUG_IMAGE_BYTES;
-const MAX_BUG_IMAGE_BASE64_CHARS = Math.ceil(MAX_BUG_IMAGE_BYTES / 3) * 4;
-const BUG_IMAGE_PREFIX_RE = /^data:image\/(png|jpeg|webp);base64,/;
+const SHOT_MAX_CHARS = Math.ceil(MAX_BUG_IMAGE_BYTES / 3) * 4;
+
+const MAGIC_TYPES = [
+  { type: 'image/png', at: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { type: 'image/jpeg', at: 0, bytes: [0xff, 0xd8, 0xff] },
+];
 
 export function imageTypeOf(bytes) {
-  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
-    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
-    return 'image/png';
+  const starts = ({ at, bytes: sig }) => bytes.length >= at + sig.length && sig.every((b, i) => bytes[at + i] === b);
+  const known = MAGIC_TYPES.find(starts);
+  if (known) {
+    return known.type;
   }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return 'image/jpeg';
+  const riff = bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP';
+  return riff ? 'image/webp' : null;
+}
+
+function screenshot(item, n) {
+  const packed = String(item ?? '').replace(/^data:image\/(png|jpeg|webp);base64,/, '').trim();
+  if (packed === '') {
+    return refuse(`Image ${n} is empty.`);
   }
-  if (bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP') {
-    return 'image/webp';
+  if (packed.length > SHOT_MAX_CHARS) {
+    return refuse(`Image ${n} is larger than a megabyte.`);
   }
-  return null;
+  if (!BASE64.test(packed)) {
+    return refuse(`Image ${n} is not base64.`);
+  }
+  const bytes = Buffer.from(packed, 'base64');
+  if (bytes.length > MAX_BUG_IMAGE_BYTES) {
+    return refuse(`Image ${n} is larger than a megabyte.`);
+  }
+  const type = imageTypeOf(bytes);
+  return type ? { type, bytes } : refuse(`Image ${n} is not a PNG, JPEG or WebP.`);
 }
 
 export function inspectBugImages(raw) {
-  if (raw == null) {
+  if (raw === undefined || raw === null) {
     return { images: [] };
   }
   if (!Array.isArray(raw)) {
-    return { error: 'Images have to be a list.' };
+    return refuse('Images have to be a list.');
   }
   if (raw.length > MAX_BUG_IMAGES) {
-    return { error: 'Attach at most four images.' };
+    return refuse('Attach at most four images.');
   }
   const images = [];
-  let total = 0;
-  for (const [i, item] of raw.entries()) {
-    const n = i + 1;
-    const packed = String(item ?? '').replace(BUG_IMAGE_PREFIX_RE, '').trim();
-    if (!packed) {
-      return { error: `Image ${n} is empty.` };
+  let bytes = 0;
+  for (let i = 0; i < raw.length; i += 1) {
+    const shot = screenshot(raw[i], i + 1);
+    if (shot.error) {
+      return shot;
     }
-    if (packed.length > MAX_BUG_IMAGE_BASE64_CHARS) {
-      return { error: `Image ${n} is larger than a megabyte.` };
+    bytes += shot.bytes.length;
+    if (bytes > MAX_BUG_IMAGES_BYTES) {
+      return refuse('The images are too large together.');
     }
-    if (!GIF_BASE64_RE.test(packed)) {
-      return { error: `Image ${n} is not base64.` };
-    }
-    const bytes = Buffer.from(packed, 'base64');
-    if (bytes.length > MAX_BUG_IMAGE_BYTES) {
-      return { error: `Image ${n} is larger than a megabyte.` };
-    }
-    const type = imageTypeOf(bytes);
-    if (!type) {
-      return { error: `Image ${n} is not a PNG, JPEG or WebP.` };
-    }
-    total += bytes.length;
-    if (total > MAX_BUG_IMAGES_BYTES) {
-      return { error: 'The images are too large together.' };
-    }
-    images.push({ type, bytes });
+    images.push(shot);
   }
   return { images };
 }
 
+/* An agent's update to a report: a status, a resolution, or both. */
 export function inspectBugPatch(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return { error: 'That request was not a JSON object.' };
+  if (!plainObject(body)) {
+    return refuse('That request was not a JSON object.');
   }
-  const out = {};
+  const patch = {};
   if (body.status != null) {
-    const status = String(body.status);
-    if (!BUG_STATUSES.includes(status)) {
-      return { error: 'Status is open, in_progress, fixed, wontfix or duplicate.' };
+    patch.status = String(body.status);
+    if (!BUG_STATUSES.includes(patch.status)) {
+      return refuse('Status is open, in_progress, fixed, wontfix or duplicate.');
     }
-    out.status = status;
   }
   if (body.resolution != null) {
-    const resolution = String(body.resolution).replace(/\r\n/g, '\n').trim();
-    if (resolution.length > BUG_RESOLUTION_MAX) {
-      return { error: 'That resolution is too long.' };
+    patch.resolution = prose(body.resolution);
+    if (patch.resolution.length > 4000) {
+      return refuse('That resolution is too long.');
     }
-    out.resolution = resolution;
   }
-  if (out.status == null && out.resolution == null) {
-    return { error: 'Send a status or a resolution.' };
-  }
-  return out;
+  return Object.keys(patch).length ? patch : refuse('Send a status or a resolution.');
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /* Tags                                                                */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 /*
- * THE TAG VOCABULARY, AND WHY IT IS CLOSED.
+ * A closed vocabulary, because a filter only narrows when everybody spells
+ * an idea the same way, and free text gives a board "race", "racing" and
+ * "Race Track" as three tags. The first three are the author's intent, the
+ * rest the shapes published tracks kept having.
  *
- * A tag exists so that a visitor looking for one kind of track can stop
- * looking at the other kinds. That only works if the same idea is spelled
- * the same way by everybody, and free text does not do that: a board with
- * "race", "racing", "Race Track" and "racetrack" on it has four tags and no
- * filter. So the board decides the list and the builder offers exactly it.
- *
- * The three the owner named are the three kinds of thing people actually
- * build, and they are about the AUTHOR'S INTENT rather than about the
- * geometry, because intent is the thing a visitor is choosing between and
- * the geometry is already on the card as a gate count and a field size.
- *
- *   race        built to be raced against a clock
- *   skills      built to practise one thing until it is easy
- *   experiment  built to find out whether something works
- *
- * The rest are the shapes that kept turning up in the tracks already
- * published and that the three above cannot say:
- *
- *   beginner, technical   how hard, which is the first thing anybody asks
- *   micro, big            how much room it wants, which decides whether it
- *                         is flyable at all on a small screen at speed.
- *                         The `micro` id is printed as "Small field", and
- *                         that is a RENAME rather than a new tag: it means
- *                         a five inch track with a small footprint, and it
- *                         has meant that since before there was a micro
- *                         CLASS. On a page that now also carries a "65 mm
- *                         whoop" filter, a tag labelled "Micro" is two
- *                         different things one word apart. The id cannot
- *                         move without stranding the tracks that carry it;
- *                         the label is what the board prints and it can.
- *   freestyle             gates as furniture rather than as a course
- *   showcase              built to be looked at
- *
- * `label` is what the board and the builder print. `id` is what travels and
- * never changes: renaming a label must never orphan a published track.
- * Adding an id is additive and needs no migration; REMOVING one would strand
- * tracks that carry it, so a retired tag keeps its row and loses its offer.
+ * `id` travels and is stored, so it never changes and is never removed
+ * (that would strand the tracks wearing it); `label` is printed and can
+ * change. `micro` prints as "Small field" because "Micro" now also names a
+ * track class, a different thing one word away.
  */
 export const TAGS = [
   { id: 'race', label: 'Race track' },
@@ -1139,251 +953,162 @@ export const TAGS = [
   { id: 'showcase', label: 'Showcase' },
 ];
 
-const TAG_IDS = new Set(TAGS.map((t) => t.id));
-
-/*
- * At most this many on one track. Five is the point past which a tag stops
- * narrowing anything: a track wearing every tag answers every filter, which
- * is the same as wearing none, and it is how an author games a list.
- */
+/* Past five a tag stops narrowing: a track wearing every tag answers
+ * every filter. */
 export const TAGS_MAX = 5;
 
 /*
- * Clean a tag list, or refuse it.
- *
- * Returns { tags } or { error }. An absent list is an empty list and is
- * fine: tags are optional and every track published before they existed
- * has none. An unknown id is refused rather than dropped, because a builder
- * that offered it and a board that ignored it would disagree silently and
- * the author would never learn their tag did not stick.
+ * Absent is none, which every track from before tags is. An unknown id is
+ * refused, not dropped, so an author learns their tag did not stick. The
+ * stored list is in the board's order, so the same tags always read the
+ * same on a card.
  */
 export function inspectTags(raw) {
-  if (raw == null) {
+  if (raw === undefined || raw === null) {
     return { tags: [] };
   }
   if (!Array.isArray(raw)) {
-    return { error: 'Tags are a list.' };
+    return refuse('Tags are a list.');
   }
   if (raw.length > TAGS_MAX) {
-    return { error: `A track wears at most ${TAGS_MAX} tags.` };
+    return refuse(`A track wears at most ${TAGS_MAX} tags.`);
   }
-  const out = [];
+  const chosen = new Set();
   for (const entry of raw) {
     const id = String(entry ?? '').trim().toLowerCase();
-    if (!TAG_IDS.has(id)) {
-      return { error: `There is no tag called "${String(entry ?? '').slice(0, 24)}".` };
+    if (!TAGS.some((t) => t.id === id)) {
+      return refuse(`There is no tag called "${String(entry ?? '').slice(0, 24)}".`);
     }
-    if (!out.includes(id)) {
-      out.push(id);
-    }
+    chosen.add(id);
   }
-  /* Stored in the board's own order rather than the order they were ticked,
-   * so two tracks wearing the same tags carry the same list and a card
-   * cannot read differently from one publish to the next. */
-  return { tags: TAGS.filter((t) => out.includes(t.id)).map((t) => t.id) };
+  return { tags: TAGS.map((t) => t.id).filter((id) => chosen.has(id)) };
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /* Freestyle runs                                                      */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 export const RUN_ID_RE = /^run-[0-9a-f]{8}$/;
 
-/*
- * WHAT THE BOARD CAN AND CANNOT KNOW ABOUT A SCORE.
- *
- * It cannot recompute one. Doing that would mean importing the simulator's
- * recogniser, its catalogue and its plant, and this file imports nothing
- * from the simulator on purpose: the board is a place to put things, not a
- * second implementation of the game. So every number below is CLAIMED by
- * the page that posted it, and nothing here should be written or read as if
- * it had been verified.
- *
- * What it can do is bound the claim and check it against itself, which is
- * exactly what inspectGhost does for a recorded lap. A run that says it
- * landed four tricks and scored a billion is refused, not because the board
- * knows what those four tricks were, but because no four tricks can be
- * worth that under rules the board can state in one line. That catches the
- * careless and the curious. It does not catch somebody determined, and the
- * README says so rather than implying otherwise.
- */
-
-/* The map a run was flown on: the simulator's freestyle worlds, MIRRORS the
- * `mode: 'freestyle'` entries of fdfpv/src/maps/registry.js, and
- * src/selftest.js holds the two together. The freestyle town this list
- * used to name was removed from the simulator on 2026-09-28, and every run
- * posted from the valleys after that was refused here. */
+/* The simulator's freestyle worlds, its src/maps/registry.js entries with
+ * `mode: 'freestyle'`; src/selftest.js holds the two together. */
 export const RUN_MAPS = ['alps', 'swiss2', 'yellowstone'];
 
-/*
- * The two physics models the simulator offers, which is not a cosmetic
- * setting: arcade turns off propwash, gyro noise and build asymmetry, so an
- * arcade run and an expert run are not the same sport. The board records
- * which and lets a reader filter, rather than quietly ranking them together
- * and letting somebody find out later.
- */
+/* Expert and arcade are different sports (arcade drops propwash, gyro
+ * noise and build asymmetry), so a run records which and the board never
+ * ranks them together. */
 export const RUN_STYLES = ['expert', 'arcade'];
 
-/* A run is two minutes of simulated time. The slack is generous because the
- * clock stops on the trick that ended the run, not on the millisecond, and
- * because a future map may want a different heat length. */
-const RUN_MS_MIN = 1_000;
-const RUN_MS_MAX = 900_000;
-const RUN_TRICKS_MAX = 600;
-const SIGNATURE_MAX = 40;
+const RUN_MIN_MS = 1000;
+const RUN_MAX_MS = 900_000;
+const RUN_MAX_TRICKS = 600;
+const SIGNATURE_MAX_CHARS = 40;
 
 /*
- * The most a run of `tricks` tricks could possibly be worth, derived rather
- * than picked.
- *
- * The dearest trick in the simulator's catalogue is 850 points. The streak
- * multiplier grows by the previous trick's raw score over ten thousand, so
- * after n tricks it is at most 1 + n * 850 / 10000. The combo multiplier is
- * capped at twelve. Nothing else in the scorer multiplies. So no single
- * trick can be worth more than 850 * (1 + n * 0.085) * 12, and no run of n
- * tricks more than n times that.
- *
- * This is a loose bound and it is meant to be: its job is to refuse a
- * number that could not have come from the game at all, not to guess what a
- * good run looks like. Every real run measured while this was written came
- * in three orders of magnitude under it.
+ * The most n tricks could score under the simulator's rules. The board
+ * cannot recompute a score without becoming a second copy of the game, so
+ * every number in a run is a claim; this bounds it. The dearest trick is
+ * 850 points, the streak multiplier after n tricks is at most
+ * 1 + n * 850 / 10000, and the combo multiplier caps at 12, so n tricks
+ * are worth at most n * 850 * (1 + 0.085 n) * 12. Loose on purpose: it
+ * refuses what the game could not produce, and stops nobody determined,
+ * which the README says.
  */
 export function maxPlausibleScore(tricks) {
   const n = tricks > 0 ? tricks : 1;
   return Math.ceil(n * 850 * (1 + n * 0.085) * 12);
 }
 
-function counted(raw, max) {
-  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > max) {
-    return null;
-  }
-  return Math.round(raw);
-}
-
 /*
- * Check a posted run. Returns the row the store should keep, or { error }.
- *
- * Every field is checked, including the ones only the display reads, because
- * a field that is stored unchecked is a field that reaches every visitor's
- * browser unchecked.
+ * A posted run, as the row the store keeps. Every field is checked,
+ * including those only the page displays, because what is stored unchecked
+ * reaches every visitor unchecked.
  */
 export function inspectRun(body) {
-  if (!isObject(body)) {
-    return { error: 'That request was not a JSON object.' };
+  if (!plainObject(body)) {
+    return refuse('That request was not a JSON object.');
   }
   const name = normaliseName(body.name);
   if (!name) {
-    return { error: 'A pilot name is 2 to 24 letters, digits, dots, dashes or spaces.' };
+    return refuse('A pilot name is 2 to 24 letters, digits, dots, dashes or spaces.');
   }
   const map = String(body.map ?? '');
   if (!RUN_MAPS.includes(map)) {
-    return { error: 'That is not a map this board keeps scores for.' };
+    return refuse('That is not a map this board keeps scores for.');
   }
   const style = String(body.style ?? '');
   if (!RUN_STYLES.includes(style)) {
-    return { error: 'A run is flown on the expert or the arcade physics model.' };
+    return refuse('A run is flown on the expert or the arcade physics model.');
   }
-  const durationMs = counted(body.durationMs, RUN_MS_MAX);
-  if (durationMs == null || durationMs < RUN_MS_MIN) {
-    return { error: 'That run is not long enough to be a run.' };
+  const durationMs = wholeUpTo(body.durationMs, RUN_MAX_MS);
+  if (durationMs === null || durationMs < RUN_MIN_MS) {
+    return refuse('That run is not long enough to be a run.');
   }
-  const tricks = counted(body.tricks, RUN_TRICKS_MAX);
-  if (tricks == null || tricks < 1) {
-    return { error: 'A run with no tricks in it is not a score.' };
+  const tricks = wholeUpTo(body.tricks, RUN_MAX_TRICKS);
+  if (tricks === null || tricks < 1) {
+    return refuse('A run with no tricks in it is not a score.');
   }
-  const unique = counted(body.unique, RUN_TRICKS_MAX);
-  if (unique == null || unique < 1 || unique > tricks) {
-    return { error: 'A run cannot have more distinct tricks than tricks.' };
+  const unique = wholeUpTo(body.unique, RUN_MAX_TRICKS);
+  if (unique === null || unique < 1 || unique > tricks) {
+    return refuse('A run cannot have more distinct tricks than tricks.');
   }
   const ceiling = maxPlausibleScore(tricks);
-  const score = counted(body.score, ceiling);
-  if (score == null || score < 1) {
-    return { error: 'That score could not have come from that many tricks.' };
+  const score = wholeUpTo(body.score, ceiling);
+  if (score === null || score < 1) {
+    return refuse('That score could not have come from that many tricks.');
   }
-  const bestCombo = counted(body.bestCombo, ceiling);
-  if (bestCombo == null || bestCombo > score) {
-    return { error: 'The best chain in a run cannot be worth more than the run.' };
+  const bestCombo = wholeUpTo(body.bestCombo, ceiling);
+  if (bestCombo === null || bestCombo > score) {
+    return refuse('The best chain in a run cannot be worth more than the run.');
   }
-  const bestTrick = counted(body.bestTrick, ceiling);
-  if (bestTrick == null || bestTrick > score) {
-    return { error: 'One trick in a run cannot be worth more than the run.' };
+  const bestTrick = wholeUpTo(body.bestTrick, ceiling);
+  if (bestTrick === null || bestTrick > score) {
+    return refuse('One trick in a run cannot be worth more than the run.');
   }
-  const crashes = counted(body.crashes, RUN_TRICKS_MAX);
-  if (crashes == null) {
-    return { error: 'That crash count is not a count.' };
+  const crashes = wholeUpTo(body.crashes, RUN_MAX_TRICKS);
+  if (crashes === null) {
+    return refuse('That crash count is not a count.');
   }
-  /* The one trick the run is remembered by. Free text, because it is a name
-   * out of a catalogue this file deliberately does not hold, so it is
-   * bounded and stripped rather than checked against a list. */
-  const signature = String(body.signature ?? '')
-    .replace(/[^\x20-\x7e]/g, '')
-    .trim()
-    .slice(0, SIGNATURE_MAX);
+  /* The trick the run is remembered by, a name from a catalogue the board
+   * does not hold, so it is trimmed to printable ASCII and bounded. */
+  const signature = String(body.signature ?? '').replace(/[^\x20-\x7e]/g, '').trim().slice(0, SIGNATURE_MAX_CHARS);
   return {
-    run: {
-      name, map, style, score, durationMs, tricks, unique,
-      bestCombo, bestTrick, crashes, signature,
-    },
+    run: { name, map, style, score, durationMs, tricks, unique, bestCombo, bestTrick, crashes, signature },
   };
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /* Site statistics                                                     */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 /*
- * WHAT THE BOARD WILL BELIEVE ABOUT A VISIT, AND WHAT IT REFUSES TO HOLD.
+ * The gate in front of the counters. The store adds to daily totals and
+ * keeps nothing about one browser, and most of that promise is the wire
+ * format: there is no field for an address, an agent, a screen, a
+ * referrer, a name or a track, and an extra key is never read. The one per
+ * tab string, `tab`, is random per page load, held in server memory three
+ * minutes for "flying now", and never stored.
  *
- * The statistics page counts sessions, laps, countries and returning
- * pilots. Every one of those numbers is a COUNTER: the store adds to a
- * daily total and keeps nothing that describes one browser. This function
- * is the gate in front of that, and its job is smaller than it looks,
- * because most of the privacy work is in what the wire format does not
- * carry rather than in what is checked here.
- *
- * NOTHING IDENTIFYING IS ACCEPTED, so nothing identifying can be stored by
- * mistake later. There is no field for an address, a user agent, a screen
- * size, a referrer, a pilot name or a track id, and an event carrying one
- * is not cleaned of it: the extra key is simply never read. The one string
- * that travels per tab, `tab`, is a random value the browser makes fresh on
- * every page load, is held in memory by the server for three minutes to
- * answer "how many are flying now", and is never written to the store.
- *
- * EVERY DIMENSION IS A CLOSED LIST. A source folds to a sponsor slug or to
- * `other`, a country to two capitals or to `ZZ`, map, input and craft to
- * `other`, and a surface not on the list below is refused outright. That is
- * what stops a stranger with curl growing the dims table: the number of
- * rows it can ever hold is the product of these lists and the days.
- *
- * THE DELTAS ARE SMALL AND BOUNDED. A flush covers at most a minute of
- * flying, so thirty laps, ninety seconds and sixty crashes are all well
- * past anything a minute can hold and far under anything worth inflating a
- * public number with. A claim outside them is refused rather than clamped:
- * clamping would store a number the sender did not send.
+ * Every dimension is a closed list (a source folds to a sponsor or
+ * `other`, a country to two capitals or ZZ, craft, map and input to
+ * `other`), which bounds the rows a stranger with curl can create. The
+ * deltas a flush may carry are a minute's worth with room; a claim past
+ * that is refused, never clamped to a number nobody sent.
  */
-
 export const STATS_KINDS = ['visit', 'session', 'flush'];
 
-/* Which page sent it. The landing page is on the list before it sends
- * anything, because the board ships before the pages that talk to it and a
- * surface the board refuses is a deploy order this repository already has
- * a rule about. See DEPLOY.md in the simulator's repository. */
+/* The landing page is listed ahead of it sending anything: the board
+ * deploys before the pages that talk to it (DEPLOY.md in the simulator). */
 export const STATS_SURFACES = ['sim', 'builder', 'board', 'landing'];
 
-/* The aircraft, spelled as the simulator's own settings spell it (the ids
- * in configs/airframes.js there, which is the copy of record), so the page
- * can print "Skyhunter" from a key that is not a translation of anything.
- * `5inch` and `whoop65` are no longer in that catalog (both were retired on
- * 2026-10-03) but stay here: every client shipped before this list grew
- * folded every aircraft onto those two, and the rows already stored under
- * them are history the page still prints.
- *
- * AN ID NOT ON THE LIST FOLDS TO `other`, it is not refused, for the reason
- * maps and inputs fold: the simulator adds an airframe without asking this
- * board, and refusing the event would drop the session AND the minute of
- * "flying now" a flush carries, which is exactly what the old two-word list
- * made the simulator work around. The table stays closed because the fold
- * happens before anything is written. */
+/*
+ * Airframe ids as the simulator's configs/airframes.js spells them, so the
+ * page can print a name from the id. `5inch` and `whoop65` left that
+ * catalogue on 2026-10-03 but stay: older clients folded every aircraft
+ * onto them and their stored rows are history. An unknown id folds to
+ * `other` instead of being refused, since refusing would drop the session
+ * and its minute of "flying now" whenever the simulator adds an airframe.
+ */
 export const STATS_CRAFT = [
   '5inch', 'whoop65',
   '7inch', '10inch', 'interceptor', 'sky1800', 'cub1400', 'radian2000', 'bramor2300', 'slowstick1180',
@@ -1391,180 +1116,116 @@ export const STATS_CRAFT = [
   'p51d1450', 'f16878', 'zagi1219', 'nrj1490', 'striker2500',
 ];
 
-/* The maps the shell can be standing in. `custom` is the track, built or
- * fetched; `city` is freestyle. Anything else folds, rather than being
- * refused, because a map added to the simulator must not start refusing
- * every session an older board sees. */
+/* `custom` is a track, built or fetched; `city` is freestyle. Others fold
+ * so a new simulator map never makes an older board refuse sessions. */
 export const STATS_MAPS = ['custom', 'city'];
 
-/* How the pilot is flying. The simulator knows a fourth thing, a radio in
- * joystick mode, and reports it as `gamepad`, because to this page a radio
- * and a controller are the same answer to "did they use sticks". */
+/* A radio in joystick mode reports as `gamepad`: either way, sticks. */
 export const STATS_INPUTS = ['gamepad', 'keyboard', 'touch'];
 
 export const STATS_OTHER = 'other';
 export const STATS_COUNTRY_UNKNOWN = 'ZZ';
 
-/* One flush covers at most a minute. See the header. */
-const FLUSH_LAPS_MAX = 30;
-const FLUSH_FLIGHT_S_MAX = 90;
-const FLUSH_CRASHES_MAX = 60;
+const FLUSH_LIMITS = { laps: 30, flightS: 90, crashes: 60 };
+
+/* Loose on purpose (a UUID fits, nothing depends on its shape) but
+ * bounded, so it cannot carry a kilobyte. */
+const TAB_HANDLE = /^[A-Za-z0-9-]{8,36}$/;
 
 /*
- * The per tab handle, and the ONLY string in this format that is unique to
- * a browser. It is `crypto.randomUUID()` from the page, it changes on every
- * page load, the server holds it in memory for three minutes and no store
- * ever sees it. The pattern is loose on purpose: it has to accept a UUID
- * and it has no reason to insist on one, because nothing is derived from
- * its shape. What it does insist on is a bound, so this cannot become a
- * place to post a kilobyte.
- */
-const STATS_TAB_RE = /^[A-Za-z0-9-]{8,36}$/;
-
-/*
- * Two capitals from the edge, or ZZ.
- *
- * The board never looks an address up and never stores one. Cloudflare puts
- * the country on the request in edge/router.js in the simulator's
- * repository, and it is believed only when BOARD_TRUST_PROXY says something
- * in front of this process sets it, exactly like the forwarded host. On a
- * checkout, and on the bare Render address, every row is ZZ and the page
- * prints Unknown, which is honest and needs no table.
- *
- * XX and T1 are Cloudflare's own answers for "no country" and "Tor exit",
- * and both mean the same thing to this page as an absent header.
+ * The edge's two letters, or ZZ. Nothing here looks an address up; the
+ * server believes the header only behind BOARD_TRUST_PROXY. XX (no
+ * country) and T1 (Tor) are Cloudflare's, and mean unknown here too.
  */
 export function normaliseCountry(raw) {
   const code = String(raw ?? '').trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code) || code === 'XX' || code === 'T1') {
-    return STATS_COUNTRY_UNKNOWN;
-  }
-  return code;
+  const known = /^[A-Z]{2}$/.test(code) && code !== 'XX' && code !== 'T1';
+  return known ? code : STATS_COUNTRY_UNKNOWN;
 }
 
-/* A word from a closed list, or `other`. Used where a new value in a newer
- * simulator must not start refusing events on an older board. */
-function foldedTo(raw, list) {
+function oneOf(list, raw) {
   const word = String(raw ?? '').trim();
   return list.includes(word) ? word : STATS_OTHER;
 }
 
-/* A bounded whole number, or null. Absent counts as nought, because a flush
- * with nothing to report is the heartbeat that answers "flying now" and
- * refusing it would cost that number. */
-function delta(raw, max) {
-  if (raw == null) {
-    return 0;
-  }
-  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > max) {
-    return null;
-  }
-  return Math.round(raw);
+/* Absent is nought: an empty flush is the heartbeat behind "flying now". */
+function flushCount(raw, max) {
+  return raw === undefined || raw === null ? 0 : wholeUpTo(raw, max);
+}
+
+/* No sponsor fold given: absent is direct, anything else is other. */
+function plainSource(raw) {
+  return raw == null ? 'direct' : STATS_OTHER;
 }
 
 /*
- * Check one posted event. Returns { event } with exactly the fields the
- * store will read, or { error } with a sentence.
- *
- * `sourceKey` is passed in rather than imported so this file keeps its one
- * import and the sponsor list has exactly one home. The server hands it
- * src/sponsors.js's fold; the tests hand it whichever fold they are
- * checking against.
+ * One posted event, as { event } holding exactly what the store reads.
+ * The source fold is passed in (the server hands src/sponsors.js's) so
+ * the sponsor list keeps one home.
  */
 export function inspectStatsEvent(body, sourceKey) {
-  if (!isObject(body)) {
-    return { error: 'That request was not a JSON object.' };
+  if (!plainObject(body)) {
+    return refuse('That request was not a JSON object.');
   }
   if (body.v !== 1) {
-    return { error: 'That is not a version of this format the board reads.' };
+    return refuse('That is not a version of this format the board reads.');
   }
   const kind = String(body.kind ?? '');
   if (!STATS_KINDS.includes(kind)) {
-    return { error: 'That is not a kind of event this board counts.' };
+    return refuse('That is not a kind of event this board counts.');
   }
-  const fold = typeof sourceKey === 'function' ? sourceKey : (x) => (x == null ? 'direct' : STATS_OTHER);
-  const source = fold(body.source);
-  if (kind === 'visit') {
-    const surface = String(body.surface ?? '');
-    if (!STATS_SURFACES.includes(surface)) {
-      return { error: 'That is not a page this board counts visits from.' };
-    }
-    /* The browser answers the question rather than sending the date it
-     * answered it from. A date would be a fingerprint; a boolean is not. */
-    if (typeof body.returning !== 'boolean') {
-      return { error: 'A visit says whether this browser has been here before.' };
-    }
-    return { event: { kind, surface, returning: body.returning, source } };
-  }
+  const source = (typeof sourceKey === 'function' ? sourceKey : plainSource)(body.source);
   if (kind === 'session') {
     return {
       event: {
         kind,
-        craft: foldedTo(body.craft, STATS_CRAFT),
-        map: foldedTo(body.map, STATS_MAPS),
-        input: foldedTo(body.input, STATS_INPUTS),
+        craft: oneOf(STATS_CRAFT, body.craft),
+        map: oneOf(STATS_MAPS, body.map),
+        input: oneOf(STATS_INPUTS, body.input),
         source,
       },
     };
   }
-  /* A flush. */
-  const tab = String(body.tab ?? '');
-  if (!STATS_TAB_RE.test(tab)) {
-    return { error: 'That is not a usable tab handle.' };
+  if (kind === 'visit') {
+    const surface = String(body.surface ?? '');
+    if (!STATS_SURFACES.includes(surface)) {
+      return refuse('That is not a page this board counts visits from.');
+    }
+    /* The browser sends its answer, never the date it kept: a date would
+     * be a fingerprint and a boolean is not. */
+    if (typeof body.returning !== 'boolean') {
+      return refuse('A visit says whether this browser has been here before.');
+    }
+    return { event: { kind, surface, returning: body.returning, source } };
   }
-  const laps = delta(body.laps, FLUSH_LAPS_MAX);
-  const flightS = delta(body.flightS, FLUSH_FLIGHT_S_MAX);
-  const crashes = delta(body.crashes, FLUSH_CRASHES_MAX);
-  if (laps == null || flightS == null || crashes == null) {
-    return { error: 'That is more than a minute of flying can hold.' };
+  const tab = String(body.tab ?? '');
+  if (!TAB_HANDLE.test(tab)) {
+    return refuse('That is not a usable tab handle.');
+  }
+  const counts = {};
+  for (const [field, max] of Object.entries(FLUSH_LIMITS)) {
+    counts[field] = flushCount(body[field], max);
+  }
+  if (Object.values(counts).includes(null)) {
+    return refuse('That is more than a minute of flying can hold.');
   }
   return {
     event: {
       kind,
       tab,
-      craft: foldedTo(body.craft, STATS_CRAFT),
-      map: foldedTo(body.map, STATS_MAPS),
-      laps,
-      flightS,
-      crashes,
+      craft: oneOf(STATS_CRAFT, body.craft),
+      map: oneOf(STATS_MAPS, body.map),
+      ...counts,
       source,
     },
   };
 }
 
 /*
- * The UTC day a write belongs to, as the text the store keys on.
- *
- * The SERVER's day, never the client's. A browser's clock is wrong often
- * enough that letting it name the day would put laps in tomorrow, and it
- * would be one more thing an event could claim. UTC, so that the day
- * boundary does not move when a host changes region, which is a thing
- * Render deploys do.
+ * The UTC day a counter lands on, by the server's clock: a browser's clock
+ * is too often wrong to name the day, and UTC keeps the boundary still
+ * when a host moves region.
  */
 export function statsDay(now = new Date()) {
   return new Date(now).toISOString().slice(0, 10);
-}
-
-/*
- * The pilot key and the signature a posted time carries, as the simulator's
- * src/share/identity.js makes them: the raw 65 byte P-256 public key and the
- * 64 byte signature, both base64. Only the shape is checked here; whether
- * the signature holds is the identity module's business, on the server.
- */
-const KEY_B64_RE = /^[A-Za-z0-9+/]{87}=$/;
-const SIG_B64_RE = /^[A-Za-z0-9+/]{86}==$/;
-
-export function inspectAuth(body) {
-  const key = typeof body.key === 'string' ? body.key : '';
-  const sig = typeof body.sig === 'string' ? body.sig : '';
-  if (!key && !sig) {
-    return { error: 'A time on the board is signed by the pilot key the simulator keeps. Post from there.' };
-  }
-  if (!KEY_B64_RE.test(key)) {
-    return { error: 'That pilot key is not usable.' };
-  }
-  if (!SIG_B64_RE.test(sig)) {
-    return { error: 'That signature is not usable.' };
-  }
-  return { key, sig };
 }
