@@ -37,6 +37,7 @@
 import { guessSimOrigin as guess, landingOrigin as frontDoor } from './origins.js';
 import { mountStats, pingVisit, showStats } from './stats.js';
 import { fillCredits } from './credits.js';
+import { ADMIN_TOKEN_KEY, moveRenamedKeys } from './keys.js';
 import { str, LOCALES, LOCALE_NAMES, currentLocale, rememberLocale } from './strings/index.js';
 
 /* Static sentences in the markup carry data-str keys; filled here so the
@@ -1333,7 +1334,10 @@ function paintCraftCounts() {
  * credential and the tab closing is a perfectly good moment to lose it. The
  * server gives it twelve hours anyway; whichever runs out first wins.
  */
-const ADMIN_KEY = 'webfpv.board.admin.v1';
+/* The name lives in keys.js, shared with the inbox, which reads the same
+ * sign in. A tab signed in before the rename keeps its sign in. */
+const ADMIN_KEY = ADMIN_TOKEN_KEY;
+moveRenamedKeys(() => sessionStorage);
 
 const admin = {
   token: '', email: '', kind: '', expiresUtc: '', sponsors: [],

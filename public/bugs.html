@@ -1,16 +1,23 @@
 <!doctype html>
 <!--
-  Bugs and feedback. Testers file both from the simulator: bug tickets
-  and flight feel feedback, one store, told apart by kind. This page is
-  the inbox: list, read, mark in progress or fixed. Agents can use the
-  JSON API instead; this is the human view of the same store.
+  The inbox for what testers file from the simulator: bug tickets and
+  flight feel feedback, one store, told apart by kind. List, read, mark.
+  Agents read the same store through /api/bugs.
 
-  This file is part of WebFPVLeaderboard.
+  This file is part of the Paraguayan Drone Combat Simulator.
 
-  WebFPVLeaderboard is free software: you can redistribute it and/or modify
+  The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or (at
   your option) any later version.
+
+  The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY, without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
 -->
 <html lang="en">
   <head>
@@ -18,12 +25,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bugs and feedback, Paraguayan Drone Combat Simulator</title>
     <meta name="robots" content="noindex" />
-    <!-- The page mark. See public/index.html. -->
+    <!-- The same mark as the board page. -->
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="icon" href="favicon.ico" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="theme-color" content="#141c16" />
     <style>
+      /* The simulator's palette, as on the board page. */
       :root {
         --cream: #f3ead4;
         --sakura: #e8a8b8;
@@ -31,105 +39,112 @@
         --mint: #7dffb4;
         --slate: #9db3c8;
         --deep: #141c16;
+        --field: #121a14;
+        --alarm: #ff8f8f;
         --panel: rgba(16, 22, 17, 0.86);
         --line: rgba(244, 236, 214, 0.12);
         --edge: rgba(232, 168, 184, 0.28);
         --ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --caps: 0.14em;
       }
       * { box-sizing: border-box; }
       html, body {
-        margin: 0; min-height: 100%;
+        margin: 0;
+        min-height: 100%;
+        color: var(--cream);
+        font-family: var(--ui);
         background: radial-gradient(120% 90% at 50% 6%, #1e2a20, #101610 60%) fixed;
-        color: var(--cream); font-family: var(--ui);
       }
-      .chequer {
-        height: 8px;
-        background: repeating-linear-gradient(90deg, #23272f 0 14px, #eae6dd 14px 28px);
-      }
+      a { color: var(--sakura); }
+
+      /* Page furniture. */
+      .chequer { height: 8px; background: repeating-linear-gradient(90deg, #23272f 0 14px, #eae6dd 14px 28px); }
       .wrap { width: min(1100px, 94vw); margin: 0 auto; padding: 28px 0 64px; }
-      .kicker {
-        font-size: 10px; font-weight: 700; letter-spacing: 0.18em;
-        text-transform: uppercase; color: var(--sakura);
-      }
+      .kicker { color: var(--sakura); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
       h1 { margin: 8px 0 0; font-size: clamp(28px, 5vw, 42px); letter-spacing: 0.06em; }
       h1 .fpv { color: var(--sakura); }
-      .lede { max-width: 40em; color: var(--slate); line-height: 1.55; }
-      .bar {
-        display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
-        margin: 22px 0 18px;
+      .lede { max-width: 40em; line-height: 1.55; color: var(--slate); }
+      .err { min-height: 1.3em; color: var(--alarm); }
+      .empty { padding: 22px; color: var(--slate); }
+
+      /* The filter bar and its controls. */
+      .bar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 22px 0 18px; }
+      label {
+        display: grid; gap: 6px;
+        color: var(--slate); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
       }
-      label { display: grid; gap: 6px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--slate); }
       input, select, textarea {
-        background: #121a14; border: 1px solid var(--line); border-radius: 4px;
-        color: var(--cream); font: inherit; padding: 8px 10px; min-width: 12em;
+        min-width: 12em; padding: 8px 10px;
+        color: var(--cream); font: inherit;
+        background: var(--field); border: 1px solid var(--line); border-radius: 4px;
       }
-      textarea { min-width: 22em; min-height: 4.5em; width: min(100%, 36em); }
+      textarea { width: min(100%, 36em); min-width: 22em; min-height: 4.5em; }
       button {
-        appearance: none; border: 1px solid var(--line); background: transparent;
-        color: var(--slate); font: 600 13px/1.2 var(--ui); padding: 9px 14px;
-        border-radius: 3px; cursor: pointer;
+        appearance: none; cursor: pointer;
+        padding: 9px 14px;
+        color: var(--slate); font: 600 13px/1.2 var(--ui);
+        background: transparent; border: 1px solid var(--line); border-radius: 3px;
       }
-      button.primary { background: var(--mint); border-color: var(--mint); color: var(--deep); }
+      /* Same specificity, so the order is the rule: a hovered primary
+         takes the hover border, and its own colour back below. */
+      button.primary { color: var(--deep); background: var(--mint); border-color: var(--mint); }
       button:hover { color: var(--cream); border-color: var(--sakura); }
-      button.primary:hover { filter: brightness(1.06); color: var(--deep); }
-      .err { color: #ff8f8f; min-height: 1.3em; }
+      button.primary:hover { color: var(--deep); filter: brightness(1.06); }
+
+      /* The list beside the open ticket, stacked on a narrow screen. */
       .layout { display: grid; grid-template-columns: minmax(240px, 340px) 1fr; gap: 18px; }
       @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
       .list, .sheet {
-        background: var(--panel); border-radius: 4px; border-top: 2px solid var(--edge);
-        box-shadow: inset 0 0 0 1px var(--line);
+        background: var(--panel); border-radius: 4px;
+        border-top: 2px solid var(--edge); box-shadow: inset 0 0 0 1px var(--line);
       }
       .ticket {
-        display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
-        background: transparent; border-radius: 0; padding: 12px 14px; color: var(--cream);
+        display: block; width: 100%; padding: 12px 14px; text-align: left;
+        color: var(--cream); background: transparent;
+        border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
       }
       .ticket.on { background: rgba(232, 168, 184, 0.08); }
-      .ticket .id { font-family: var(--mono); font-size: 12px; color: var(--sakura); }
+      .ticket .id { color: var(--sakura); font-family: var(--mono); font-size: 12px; }
       .ticket .title { margin-top: 4px; font-weight: 600; }
-      .ticket .meta { margin-top: 4px; font-size: 12px; color: var(--slate); }
-      .sheet { padding: 18px 20px 22px; min-height: 20em; }
+      .ticket .meta { margin-top: 4px; color: var(--slate); font-size: 12px; }
+
+      /* The open ticket. */
+      .sheet { min-height: 20em; padding: 18px 20px 22px; }
       .sheet h2 { margin: 8px 0 10px; font-size: 22px; }
-      .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
       .badge {
-        font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-        padding: 4px 8px; border-radius: 3px; border: 1px solid var(--line); color: var(--slate);
+        padding: 4px 8px; border: 1px solid var(--line); border-radius: 3px;
+        color: var(--slate); font-size: 10px; letter-spacing: var(--caps); text-transform: uppercase;
       }
       .badge.open { color: var(--amber); border-color: var(--amber); }
       .badge.in_progress { color: var(--sakura); border-color: var(--sakura); }
-      .badge.fixed { color: var(--mint); border-color: var(--mint); }
-      /* Feedback is the signal the tune work runs on, so it wears mint,
-         the colour this page paints a record in, in the badge and in the
-         list, and never disappears into the grey of the bug rows. */
-      .badge.feel { color: var(--mint); border-color: var(--mint); }
+      /* Feedback is what the flight tuning work runs on, so it is painted
+         mint, the colour of a record, in its badge and in the list, and is
+         never lost among the grey bug rows. */
+      .badge.fixed, .badge.feel { color: var(--mint); border-color: var(--mint); }
       .ticket .meta .kind.feel { color: var(--mint); }
       .block { margin: 14px 0; }
       .block h3 {
-        margin: 0 0 6px; font-size: 11px; letter-spacing: 0.14em;
-        text-transform: uppercase; color: var(--slate); font-weight: 700;
+        margin: 0 0 6px;
+        color: var(--slate); font-size: 11px; font-weight: 700; letter-spacing: var(--caps); text-transform: uppercase;
       }
-      .block p, .block pre {
-        margin: 0; white-space: pre-wrap; line-height: 1.5; font-family: inherit;
-      }
+      .block p, .block pre { margin: 0; white-space: pre-wrap; line-height: 1.5; font-family: inherit; }
       pre.ctx {
-        font-family: var(--mono); font-size: 12px; color: var(--slate);
-        background: #121a14; padding: 10px 12px; border-radius: 4px; overflow: auto;
+        overflow: auto; padding: 10px 12px; border-radius: 4px;
+        color: var(--slate); font-family: var(--mono); font-size: 12px; background: var(--field);
       }
-      /* Screenshots on a ticket: thumbnails that open full size in a tab. */
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+      /* Screenshots: thumbnails that open full size in a tab. */
       .shots { display: flex; flex-wrap: wrap; gap: 10px; }
-      .shot {
-        display: grid; gap: 4px; justify-items: start; text-decoration: none;
-        font-size: 11px; color: var(--slate);
-      }
+      .shot { display: grid; justify-items: start; gap: 4px; color: var(--slate); font-size: 11px; text-decoration: none; }
       .shot img {
         display: block; max-width: 220px; max-height: 140px;
-        border: 1px solid var(--line); border-radius: 4px; background: #121a14;
+        background: var(--field); border: 1px solid var(--line); border-radius: 4px;
       }
       .shot:hover img { border-color: var(--sakura); }
-      .shot-err { color: #ff8f8f; }
-      .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-      a { color: var(--sakura); }
-      .empty { padding: 22px; color: var(--slate); }
+      .shot-err { color: var(--alarm); }
     </style>
   </head>
   <body>
