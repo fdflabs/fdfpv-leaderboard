@@ -382,11 +382,14 @@ if (against) {
 /*
  * Two readings come from the server's own clock, which the frozen page
  * clock cannot reach: how long ago the statistics were generated, and when
- * an admin's sign in runs out. They move with the wall clock between the
- * two walks, so they are masked when the walks are compared.
+ * an admin's sign in runs out (which says "tomorrow" once it passes
+ * midnight). They move with the wall clock between the two walks, so they
+ * are masked when the walks are compared.
  */
 function serverClockFree(text) {
-  return text.replace(/\b\d{1,2}:\d{2}( [AP]M)?\b/g, '<clock>').replace(/\b\d+ min\b/g, '<n> min');
+  return text
+    .replace(/(tomorrow at |mañana a las )?\b\d{1,2}:\d{2}( [AP]M)?\b/g, '<clock>')
+    .replace(/\b\d+ min\b/g, '<n> min');
 }
 
 function firstDifference(a, b) {
