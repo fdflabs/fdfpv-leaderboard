@@ -39,6 +39,7 @@ jobs:
       - run: npm test
       - run: npm run validate:golden
       - run: npm run admin:golden
+      - run: npm run store:golden
       - run: npm run lint:licence
       - run: npm run lint:nouns
       - run: npm run lint:copy

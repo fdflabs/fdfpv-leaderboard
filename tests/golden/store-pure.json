@@ -1,0 +1,423 @@
+{
+ "emptyStatsDay": {
+  "crashes": 0,
+  "day": "2026-10-06",
+  "flightS": 0,
+  "laps": 0,
+  "newVisitors": 0,
+  "returningVisitors": 0,
+  "sessions": 0,
+  "visits": 0
+ },
+ "planeBoardField": {
+  "planes": "<planes>",
+  "wing": null
+ },
+ "planeBoardMap": {
+  "planes": "<planes>",
+  "wing": {
+   "best": null,
+   "times": 2
+  }
+ },
+ "rowToSummary": {
+  "author": "Cy",
+  "designer": "",
+  "elements": 3,
+  "gates": 3,
+  "gifUtc": null,
+  "hasGif": false,
+  "hasLogo": true,
+  "id": "trk-30000001",
+  "map": "swiss2",
+  "name": "Valle Alto",
+  "plan": {
+   "depth": 118,
+   "map": "swiss2",
+   "marks": [
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 24,
+     "y": 64,
+     "yaw": 0
+    },
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 144,
+     "y": 94,
+     "yaw": 0
+    },
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 224,
+     "y": 24,
+     "yaw": 0
+    }
+   ],
+   "numbers": [
+    {
+     "n": 1,
+     "stack": 0,
+     "x": 24,
+     "y": 64
+    },
+    {
+     "n": 2,
+     "stack": 0,
+     "x": 144,
+     "y": 94
+    },
+    {
+     "n": 3,
+     "stack": 0,
+     "x": 224,
+     "y": 24
+    }
+   ],
+   "path": [
+    {
+     "x": 24,
+     "y": 64
+    },
+    {
+     "x": 144,
+     "y": 94
+    },
+    {
+     "x": 224,
+     "y": 24
+    }
+   ],
+   "trackClass": "full",
+   "width": 248
+  },
+  "planes": "<planes>",
+  "publishedUtc": "<t>",
+  "series": "",
+  "tags": [],
+  "trackClass": "full",
+  "updatedUtc": "<t>",
+  "wing": {
+   "best": null,
+   "times": 0
+  }
+ },
+ "shapeStats": {
+  "allTime": {
+   "countries": 3,
+   "visits": 10
+  },
+  "countries": [
+   {
+    "dim": "country",
+    "key": "BR",
+    "laps": 0,
+    "sessions": 1,
+    "visits": 2
+   },
+   {
+    "dim": "country",
+    "key": "NZ",
+    "laps": 0,
+    "sessions": 1,
+    "visits": 2
+   },
+   {
+    "dim": "country",
+    "key": "AU",
+    "laps": 0,
+    "sessions": 1,
+    "visits": 1
+   },
+   {
+    "dim": "country",
+    "key": "ZZ",
+    "laps": 9,
+    "sessions": 9,
+    "visits": 9
+   }
+  ],
+  "craft": [
+   {
+    "dim": "craft",
+    "key": "5inch",
+    "laps": 4,
+    "sessions": 1,
+    "visits": 0
+   }
+  ],
+  "days": [
+   {
+    "crashes": 0,
+    "day": "2026-10-04",
+    "flightS": 0,
+    "laps": 0,
+    "newVisitors": 0,
+    "returningVisitors": 0,
+    "sessions": 0,
+    "visits": 0
+   },
+   {
+    "crashes": 0,
+    "day": "2026-10-05",
+    "flightS": 0,
+    "laps": 0,
+    "newVisitors": 0,
+    "returningVisitors": 0,
+    "sessions": 1,
+    "visits": 2
+   },
+   {
+    "crashes": 0,
+    "day": "2026-10-06",
+    "flightS": 0,
+    "laps": 0,
+    "newVisitors": 0,
+    "returningVisitors": 0,
+    "sessions": 0,
+    "visits": 0
+   }
+  ],
+  "firstDay": null,
+  "generatedUtc": "<t>",
+  "inputs": [],
+  "maps": [],
+  "sources": [
+   {
+    "dim": "source",
+    "key": "direct",
+    "laps": 0,
+    "sessions": 0,
+    "visits": 3
+   }
+  ],
+  "surfaces": [],
+  "today": {
+   "crashes": 0,
+   "day": "2026-10-06",
+   "flightS": 0,
+   "laps": 0,
+   "newVisitors": 0,
+   "returningVisitors": 0,
+   "sessions": 0,
+   "visits": 0
+  },
+  "window": {
+   "countries": 3,
+   "crashes": 0,
+   "days": 3,
+   "flightS": 0,
+   "laps": 0,
+   "newVisitors": 0,
+   "returningVisitors": 0,
+   "sessions": 1,
+   "visits": 2
+  }
+ },
+ "statsDayKeys": [
+  [
+   "2026-03-27",
+   "2026-03-28",
+   "2026-03-29"
+  ],
+  [
+   "1970-01-01"
+  ],
+  [
+   "2026-10-05",
+   "2026-10-06"
+  ]
+ ],
+ "summaryOf": {
+  "author": "Cy",
+  "best": {
+   "lapMs": 5,
+   "name": "B"
+  },
+  "designer": "",
+  "elements": 3,
+  "gates": 3,
+  "gifUtc": "<t>",
+  "hasGif": true,
+  "hasLogo": false,
+  "id": "trk-30000001",
+  "map": "swiss2",
+  "name": "Valle Alto",
+  "plan": {
+   "depth": 118,
+   "map": "swiss2",
+   "marks": [
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 24,
+     "y": 64,
+     "yaw": 0
+    },
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 144,
+     "y": 94,
+     "yaw": 0
+    },
+    {
+     "clearW": "<undefined>",
+     "d": "<undefined>",
+     "levels": "<undefined>",
+     "padSize": "<undefined>",
+     "pads": "<undefined>",
+     "seq": true,
+     "spacing": "<undefined>",
+     "type": "gate",
+     "w": "<undefined>",
+     "x": 224,
+     "y": 24,
+     "yaw": 0
+    }
+   ],
+   "numbers": [
+    {
+     "n": 1,
+     "stack": 0,
+     "x": 24,
+     "y": 64
+    },
+    {
+     "n": 2,
+     "stack": 0,
+     "x": 144,
+     "y": 94
+    },
+    {
+     "n": 3,
+     "stack": 0,
+     "x": 224,
+     "y": 24
+    }
+   ],
+   "path": [
+    {
+     "x": 24,
+     "y": 64
+    },
+    {
+     "x": 144,
+     "y": 94
+    },
+    {
+     "x": 224,
+     "y": 24
+    }
+   ],
+   "trackClass": "full",
+   "width": 248
+  },
+  "planes": "<planes>",
+  "publishedUtc": "<t>",
+  "series": "",
+  "tags": [],
+  "times": 2,
+  "trackClass": "full",
+  "updatedUtc": "<t>",
+  "wing": {
+   "best": {
+    "lapMs": 3,
+    "name": "C"
+   },
+   "times": 1
+  }
+ },
+ "summaryOfNoDocument": {
+  "author": "Cy",
+  "best": null,
+  "designer": "",
+  "elements": 3,
+  "gates": 3,
+  "gifUtc": "<t>",
+  "hasGif": true,
+  "hasLogo": false,
+  "id": "trk-30000001",
+  "map": null,
+  "name": "Valle Alto",
+  "plan": {
+   "depth": 2,
+   "marks": [],
+   "path": [],
+   "width": 1
+  },
+  "planes": "<planes>",
+  "publishedUtc": "<t>",
+  "series": "",
+  "tags": [],
+  "times": 0,
+  "trackClass": "full",
+  "updatedUtc": "<t>",
+  "wing": null
+ },
+ "summaryOfNothing": {
+  "author": "Cy",
+  "best": null,
+  "designer": "",
+  "elements": 3,
+  "gates": 3,
+  "gifUtc": "<t>",
+  "hasGif": true,
+  "hasLogo": false,
+  "id": "trk-30000001",
+  "map": null,
+  "name": "Valle Alto",
+  "plan": {
+   "depth": 40,
+   "marks": [],
+   "path": [],
+   "width": 60
+  },
+  "planes": "<planes>",
+  "publishedUtc": "<t>",
+  "series": "",
+  "tags": [],
+  "times": 0,
+  "trackClass": "full",
+  "updatedUtc": "<t>",
+  "wing": null
+ }
+}

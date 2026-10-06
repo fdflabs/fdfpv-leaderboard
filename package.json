@@ -13,6 +13,7 @@
     "test": "node src/selftest.js",
     "validate:golden": "node tests/validate-golden.js",
     "admin:golden": "node tests/admin-golden.js",
+    "store:golden": "node tests/store-golden.js",
     "lint:licence": "node scripts/licence-lint.js",
     "lint:nouns": "node scripts/noun-lint.js",
     "lint:copy": "node scripts/copy-lint.js",
