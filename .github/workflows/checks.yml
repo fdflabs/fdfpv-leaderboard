@@ -47,5 +47,6 @@ jobs:
       - run: npm run strings:selftest
       - run: npm run scripts:selftest
       - run: npm run client:golden
+      - run: npm run client:keys
       - run: npm run client:check
       - run: npm run wing:e2e

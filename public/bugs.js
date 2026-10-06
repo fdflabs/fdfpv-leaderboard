@@ -1,352 +1,305 @@
 /*
- * bugs.js: the human inbox for tester tickets.
+ * bugs.js: the inbox where a person reads tester tickets and marks them.
  *
- * This file is part of WebFPVLeaderboard.
+ * Agents use the JSON API; this is the same store for a human. The page
+ * is served at /bugs on a board of its own and at /board/bugs on the VM,
+ * so every request is resolved against the page's own directory, never
+ * the site root.
  *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * A board admin who signed in on the board page reads the inbox without a
+ * second secret (bugsAuthorized in src/server.js): the two pages share an
+ * origin, so the sign in is already in this tab's sessionStorage. A token
+ * typed into the box wins, because whoever pasted it means to use it.
+ *
+ * This file is part of the Paraguayan Drone Combat Simulator.
+ *
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
+ *
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY, without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-
 import { str } from './strings/index.js';
+import { ADMIN_TOKEN_KEY, BUGS_TOKEN_KEY, moveRenamedKeys } from './keys.js';
 
-/* Static sentences in the markup carry data-str keys; filled here so the
- * page stays greppable and the copy lives in one table. */
-for (const node of document.querySelectorAll('[data-str]')) {
-  node.textContent = str(node.dataset.str);
+moveRenamedKeys(() => sessionStorage);
+
+/* The markup's fixed sentences carry data-str keys; the copy lives in the
+ * string table. */
+for (const holder of document.querySelectorAll('[data-str]')) {
+  holder.textContent = str(holder.dataset.str);
 }
 
-const TOKEN_KEY = 'webfpv.bugs.token';
+const $ = (id) => document.getElementById(id);
+const pageDir = new URL('./', document.baseURI);
+const api = (path) => new URL(path, pageDir).href;
 
-function el(tag, cls, text) {
+/* An element with an optional class and children (nodes or text). */
+function make(tag, cls, ...children) {
   const n = document.createElement(tag);
   if (cls) {
     n.className = cls;
   }
-  if (text != null) {
-    n.textContent = text;
-  }
+  n.append(...children);
   return n;
 }
 
-/*
- * Where this page lives. Same reason as app.js: the inbox is served at /bugs
- * on Render and at /board/bugs on fdfpv.example, and a fetch of '/api/bugs' from
- * the second one leaves the board's namespace. './' against the document's own
- * address is its directory, which is /board/ there and / here.
- */
-const HERE = new URL('./', document.baseURI);
+/* sessionStorage, which a private window may refuse; then there is simply
+ * nothing kept and the box still works. */
+const session = {
+  get(key) {
+    try {
+      return sessionStorage.getItem(key) || '';
+    } catch {
+      return '';
+    }
+  },
+  put(key, value) {
+    try {
+      if (value) {
+        sessionStorage.setItem(key, value);
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    } catch {
+      /* Refused; nothing to keep. */
+    }
+  },
+};
 
-function here(path) {
-  return new URL(path, HERE).href;
+const typedToken = () => $('token').value.trim();
+
+function requestHeaders() {
+  const token = typedToken() || session.get(ADMIN_TOKEN_KEY);
+  return token
+    ? { 'content-type': 'application/json', authorization: str('bugs.bearer', { t: token }) }
+    : { 'content-type': 'application/json' };
 }
 
-function token() {
-  return document.getElementById('token').value.trim();
-}
-
-/*
- * THE SIGN IN FROM THE BOARD COUNTS HERE TOO.
- *
- * An admin of the board reads this inbox without a second secret: see
- * bugsAuthorized in src/server.js. This page and the board are the same
- * origin, so the token the Admin panel kept is already in this tab's
- * sessionStorage and there is nothing to pass between them.
- *
- * The typed token still wins when there is one, because somebody who has
- * gone to the trouble of pasting a token in the box means to use it.
- */
-const ADMIN_KEY = 'webfpv.board.admin.v1';
-
-function adminToken() {
-  try {
-    return sessionStorage.getItem(ADMIN_KEY) || '';
-  } catch (e) {
-    /* Private mode. The box is still there. */
-    return '';
-  }
-}
-
-function headers() {
-  const t = token() || adminToken();
-  const h = { 'content-type': 'application/json' };
-  if (t) {
-    h.authorization = str('bugs.bearer', { t });
-  }
-  return h;
-}
-
-async function readJson(res) {
-  const text = await res.text();
+/* The JSON body, or an Error carrying the board's own sentence. */
+async function answerOf(response) {
+  const text = await response.text();
   let body = null;
   try {
     body = text ? JSON.parse(text) : null;
-  } catch (e) {
+  } catch {
     body = null;
   }
-  if (!res.ok) {
-    throw new Error((body && body.error) || text || str('app.the_board_answered', { status: res.status }));
+  if (!response.ok) {
+    throw new Error(body?.error || text || str('app.the_board_answered', { status: response.status }));
   }
   return body;
 }
 
-function when(iso) {
+async function call(path, init = {}) {
+  return answerOf(await fetch(api(path), { ...init, headers: requestHeaders() }));
+}
+
+function localTime(iso) {
   if (!iso) {
     return '';
   }
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) {
-    return String(iso);
-  }
-  return d.toLocaleString();
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? String(iso) : at.toLocaleString();
 }
 
-const state = { bugs: [], current: null };
+/* Flight feel reports are filed with kind `feel` and read as feedback. */
+const kindName = (kind) => (kind === 'feel' ? 'feedback' : kind);
 
-/*
- * A feel report is feedback, not a defect, and the inbox says so. Every
- * other kind reads as itself; only feel gets renamed, because "feel" on a
- * list row reads like a typo where "feedback" reads like what it is.
- */
-function kindLabel(kind) {
-  return kind === 'feel' ? 'feedback' : kind;
+const inbox = { tickets: [], open: null };
+
+function showError(err) {
+  $('err').textContent = err ? err.message || String(err) : '';
 }
 
-function paintList() {
-  const host = document.getElementById('list');
-  host.textContent = '';
-  if (!state.bugs.length) {
-    host.append(el('div', 'empty', str('bugs.no_tickets_in_this_filter')));
+function drawList() {
+  const list = $('list');
+  list.textContent = '';
+  if (inbox.tickets.length === 0) {
+    list.append(make('div', 'empty', str('bugs.no_tickets_in_this_filter')));
     return;
   }
-  for (const b of state.bugs) {
-    const row = el('button', state.current && state.current.id === b.id ? str('bugs.ticket_on') : 'ticket');
+  for (const t of inbox.tickets) {
+    const row = make('button', 'ticket',
+      make('div', 'id', t.id),
+      make('div', 'title', t.title),
+      make('div', 'meta',
+        make('span', t.kind === 'feel' ? 'kind feel' : 'kind', kindName(t.kind)),
+        str('bugs.text', { reporter: t.reporter, v2: t.map ? ` · ${t.map}` : '' })));
     row.type = 'button';
-    row.append(el('div', 'id', b.id));
-    row.append(el('div', 'title', b.title));
-    const meta = el('div', 'meta');
-    meta.append(el('span', b.kind === 'feel' ? 'kind feel' : 'kind', kindLabel(b.kind)));
-    meta.append(document.createTextNode(str('bugs.text', { reporter: b.reporter, v2: b.map ? ` · ${b.map}` : '' })));
-    row.append(meta);
-    row.addEventListener('click', () => openTicket(b.id));
-    host.append(row);
+    /* A class name, not copy: it once came from the string table and the
+     * Spanish table spelled it "ticket en", which no rule matches. */
+    row.classList.toggle('on', inbox.open?.id === t.id);
+    row.addEventListener('click', () => openTicket(t.id));
+    list.append(row);
   }
 }
 
-function block(title, body) {
-  const wrap = el('div', 'block');
-  wrap.append(el('h3', null, title));
-  const p = el('p');
-  p.textContent = body || '(none)';
-  wrap.append(p);
-  return wrap;
+function section(title, text) {
+  const p = make('p');
+  p.textContent = text || '(none)';
+  return make('div', 'block', make('h3', null, title), p);
 }
 
 /*
- * THE SCREENSHOTS, fetched with the same bearer header as the ticket and
- * shown from blob addresses. An <img src> pointing at the API would go out
- * with no header and be refused, which is the point: tickets are private.
- * Each thumbnail is a link to its own blob, so a click opens it full size
- * in a tab of its own. The blobs are let go when the sheet is repainted.
+ * Screenshots come with the bearer header, which a bare <img src> cannot
+ * send, so each is fetched and shown from a blob URL. The URLs are freed
+ * when the sheet is redrawn.
  */
-let shotUrls = [];
+let blobUrls = [];
 
-function releaseShots() {
-  for (const u of shotUrls) {
-    URL.revokeObjectURL(u);
-  }
-  shotUrls = [];
+function freeBlobs() {
+  blobUrls.forEach((u) => URL.revokeObjectURL(u));
+  blobUrls = [];
 }
 
-function paintShots(t) {
-  const wrap = el('div', 'block');
-  wrap.append(el('h3', null, str('bugs.images')));
-  const row = el('div', 'shots');
-  wrap.append(row);
-  for (const img of t.images) {
-    const label = str('bugs.image_n', { n: img.n });
-    const link = el('a', 'shot');
-    link.target = '_blank';
-    link.title = label;
-    link.append(el('span', 'shot-label', label));
-    row.append(link);
-    fetch(here(`api/bugs/${encodeURIComponent(t.id)}/images/${img.n}`), { headers: headers() })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(str('app.the_board_answered', { status: res.status }));
-        }
-        return res.blob();
-      })
-      .then((blob) => {
-        if (state.current !== t) {
-          return;
-        }
-        const u = URL.createObjectURL(blob);
-        shotUrls.push(u);
-        link.href = u;
-        const pic = document.createElement('img');
-        pic.src = u;
-        pic.alt = label;
-        link.prepend(pic);
-      })
-      .catch((e) => {
-        link.append(el('span', 'shot-err', e.message || String(e)));
-      });
-  }
-  return wrap;
+function screenshot(t, img) {
+  const label = str('bugs.image_n', { n: img.n });
+  const link = make('a', 'shot', make('span', 'shot-label', label));
+  link.target = '_blank';
+  link.title = label;
+  fetch(api(`api/bugs/${encodeURIComponent(t.id)}/images/${img.n}`), { headers: requestHeaders() })
+    .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(str('app.the_board_answered', { status: res.status })))))
+    .then((blob) => {
+      if (inbox.open !== t) {
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      blobUrls.push(url);
+      link.href = url;
+      const pic = document.createElement('img');
+      pic.src = url;
+      pic.alt = label;
+      link.prepend(pic);
+    })
+    .catch((err) => link.append(make('span', 'shot-err', err.message || String(err))));
+  return link;
 }
 
-function paintSheet() {
-  const host = document.getElementById('sheet');
-  host.textContent = '';
-  releaseShots();
-  const t = state.current;
+const NEXT_STATUSES = () => [
+  ['in_progress', str('bugs.in_progress')],
+  ['fixed', 'Fixed'],
+  ['wontfix', str('bugs.won_t_fix')],
+  ['duplicate', 'Duplicate'],
+  ['open', 'Reopen'],
+];
+
+function drawSheet() {
+  const sheet = $('sheet');
+  sheet.textContent = '';
+  freeBlobs();
+  const t = inbox.open;
   if (!t) {
-    host.append(el('div', 'empty', str('bugs.pick_a_ticket')));
+    sheet.append(make('div', 'empty', str('bugs.pick_a_ticket')));
     return;
   }
-  const badges = el('div', 'badges');
-  badges.append(el('span', `badge ${t.status}`, t.status.replace('_', ' ')));
-  badges.append(el('span', t.kind === 'feel' ? 'badge feel' : 'badge', kindLabel(t.kind)));
+  const badges = make('div', 'badges',
+    make('span', `badge ${t.status}`, t.status.replace('_', ' ')),
+    make('span', t.kind === 'feel' ? 'badge feel' : 'badge', kindName(t.kind)));
   if (t.map) {
-    badges.append(el('span', 'badge', t.map));
+    badges.append(make('span', 'badge', t.map));
   }
-  host.append(el('div', 'kicker', t.id));
-  host.append(el('h2', null, t.title));
-  host.append(badges);
-  host.append(el('p', 'meta', str('bugs.text_2', { reporter: t.reporter, when: when(t.submittedUtc) })));
-  host.append(block(str('bugs.what_happened'), t.what));
-  host.append(block('Expected', t.expected));
-  host.append(block('Steps', t.steps));
-  host.append(block('Resolution', t.resolution));
-  if (t.images && t.images.length) {
-    host.append(paintShots(t));
+  sheet.append(
+    make('div', 'kicker', t.id),
+    make('h2', null, t.title),
+    badges,
+    make('p', 'meta', str('bugs.text_2', { reporter: t.reporter, when: localTime(t.submittedUtc) })),
+    section(str('bugs.what_happened'), t.what),
+    section('Expected', t.expected),
+    section('Steps', t.steps),
+    section('Resolution', t.resolution),
+  );
+  if (t.images?.length) {
+    sheet.append(make('div', 'block', make('h3', null, str('bugs.images')),
+      make('div', 'shots', ...t.images.map((img) => screenshot(t, img)))));
   }
-  const ctx = el('div', 'block');
-  ctx.append(el('h3', null, str('bugs.context')));
-  const pre = el('pre', 'ctx', JSON.stringify(t.context || {}, null, 2));
-  ctx.append(pre);
-  host.append(ctx);
-  const resolution = document.createElement('textarea');
-  resolution.placeholder = str('bugs.what_you_did_for_the_next');
-  resolution.value = t.resolution || '';
-  const actions = el('div', 'actions');
-  const statuses = [
-    ['in_progress', str('bugs.in_progress')],
-    ['fixed', 'Fixed'],
-    ['wontfix', str('bugs.won_t_fix')],
-    ['duplicate', 'Duplicate'],
-    ['open', 'Reopen'],
-  ];
-  for (const [id, label] of statuses) {
-    const b = el('button', id === 'fixed' ? 'primary' : '', label);
-    b.type = 'button';
-    b.addEventListener('click', () => saveTicket(id, resolution.value));
-    actions.append(b);
+  sheet.append(make('div', 'block', make('h3', null, str('bugs.context')),
+    make('pre', 'ctx', JSON.stringify(t.context || {}, null, 2))));
+  const note = document.createElement('textarea');
+  note.placeholder = str('bugs.what_you_did_for_the_next');
+  note.value = t.resolution || '';
+  const actions = make('div', 'actions');
+  for (const [status, label] of NEXT_STATUSES()) {
+    const button = make('button', status === 'fixed' ? 'primary' : '', label);
+    button.type = 'button';
+    button.addEventListener('click', () => mark(status, note.value));
+    actions.append(button);
   }
-  host.append(el('h3', null, str('bugs.update')));
-  host.append(resolution);
-  host.append(actions);
+  sheet.append(make('h3', null, str('bugs.update')), note, actions);
 }
 
 async function loadList() {
-  const err = document.getElementById('err');
-  err.textContent = '';
-  const status = document.getElementById('status').value;
-  const kind = document.getElementById('kind').value;
+  showError(null);
+  const query = new URLSearchParams();
+  for (const id of ['status', 'kind']) {
+    if ($(id).value) {
+      query.set(id, $(id).value);
+    }
+  }
   try {
-    const qs = new URLSearchParams();
-    if (status) {
-      qs.set('status', status);
+    inbox.tickets = (await call(`api/bugs?${query}`)).bugs || [];
+    if (inbox.open && !inbox.tickets.some((t) => t.id === inbox.open.id)) {
+      inbox.open = null;
     }
-    if (kind) {
-      qs.set('kind', kind);
-    }
-    const res = await fetch(here(`api/bugs?${qs.toString()}`), { headers: headers() });
-    const body = await readJson(res);
-    state.bugs = body.bugs || [];
-    if (state.current && !state.bugs.some((b) => b.id === state.current.id)) {
-      state.current = null;
-    }
-    paintList();
-    paintSheet();
-  } catch (e) {
-    err.textContent = e.message || String(e);
-    state.bugs = [];
-    paintList();
+    drawList();
+    drawSheet();
+  } catch (err) {
+    showError(err);
+    inbox.tickets = [];
+    drawList();
   }
 }
 
 async function openTicket(id) {
-  const err = document.getElementById('err');
-  err.textContent = '';
+  showError(null);
   try {
-    const res = await fetch(here(`api/bugs/${encodeURIComponent(id)}`), { headers: headers() });
-    state.current = await readJson(res);
-    paintList();
-    paintSheet();
-  } catch (e) {
-    err.textContent = e.message || String(e);
+    inbox.open = await call(`api/bugs/${encodeURIComponent(id)}`);
+    drawList();
+    drawSheet();
+  } catch (err) {
+    showError(err);
   }
 }
 
-async function saveTicket(status, resolution) {
-  const err = document.getElementById('err');
-  err.textContent = '';
-  if (!state.current) {
+async function mark(status, resolution) {
+  showError(null);
+  if (!inbox.open) {
     return;
   }
   try {
-    const res = await fetch(here(`api/bugs/${encodeURIComponent(state.current.id)}`), {
+    inbox.open = await call(`api/bugs/${encodeURIComponent(inbox.open.id)}`, {
       method: 'POST',
-      headers: headers(),
       body: JSON.stringify({ status, resolution }),
     });
-    state.current = await readJson(res);
     await loadList();
-    paintSheet();
-  } catch (e) {
-    err.textContent = e.message || String(e);
+    drawSheet();
+  } catch (err) {
+    showError(err);
   }
 }
 
-function restoreToken() {
-  try {
-    const stored = sessionStorage.getItem(TOKEN_KEY) || '';
-    if (stored) {
-      document.getElementById('token').value = stored;
-    }
-  } catch (e) {
-    /* Private mode. */
-  }
-}
+const keepToken = () => session.put(BUGS_TOKEN_KEY, typedToken());
 
-function rememberToken() {
-  try {
-    const value = token();
-    if (value) {
-      sessionStorage.setItem(TOKEN_KEY, value);
-    } else {
-      sessionStorage.removeItem(TOKEN_KEY);
-    }
-  } catch (e) {
-    /* Private mode. */
-  }
+const kept = session.get(BUGS_TOKEN_KEY);
+if (kept) {
+  $('token').value = kept;
 }
-
-restoreToken();
-document.getElementById('reload').addEventListener('click', () => {
-  rememberToken();
+$('reload').addEventListener('click', () => {
+  keepToken();
   loadList();
 });
-document.getElementById('status').addEventListener('change', () => {
-  rememberToken();
-  loadList();
-});
-document.getElementById('kind').addEventListener('change', () => {
-  rememberToken();
-  loadList();
-});
-document.getElementById('token').addEventListener('change', rememberToken);
+for (const id of ['status', 'kind']) {
+  $(id).addEventListener('change', () => {
+    keepToken();
+    loadList();
+  });
+}
+$('token').addEventListener('change', keepToken);
 loadList();

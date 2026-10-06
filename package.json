@@ -22,6 +22,7 @@
     "scripts:selftest": "node scripts/scripts-selftest.js",
     "client:golden": "node tests/client-golden.js",
     "client:check": "node tests/client-check.js",
+    "client:keys": "node tests/client-keys.js",
     "wing:e2e": "FDFPV_BOARD=. node vendor/fdfpv/scripts/wing-e2e.js",
     "admin:hash": "node scripts/admin-hash.js"
   },
