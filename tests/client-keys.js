@@ -60,19 +60,23 @@ class FakeStorage {
 }
 
 console.log('\nrenamed keys');
+const pairs = Object.values(RENAMED).flat();
 check('every rename goes from a webfpv name to an fdfpv name',
-  RENAMED.every(([from, to]) => from.startsWith('webfpv.') && to.startsWith('fdfpv.')));
+  pairs.every(([from, to]) => from.startsWith('webfpv.') && to.startsWith('fdfpv.')));
 
-const old = Object.fromEntries(RENAMED.map(([from], i) => [from, `value-${i}`]));
-const store = new FakeStorage({ ...old, unrelated: 'stays' });
-moveRenamedKeys(() => store);
-check('each value is under its new name',
-  RENAMED.every(([, to], i) => store.getItem(to) === `value-${i}`), store.snapshot());
-check('and no old name is left', RENAMED.every(([from]) => store.getItem(from) === null), store.snapshot());
-check('other keys are untouched', store.getItem('unrelated') === 'stays');
-const once = store.snapshot();
-moveRenamedKeys(() => store);
-check('a second run changes nothing', store.snapshot() === once);
+for (const kind of Object.keys(RENAMED)) {
+  const list = RENAMED[kind];
+  const old = Object.fromEntries(list.map(([from], i) => [from, `value-${i}`]));
+  const store = new FakeStorage({ ...old, unrelated: 'stays' });
+  moveRenamedKeys(() => store, kind);
+  check(`${kind}: each value is under its new name`,
+    list.every(([, to], i) => store.getItem(to) === `value-${i}`), store.snapshot());
+  check(`${kind}: and no old name is left`, list.every(([from]) => store.getItem(from) === null), store.snapshot());
+  check(`${kind}: other keys are untouched`, store.getItem('unrelated') === 'stays');
+  const once = store.snapshot();
+  moveRenamedKeys(() => store, kind);
+  check(`${kind}: a second run changes nothing`, store.snapshot() === once);
+}
 
 const both = new FakeStorage({ a: 'old', b: 'new' });
 moveKey(both, 'a', 'b');
@@ -91,7 +95,7 @@ let threw = false;
 try {
   moveRenamedKeys(() => {
     throw new Error('SecurityError');
-  });
+  }, 'local');
   moveKey({ getItem() { throw new Error('denied'); } }, 'a', 'b');
 } catch {
   threw = true;

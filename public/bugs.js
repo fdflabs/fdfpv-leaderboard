@@ -29,7 +29,7 @@
 import { str } from './strings/index.js';
 import { ADMIN_TOKEN_KEY, BUGS_TOKEN_KEY, moveRenamedKeys } from './keys.js';
 
-moveRenamedKeys(() => sessionStorage);
+moveRenamedKeys(() => sessionStorage, 'session');
 
 /* The markup's fixed sentences carry data-str keys; the copy lives in the
  * string table. */
