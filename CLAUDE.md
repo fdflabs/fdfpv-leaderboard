@@ -12,6 +12,27 @@ The three repositories are one product. `fdflabs/fdfpv` holds the simulator and 
 
 **Licence is GPLv3.** Every file gets a header. Do not add a dependency with an incompatible licence.
 
+**The GPLv3 header names this project, never the upstream.** A new file, or a file rewritten so that none of WebFPVSimulator-LeaderBoard's code is left in it, carries the simulator's header, the one in its `CLAUDE.md`, in the file's own comment syntax:
+
+```
+This file is part of the Paraguayan Drone Combat Simulator.
+
+The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
+
+The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY, without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
+```
+
+A file that still holds upstream code keeps its existing header ("WebFPVLeaderboard", "the WebFPVSimulator leaderboard") untouched until that code is rewritten: GPLv3 sections 4 and 5 require those notices to travel with the code. Never copy upstream code into a new file; write it fresh. `~/Desktop/fdfpv-loop/upstream/board-share.sh` measures what is left. The README and NOTICE credit stays until it says none is.
+
 **One runtime dependency, `pg`, and it is the only one.** The page has none at all: no framework, no bundler, no build step. Adding one needs an argument first.
 
 **The page's styles are inline in the HTML.** Same reason as the simulator's: the styling must not depend on a server's MIME table.
