@@ -1,269 +1,277 @@
 /*
- * server.js: the public board.
+ * server.js: the board's HTTP service, a static page and a JSON API.
  *
- * A static page and a small JSON API. The page lists every published
- * track. Expanding one shows its times. Fly opens the simulator in
- * another tab with ?share=id, which is the only link the two sites
- * need. Publish and post-time are the writes. Testers also POST bug
- * tickets here; agents GET them.
+ * The page lists every published track with its times; Fly opens the
+ * simulator with ?share=<id>, the one link between the two sites. The
+ * writes are a publish, a time, a card animation, a freestyle run, a
+ * name claim, a bug report and a statistics event. The paths, status
+ * codes, bodies and refusal sentences here are what the simulator, the
+ * builder, the landing page and the board's own page are written
+ * against; tests/server-golden.js pins them.
  *
- * One person can sign in: an address on the whitelist in src/admin.js,
- * which is what the Admin button on the page opens. That is the only
- * credential this API reads, it is never a cookie, and it exists because
- * taking a track off the board used to mean curl and a token.
+ * Nothing is ambiently authenticated and no cookie is ever set, which is
+ * why reflecting any origin in CORS grants nothing curl does not already
+ * have. The one credential is a bearer token the Admin panel attaches by
+ * hand (or BOARD_ADMIN_TOKEN, for scripts); see cors() and src/admin.js.
  *
- * This file is part of WebFPVLeaderboard.
+ * This file is part of the Paraguayan Drone Combat Simulator.
  *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
  *
- * WebFPVLeaderboard is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY, without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-
-import http from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, dirname, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { timingSafeEqual } from 'node:crypto';
-import { openStore } from './store.js';
+import { readFile } from 'node:fs/promises';
+import http from 'node:http';
+import {
+  dirname, extname, join, normalize, relative, resolve, sep,
+} from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
+import { verifyTimeSignature } from '../vendor/fdfpv/src/share/identity.js';
 import {
   adminCount, checkPassword, mintSession, normaliseEmail, readSession, PASSWORD_MAX,
 } from './admin.js';
+import { attachLive } from './live.js';
+import { keyLinkMessage, nameClaimMessage, verifyKeySignature } from './pilotkeys.js';
 import {
-  inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectAuth, inspectGif, inspectRun,
-  inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
+  sourceKey, sponsorLink, sponsorList, sponsorName,
+} from './sponsors.js';
+import { openStore } from './store.js';
+import {
+  inspectAuth, inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectGif,
+  inspectRun, inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
   BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_BUG_IMAGE_BYTES, MAX_BUG_IMAGES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
   TIME_ID_RE, TRACK_ID_RE,
 } from './validate.js';
-import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
-import { verifyTimeSignature } from '../vendor/fdfpv/src/share/identity.js';
-import { keyLinkMessage, nameClaimMessage, verifyKeySignature } from './pilotkeys.js';
-import { attachLive } from './live.js';
-import { sourceKey, sponsorLink, sponsorList, sponsorName } from './sponsors.js';
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const publicDir = join(root, 'public');
-const port = Number(process.env.PORT || 3180);
-/* Every interface by default, which is what Render needs. Behind a proxy
- * on the same machine, as on the owner's VM, it is 127.0.0.1, so the only
- * way in is through the proxy that sets the forwarded headers
- * BOARD_TRUST_PROXY believes. */
-const listenHost = process.env.BOARD_HOST || '0.0.0.0';
-const simOrigin = (process.env.SIM_ORIGIN || 'http://127.0.0.1:8000').replace(/\/+$/, '');
-const boardPublic = (process.env.BOARD_PUBLIC_ORIGIN || '').replace(/\/+$/, '');
+/* ================================================================== */
+/* Configuration                                                       */
+/* ================================================================== */
 
-const MIME = new Map([
-  ['.html', 'text/html; charset=utf-8'],
-  ['.js', 'text/javascript; charset=utf-8'],
-  ['.json', 'application/json; charset=utf-8'],
-  ['.svg', 'image/svg+xml'],
-  ['.png', 'image/png'],
-  /* The credits roll's pilot faces are photographs, so they are JPEG.
-     Without a row here they go out as application/octet-stream and the
-     one page that shows a person's face shows four broken images. */
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-  ['.ico', 'image/x-icon'],
-]);
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const publicDir = resolve(repoRoot, 'public');
+const env = process.env;
+const port = Number(env.PORT || 3180);
+/* All interfaces for a host like Render; 127.0.0.1 behind a proxy on the
+ * same machine (the owner's VM), so the only way in sets the forwarded
+ * headers BOARD_TRUST_PROXY believes. */
+const listenHost = env.BOARD_HOST || '0.0.0.0';
+const trimSlashes = (origin) => origin.replace(/\/+$/, '');
+const simOrigin = trimSlashes(env.SIM_ORIGIN || 'http://127.0.0.1:8000');
+const publicOrigin = trimSlashes(env.BOARD_PUBLIC_ORIGIN || '');
+const trustProxy = () => env.BOARD_TRUST_PROXY === '1';
+const bugsToken = String(env.BUGS_TOKEN || '');
+/* A way past an edit key for scripts, which have no browser to sign in
+ * from (the simulator's scripts/boardgif.js holds it). Unset, no script
+ * can remove or replace anything; a signed in admin still can. */
+const adminToken = String(env.BOARD_ADMIN_TOKEN || '');
+
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  /* The credits' pilot photographs; without these they go out as
+   * octet-stream and show as broken images. */
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.ico': 'image/x-icon',
+};
 
 /*
- * WHAT IS RUNNING, for GET /api/version. The simulator's
- * deploy/vm/deploy-board.sh writes REVISION beside src/ before it restarts
- * the board, "<board commit> vendor/fdfpv <simulator commit>", and it is
- * read once, here, so the answer names the code this process loaded and
- * not whatever a later deploy copied over it without a restart. A checkout
- * or a host that deploys some other way has no file, and both are null. A
- * file that is there but is not that line stops the board at start: a
- * deploy that wrote it wrong is a bug to see, not a version to guess.
+ * What is running, for GET /api/version: the simulator's
+ * deploy/vm/deploy-board.sh writes REVISION ("<board commit> vendor/fdfpv
+ * <simulator commit>") before restarting the board, and it is read once so
+ * the answer names the code this process loaded. No file (a checkout, or
+ * another kind of host) answers nulls. A file that is not that line stops
+ * the board at start: a deploy that wrote it wrong is a bug to see.
  */
-async function readRevision() {
+async function loadRevision() {
   let text;
   try {
-    text = await readFile(join(root, 'REVISION'), 'utf8');
-  } catch (e) {
-    if (e.code === 'ENOENT') {
+    text = await readFile(join(repoRoot, 'REVISION'), 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
       return { commit: null, fdfpv: null };
     }
-    throw e;
+    throw err;
   }
-  const m = text.trim().match(/^([0-9a-f]{40}) vendor\/fdfpv ([0-9a-f]{40})$/);
-  if (!m) {
+  const parts = text.trim().match(/^([0-9a-f]{40}) vendor\/fdfpv ([0-9a-f]{40})$/);
+  if (!parts) {
     throw new Error(`REVISION is not "<commit> vendor/fdfpv <commit>": ${JSON.stringify(text.slice(0, 120))}`);
   }
-  return { commit: m[1], fdfpv: m[2] };
+  return { commit: parts[1], fdfpv: parts[2] };
 }
-const revision = await readRevision();
 
+const revision = await loadRevision();
 const store = await openStore();
-const bugsToken = String(process.env.BUGS_TOKEN || '');
-/*
- * A way past an edit key, and there are two things it opens.
- *
- * It exists because the rooms already on the board were published from
- * browsers nobody still has, and the alternative to a token was leaving
- * them with an empty plan for ever: that is the animation upload. Taking a
- * track off the board is the other, and it has no edit key path at all.
- *
- * IT IS NO LONGER THE ONLY WAY PAST, and that changed with the admin login
- * in src/admin.js. Unset used to mean nothing on the board could ever be
- * removed; now it means no SCRIPT can remove anything, and a person on the
- * whitelist still can once they have signed in. That is the point of the
- * login, and it is written here because the old sentence was the kind
- * somebody relies on without checking whether it is still true.
- *
- * It stays because a script has no browser: scripts/boardgif.js in the
- * simulator's repository holds this and nothing else.
- */
-const adminToken = String(process.env.BOARD_ADMIN_TOKEN || '');
 
-/* ------------------------------------------------------------------ */
-/* Site statistics                                                     */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* Answers                                                             */
+/* ================================================================== */
 
 /*
- * HOW MANY ARE FLYING RIGHT NOW, and it is the one number on the statistics
- * page that is not a stored counter.
- *
- * A flying tab sends a heartbeat once a minute carrying a random handle it
- * made at page load. This map holds those handles for three minutes and
- * counts them. It is IN MEMORY AND NOWHERE ELSE: no table, no file, no
- * column, nothing that survives a restart, which is the point. A number
- * called "now" does not need a history and a history of who was flying when
- * is exactly the thing this page promises not to keep.
- *
- * It is process local, so on a host running two instances each would count
- * its own half, and on Render's free tier it starts empty after a sleep.
- * Both are undercounts of a number that is decoration on a page of counters,
- * and both are better than a shared table keyed by a per browser handle.
+ * Every response reflects the asking origin. That is the same grant as
+ * '*' only because nothing here is ambient: no cookie, no HTTP auth, and
+ * access-control-allow-credentials is never sent. The admin token is
+ * attached by the board page's own script, never by the browser on another
+ * site's behalf. Add a cookie and this has to name one origin instead.
  */
-const FLYING_WINDOW_MS = 3 * 60 * 1000;
-const FLYING_MAX_TABS = 4096;
-const flyingTabs = new Map();
+function allowOrigin(req, res) {
+  res.setHeader('access-control-allow-origin', req.headers.origin || '*');
+  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  res.setHeader('access-control-allow-headers', 'content-type, authorization');
+  res.setHeader('vary', 'origin');
+}
 
-function sweepFlying(now) {
-  for (const [tab, at] of flyingTabs) {
-    if (now - at >= FLYING_WINDOW_MS) {
-      flyingTabs.delete(tab);
-    }
+function reply(res, status, body, type = 'application/json; charset=utf-8') {
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
+  res.end(typeof body === 'string' ? body : JSON.stringify(body));
+}
+
+const refuse = (res, status, error) => reply(res, status, { error });
+
+function replyBytes(res, headers, bytes) {
+  res.writeHead(200, { ...headers, 'content-length': bytes.length });
+  res.end(bytes);
+}
+
+/* A refusal this code raises on purpose, with a sentence fit for a
+ * stranger; anything else becomes a bare 500. `close` marks a body that
+ * was too big to drain, so the socket cannot carry another request. */
+class Refusal extends Error {
+  constructor(status, message, { close = false } = {}) {
+    super(message);
+    this.status = status;
+    this.close = close;
   }
 }
 
-function markFlying(tab) {
-  const now = Date.now();
-  /* A cap as well as a sweep, because the sweep only runs on a read and a
-   * board nobody is looking at still takes heartbeats. Dropping the oldest
-   * is right: it is the one closest to expiring anyway. */
-  if (flyingTabs.size >= FLYING_MAX_TABS) {
-    sweepFlying(now);
-    if (flyingTabs.size >= FLYING_MAX_TABS) {
-      flyingTabs.delete(flyingTabs.keys().next().value);
+const UNUSABLE_ADDRESS = 'That address is not usable.';
+const TRACK_GONE = 'That track is not on the board.';
+const NOT_JSON = 'That request was not JSON.';
+const NOT_AN_OBJECT = 'That request was not a JSON object.';
+
+/* ================================================================== */
+/* Reading requests                                                    */
+/* ================================================================== */
+
+/*
+ * The body as text, bounded. Past the limit the rest is read and thrown
+ * away before refusing: killing the socket showed the client a reset
+ * instead of the message, and leaving the tail unread broke the next
+ * request on a kept-alive connection (a browser's, or Caddy's pool on the
+ * VM). Draining stops at four times the limit; past that the refusal goes
+ * out at once and the connection closes.
+ *
+ * 660 kB by default, for a publish: above validate.js's document cap plus
+ * the envelope it travels in, so a track that would pass is never refused
+ * here for its size.
+ */
+const DRAIN_FACTOR = 4;
+
+async function bodyText(req, limit = 660_000, tooBig = 'That track is too large to publish.') {
+  const kept = [];
+  let seen = 0;
+  for await (const chunk of req) {
+    seen += chunk.length;
+    if (seen <= limit) {
+      kept.push(chunk);
+    } else if (seen > limit * DRAIN_FACTOR) {
+      req.pause();
+      throw new Refusal(413, tooBig, { close: true });
     }
   }
-  flyingTabs.delete(tab);
-  flyingTabs.set(tab, now);
+  if (seen > limit) {
+    throw new Refusal(413, tooBig);
+  }
+  return Buffer.concat(kept).toString('utf8');
 }
 
-function flyingNow() {
-  const now = Date.now();
-  sweepFlying(now);
-  return flyingTabs.size;
+/* { json } or { unreadable: parser message }; size refusals propagate.
+ * Routes word an unreadable body their own way. */
+async function bodyJson(req, limit, tooBig) {
+  const text = await bodyText(req, limit, tooBig);
+  try {
+    return { json: JSON.parse(text) };
+  } catch (err) {
+    return { unreadable: err.message };
+  }
 }
 
-/*
- * The read is cached for twenty seconds, and it is the second response on
- * this board that is not no-store.
- *
- * Every visitor on the statistics tab polls this every thirty seconds while
- * they are looking at it, and the answer is four aggregate queries over
- * tables that only change by counting. Twenty seconds is under the poll
- * interval, so a reader still sees their own effect on the numbers within
- * one tick, and it is enough that a hundred readers cost the database what
- * one does.
- *
- * STATS_WINDOW_DAYS is the chart's width and the only window this route
- * offers. A `?days=` would be a second thing to validate and a second cache
- * key for a page that asks for one number.
- */
-const STATS_CACHE_MS = 20_000;
-const STATS_WINDOW_DAYS = 30;
-let statsCache = { at: 0, body: '' };
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const stringOr = (v, fallback = '') => (typeof v === 'string' ? v : fallback);
 
-/*
- * How many events one address may post in ten minutes.
- *
- * A flying tab spends one a minute, so a PILOT never gets near this. A
- * ROOM does: a club night is thirty pilots behind one public address, each
- * flushing once a minute, which is three hundred in ten minutes, and a
- * gate of two hundred would have silenced the room seven minutes in. Six
- * hundred is fifty pilots on one address, which is a big night.
- *
- * It is not the defence against a stranger inflating a public number, and
- * it is not meant to be: the bounds on a flush and the fold on every
- * dimension are, and the page says it counts what it is told. This stops a
- * script hammering the database, and nothing else.
- */
-const STATS_FLOOD_LIMIT = 600;
-
-/*
- * GLOBAL PRIVACY CONTROL, and it is honoured on the server as well as in
- * the page.
- *
- * The client checks navigator.globalPrivacyControl and sends nothing, so
- * this is the belt to that braces: a browser that sets the header without
- * exposing the property, an extension that adds it, or a page of this
- * product that has not learned to check yet. The answer is the same 204 an
- * accepted event gets, deliberately, because a different status would tell
- * a script whether the signal was seen and there is nothing here to tell.
- */
-/*
- * The sponsors, with the link each one is given, for the Admin panel.
- *
- * Admin only, and the reason is not that a slug is secret: it is printed on
- * a poster and it arrives in a query string. It is that the LIST is the set
- * of sponsors including the ones with no traffic yet, which is a commercial
- * fact rather than a public one. The per sponsor NUMBERS are public on the
- * statistics tab, deliberately, because a sponsor should be able to check
- * them without asking anybody.
- */
-function adminSponsors() {
-  return sponsorList().map((s) => ({ ...s, link: sponsorLink(simOrigin, s.slug) }));
+function pathPart(raw, pattern) {
+  try {
+    const decoded = decodeURIComponent(raw);
+    /* The shape check matters: the file store keys tracks in a plain
+     * object, so 'constructor' or '__proto__' would otherwise find
+     * something on its prototype. */
+    return pattern.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
-function privacySignalled(req) {
-  return String(req.headers['sec-gpc'] || '') === '1';
+/* The board's own origin as the asker sees it, for the page's links. The
+ * forwarded host and scheme are believed only behind a trusted proxy. */
+function boardOrigin(req) {
+  if (publicOrigin) {
+    return publicOrigin;
+  }
+  const forwarded = (name) => (trustProxy() ? req.headers[name] : undefined);
+  const firstOf = (value) => String(value).split(',')[0].trim();
+  const host = firstOf(forwarded('x-forwarded-host') || req.headers.host || `127.0.0.1:${port}`);
+  if (!/^[A-Za-z0-9.[\]:_-]+$/.test(host)) {
+    return `http://127.0.0.1:${port}`;
+  }
+  const proto = forwarded('x-forwarded-proto');
+  return `${proto && firstOf(proto) === 'https' ? 'https' : 'http'}://${host}`;
 }
 
-function bearer(req) {
+function clientAddress(req) {
+  const forwarded = trustProxy() ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+  if (forwarded) {
+    return forwarded.slice(0, 80);
+  }
+  return req.socket?.remoteAddress ? String(req.socket.remoteAddress) : 'unknown';
+}
+
+/* ================================================================== */
+/* Who is asking                                                       */
+/* ================================================================== */
+
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length > 0 && x.length === y.length && timingSafeEqual(x, y);
+}
+
+function bearerToken(req) {
   const header = String(req.headers.authorization || '');
-  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  return header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
 }
 
 /*
- * WHO IS ASKING, and there are two kinds of admin now.
- *
- * BOARD_ADMIN_TOKEN is a string in an environment. It is what
- * scripts/boardgif.js in the simulator's repository holds, and a script has
- * no browser to sign in from, so it stays exactly as it was.
- *
- * A session is a PERSON: an address on the whitelist in src/admin.js that
- * typed its password into the board's own Admin panel recently. That is the
- * one a browser can have, and it is why the board finally has an admin
- * screen rather than a curl command in the README.
- *
- * Both open the same doors. The identity is returned rather than a boolean
- * so that anything wanting to say WHO removed a track has it to hand.
+ * An admin is BOARD_ADMIN_TOKEN (a script) or a signed session (a person
+ * on the whitelist). Both open the same doors; who it was is returned so a
+ * removal can be logged against it.
  */
-function adminIdentity(req) {
-  const offered = bearer(req);
+function adminOf(req) {
+  const offered = bearerToken(req);
   if (!offered) {
     return null;
   }
@@ -274,1172 +282,699 @@ function adminIdentity(req) {
   return session ? { kind: 'session', email: session.email, expiresUtc: session.expiresUtc } : null;
 }
 
-function adminAuthorized(req) {
-  return Boolean(adminIdentity(req));
-}
-const bugHits = new Map();
-
-/*
- * The board is public and no response here is AMBIENTLY authenticated:
- * there is no cookie, no session cookie and no HTTP auth realm, and
- * access-control-allow-credentials is never sent. Reflecting the request
- * origin is therefore still the same grant as '*', which is the invariant
- * this function exists to keep.
- *
- * The admin login does not change that, and the reason is worth writing
- * down. Its token lives in the board page's own sessionStorage and is
- * attached by that page's script, by hand, to the requests that need it. A
- * browser never sends it on anybody else's behalf. So another site's script
- * calling this API gets exactly what curl gets, which is an unauthenticated
- * request, and the reflected origin hands it nothing it did not already
- * have.
- *
- * What would break the invariant is a cookie, so do not add one. The moment
- * a credential is sent by the browser rather than by the page, reflecting
- * the origin becomes a standing grant to every site on the internet, and
- * this header has to name one origin instead.
- */
-function cors(req, res) {
-  const origin = req.headers.origin || '*';
-  res.setHeader('access-control-allow-origin', origin);
-  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type, authorization');
-  res.setHeader('vary', 'origin');
-}
-
-function send(res, status, body, type = 'application/json; charset=utf-8') {
-  const payload = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, {
-    'content-type': type,
-    'cache-control': 'no-store',
-  });
-  res.end(payload);
-}
-
-function requestOrigin(req) {
-  if (boardPublic) {
-    return boardPublic;
-  }
-  const trust = process.env.BOARD_TRUST_PROXY === '1';
-  const rawHost = (trust && req.headers['x-forwarded-host']) || req.headers.host || `127.0.0.1:${port}`;
-  const host = String(rawHost).split(',')[0].trim();
-  if (!/^[A-Za-z0-9.[\]:_-]+$/.test(host)) {
-    return `http://127.0.0.1:${port}`;
-  }
-  const proto = (trust && req.headers['x-forwarded-proto'])
-    ? String(req.headers['x-forwarded-proto']).split(',')[0].trim()
-    : 'http';
-  const scheme = proto === 'https' ? 'https' : 'http';
-  return `${scheme}://${host}`;
-}
-
-function decodePathPart(raw) {
-  try {
-    return decodeURIComponent(raw);
-  } catch (e) {
-    return null;
-  }
-}
-
-/*
- * A track id out of the path, or null. The shape check is not decoration.
- * The file store keeps its tracks in a plain object, so an id of
- * 'constructor' or '__proto__' used to find something on Object.prototype:
- * the lookup came back truthy and the request went on to read a track out
- * of a function, which is a 500 rather than the 404 it should be. Every id
- * the board holds passed this same expression through inspectDocument at
- * publish time, so nothing real can fail it.
- */
-function trackIdFrom(raw) {
-  const id = decodePathPart(raw);
-  return id && TRACK_ID_RE.test(id) ? id : null;
-}
-
-function bugIdFrom(raw) {
-  const id = decodePathPart(raw);
-  return id && BUG_ID_RE.test(id) ? id : null;
-}
-
-function timeIdFrom(raw) {
-  const id = decodePathPart(raw);
-  return id && TIME_ID_RE.test(id) ? id : null;
-}
-
-function sameSecret(a, b) {
-  const left = Buffer.from(String(a));
-  const right = Buffer.from(String(b));
-  if (left.length !== right.length || left.length === 0) {
-    return false;
-  }
-  return timingSafeEqual(left, right);
-}
-
-function bugsAuthorized(req, url) {
-  if (!bugsToken) {
+/* Tickets are open when BUGS_TOKEN is unset. Otherwise the token (header
+ * or ?token=) or an admin: whoever may take a track down may read a
+ * ticket, without holding a second secret. */
+function mayReadTickets(req, url) {
+  if (!bugsToken || adminOf(req)) {
     return true;
   }
-  /* An admin of the board reads the inbox without a second secret. Somebody
-   * trusted to take a track off the board is trusted to read a bug ticket,
-   * and making them hold two strings to do one job is how one of the two
-   * ends up written down somewhere it should not be. */
-  if (adminAuthorized(req)) {
-    return true;
-  }
-  const query = url.searchParams.get('token') || '';
-  return sameSecret(bearer(req), bugsToken) || sameSecret(query, bugsToken);
+  return sameSecret(bearerToken(req), bugsToken) || sameSecret(url.searchParams.get('token') || '', bugsToken);
 }
 
-function clientIp(req) {
-  if (process.env.BOARD_TRUST_PROXY === '1') {
-    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    if (forwarded) {
-      return forwarded.slice(0, 80);
-    }
-  }
-  return req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : 'unknown';
+/* The sponsors and the link each is handed, for the Admin panel only:
+ * the list includes sponsors with no traffic yet, which is commercial,
+ * while each sponsor's numbers are public on the statistics tab. */
+function sponsorsWithLinks() {
+  return sponsorList().map((s) => ({ ...s, link: sponsorLink(simOrigin, s.slug) }));
 }
 
+/* ================================================================== */
+/* Flood gates                                                         */
+/* ================================================================== */
+
 /*
- * The flood gate, in two halves so a REJECTED post does not spend the
- * allowance: the check runs before the body is read, the record only after
- * validation passes. In one piece, eight malformed attempts (an over-long
- * title, say) locked a tester out for ten minutes without a single ticket
- * landing. Spam of invalid posts stays free, and stays harmless: it stores
- * nothing.
- *
- * `who` is the client address with the route folded into it, so a tester
- * filing bugs and a pilot posting scores do not spend each other's
- * allowance. It was written for bugs and the freestyle board is the second
- * caller: a public write with no owner and no edit key, which is the same
- * shape of exposure and wants the same gate.
- *
- * It is process local, so on a host that runs two instances or spins one
- * down it is a speed bump rather than a guarantee. What does the real work
- * on the freestyle board is that a pilot holds ONE row per map: see
- * addRunUnlocked in src/store.js.
+ * Posts per address per route in a sliding ten minutes. Checked before a
+ * body is read and spent only after it is accepted, so malformed attempts
+ * never lock out the next good one. Process local: a speed bump, not a
+ * guarantee. What actually bounds the public tables is elsewhere (one run
+ * per pilot per map, closed vocabularies for statistics).
  */
-/*
- * `limit` is an argument because the statistics route is a different shape
- * of caller: a tab that is flying sends one heartbeat a minute on purpose,
- * so eight in ten minutes would silence an honest pilot after eight
- * minutes. Its allowance is set where it is spent, at the route.
- */
-function bugFlooded(ip, limit = 8) {
+const FLOOD_WINDOW_MS = 10 * 60 * 1000;
+const floodLog = new Map();
+
+function overLimit(key, limit = 8) {
   const now = Date.now();
-  const windowMs = 10 * 60 * 1000;
-  /* The map used to keep every IP that ever posted, forever; a stale entry
-   * was only dropped when that same IP came back. Sweep the whole map once
-   * it grows, which on this board's traffic is almost never. */
-  if (bugHits.size > 256) {
-    for (const [who, times] of bugHits) {
-      if (!times.some((t) => now - t < windowMs)) {
-        bugHits.delete(who);
+  const recent = (stamps) => stamps.filter((t) => now - t < FLOOD_WINDOW_MS);
+  /* Forget quiet addresses once there are many, rather than keeping every
+   * address that ever posted. */
+  if (floodLog.size > 256) {
+    for (const [who, stamps] of floodLog) {
+      if (recent(stamps).length === 0) {
+        floodLog.delete(who);
       }
     }
   }
-  const hits = (bugHits.get(ip) || []).filter((t) => now - t < windowMs);
-  bugHits.set(ip, hits);
-  return hits.length >= limit;
+  const stamps = recent(floodLog.get(key) || []);
+  floodLog.set(key, stamps);
+  return stamps.length >= limit;
 }
 
-function recordBugHit(ip) {
-  const hits = bugHits.get(ip) || [];
-  hits.push(Date.now());
-  bugHits.set(ip, hits);
+function spend(key) {
+  floodLog.set(key, [...(floodLog.get(key) || []), Date.now()]);
 }
 
-/*
- * 660_000, up from 500_000. The publish route is the only caller that takes
- * the default, and what it carries is a document capped at MAX_DOCUMENT_CHARS
- * in validate.js, which grew when a track went from one sponsor's logo to
- * five. This has to stay above that cap plus the envelope the document
- * travels in (author, edit key, JSON string escaping), or a track that
- * validate.js would accept is refused here before anything reads it, and
- * the message would blame its size rather than this number. The other two
- * callers pass their own, much smaller, limits.
- *
- * tooBig is the message for THIS route's payload. It used to be hardcoded
- * to the publish wording, so a tester whose bug context ran long was told
- * their track was too large to publish, from a form with no track in it.
- */
-/*
- * PAST THE CAP, THE REST IS READ AND THROWN AWAY, THEN REFUSED.
- *
- * Killing the socket at the cap meant the client saw a connection reset
- * instead of the message, so an oversized publish looked like the board
- * being down. Pausing and answering at once was the next attempt, and it
- * left the unread tail on the socket: the next request on that kept alive
- * connection, from a browser or from Caddy's pool on the VM, met the tail
- * and failed, and closing the connection instead made Caddy answer 502
- * while the upload was still arriving over a real network. Draining keeps
- * nothing in memory and leaves the connection clean for the 413.
- *
- * Draining is bounded at DRAIN_FACTOR times the cap. Past that the answer
- * goes out at once with Connection: close, and whoever is streaming that
- * much garbage gets the reset they earned.
- */
-const DRAIN_FACTOR = 4;
+/* ================================================================== */
+/* Statistics state that is not stored                                 */
+/* ================================================================== */
 
-async function readBody(req, limit = 660_000, tooBig = 'That track is too large to publish.') {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size <= limit) {
-      chunks.push(chunk);
-      continue;
-    }
-    if (size > limit * DRAIN_FACTOR) {
-      req.pause();
-      const err = new Error(tooBig);
-      err.status = 413;
-      err.close = true;
-      throw err;
+/*
+ * "Flying now": each flying tab's random handle and when its last flush
+ * came, held in memory three minutes and counted. Never stored, never
+ * shared between instances; a number called "now" needs no history, and a
+ * history of who flew when is what the page promises not to keep.
+ */
+const FLYING_FOR_MS = 3 * 60 * 1000;
+const FLYING_MAX = 4096;
+const flying = new Map();
+
+function forgetLanded(now) {
+  for (const [tab, at] of flying) {
+    if (now - at >= FLYING_FOR_MS) {
+      flying.delete(tab);
     }
   }
-  if (size > limit) {
-    const err = new Error(tooBig);
-    err.status = 413;
-    throw err;
+}
+
+function sawFlying(tab) {
+  const now = Date.now();
+  /* The sweep only runs on a read, so heartbeats on an unwatched board are
+   * capped too, dropping the oldest, which was nearest expiry anyway. */
+  if (flying.size >= FLYING_MAX) {
+    forgetLanded(now);
+    if (flying.size >= FLYING_MAX) {
+      flying.delete(flying.keys().next().value);
+    }
   }
-  return Buffer.concat(chunks).toString('utf8');
+  flying.delete(tab);
+  flying.set(tab, now);
+}
+
+function flyingCount() {
+  forgetLanded(Date.now());
+  return flying.size;
 }
 
 /*
- * A report's body: 40 kB of words and context, as it always was, plus the
- * base64 of four screenshots at their cap and a data: prefix each. Derived
- * from the caps in src/validate.js rather than written as a round number,
- * so it cannot drift under them. Five and a half megabytes, which is what
- * Caddy in front of the VM passes too: it sets no body limit of its own.
+ * GET /api/stats is cached twenty seconds here and in the browser: every
+ * reader polls every thirty seconds and the answer only changes by
+ * counting, so a hundred readers cost what one does and each still sees
+ * their own effect within a tick. Thirty days is the only window.
  */
+const STATS_CACHE_MS = 20_000;
+const STATS_DAYS = 30;
+let statsCache = { at: 0, body: '' };
+
+/* A club night is thirty pilots behind one address, each flushing once a
+ * minute; this allows fifty. It stops a script hammering the database,
+ * nothing more. */
+const STATS_EVENTS_PER_WINDOW = 600;
+
+/* ================================================================== */
+/* Routes                                                              */
+/* ================================================================== */
+
+/* A bug report: 40 kB of words and context plus four screenshots at their
+ * base64 cap with a data: prefix each, derived from validate.js's caps so
+ * it cannot fall under them. */
 const BUG_BODY_MAX = 40_000 + MAX_BUG_IMAGES * (Math.ceil(MAX_BUG_IMAGE_BYTES / 3) * 4 + 64);
 
-async function handleApi(req, res, url) {
-  const path = url.pathname.replace(/\/+$/, '') || '/';
-
-  if (req.method === 'GET' && path === '/api/health') {
-    send(res, 200, { ok: true, store: store.kind });
-    return;
+async function trackGet({ res, params }, read, missing = TRACK_GONE) {
+  const id = pathPart(params[0], TRACK_ID_RE);
+  if (!id) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
   }
-
-  if (req.method === 'GET' && path === '/api/version') {
-    send(res, 200, revision);
-    return;
-  }
-
-  if (req.method === 'GET' && path === '/api/config') {
-    send(res, 200, {
-      simOrigin,
-      boardOrigin: requestOrigin(req),
-    });
-    return;
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* Signing in                                                         */
-  /* ---------------------------------------------------------------- */
-
-  /*
-   * THE ONE ROUTE ON THIS BOARD THAT READS A PASSWORD.
-   *
-   * An address off the whitelist in src/admin.js, its password, and a
-   * signed token back. The token is what the Admin panel on the board's own
-   * page then sends on the admin routes, and it expires on its own.
-   *
-   * ONE MESSAGE FOR EVERY FAILURE, deliberately. A wrong password, an
-   * address that is not an admin and an address that is not an address all
-   * answer the same sentence, so this route cannot be asked which addresses
-   * are worth attacking. checkPassword runs scrypt against a decoy record
-   * for an unknown address for the same reason, so the answers take about
-   * the same time as well as saying the same thing.
-   *
-   * Rate limited on the same gate the bug form and the freestyle board use,
-   * and recorded only on a FAILURE: an admin signing in twice in a morning
-   * is not spending an allowance, and somebody working through a word list
-   * is. Process local, so it is a speed bump rather than a guarantee; what
-   * does the real work is scrypt, which makes each guess cost tens of
-   * milliseconds whether it is made here or offline.
-   */
-  if (req.method === 'POST' && path === '/api/admin/login') {
-    const ip = clientIp(req);
-    if (bugFlooded(`admin:${ip}`)) {
-      send(res, 429, { error: 'Too many sign in attempts from here. Try again in a few minutes.' });
-      return;
-    }
-    if (!adminCount()) {
-      send(res, 503, { error: 'This board has no admin accounts.' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, 4_000, 'That sign in was too large.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: 'That request was not JSON.' });
-      return;
-    }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      send(res, 400, { error: 'That request was not a JSON object.' });
-      return;
-    }
-    const email = normaliseEmail(body.email);
-    const password = typeof body.password === 'string' ? body.password : '';
-    const who = (email && password && password.length <= PASSWORD_MAX)
-      ? checkPassword(email, password)
-      : null;
-    if (!who) {
-      recordBugHit(`admin:${ip}`);
-      send(res, 401, { error: 'That email and password do not open this board.' });
-      return;
-    }
-    const token = mintSession(who);
-    const session = readSession(token);
-    send(res, 200, {
-      token,
-      email: who,
-      expiresUtc: session ? session.expiresUtc : null,
-      sponsors: adminSponsors(),
-    });
-    return;
-  }
-
-  /*
-   * Who the caller is, if anybody. The Admin panel asks this on load, with
-   * the token it kept in sessionStorage, so a reload does not cost a second
-   * sign in and a token that has expired or been revoked is found out
-   * quietly rather than at the moment somebody tries to remove a track.
-   *
-   * It answers for BOARD_ADMIN_TOKEN too, with no address, because that
-   * identity is a string rather than a person and the panel has something
-   * honest to print either way.
-   */
-  if (req.method === 'GET' && path === '/api/admin/session') {
-    const who = adminIdentity(req);
-    if (!who) {
-      send(res, 401, { error: 'Not signed in.' });
-      return;
-    }
-    send(res, 200, {
-      email: who.email,
-      kind: who.kind,
-      expiresUtc: who.expiresUtc || null,
-      sponsors: adminSponsors(),
-    });
-    return;
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* Site statistics                                                    */
-  /* ---------------------------------------------------------------- */
-
-  /*
-   * ONE EVENT, ADDED TO A DAILY TOTAL.
-   *
-   * The whole privacy argument for this page is in what this route does not
-   * do. It does not set a cookie. It does not store an address: clientIp is
-   * read for the flood gate below and goes out of scope with the request.
-   * It does not store the tab handle a flush carries, which lives in memory
-   * for three minutes and answers one number. It does not store a
-   * timestamp finer than the day, a user agent, a referrer, a screen size,
-   * a pilot name or a track id, and there is no field in the wire format
-   * for any of them.
-   *
-   * 204 for everything it accepts, and 204 for a request that asked not to
-   * be counted, because the sender has nothing to do with either answer.
-   */
-  if (req.method === 'POST' && path === '/api/stats/events') {
-    if (privacySignalled(req)) {
-      res.writeHead(204, { 'cache-control': 'no-store' });
-      res.end();
-      return;
-    }
-    const ip = clientIp(req);
-    if (bugFlooded(`stats:${ip}`, STATS_FLOOD_LIMIT)) {
-      send(res, 429, { error: 'Too many events from here.' });
-      return;
-    }
-    let body;
-    try {
-      /* Small, because the largest honest event is about two hundred
-       * characters. text/plain arrives here as readily as JSON: a beacon
-       * cannot set a content type header and this route never reads one. */
-      body = JSON.parse(await readBody(req, 2_000, 'That event is too large.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: 'That event was not readable.' });
-      return;
-    }
-    const inspected = inspectStatsEvent(body, sourceKey);
-    if (inspected.error) {
-      send(res, 400, { error: inspected.error });
-      return;
-    }
-    /* Spent only on an event that was actually stored, the same rule the
-     * bug form follows: eight malformed posts should not lock out a pilot
-     * who then sends a good one. */
-    recordBugHit(`stats:${ip}`);
-    if (inspected.event.kind === 'flush') {
-      markFlying(inspected.event.tab);
-    }
-    /*
-     * The country comes from the edge and only when something in front of
-     * this process is trusted to set headers, exactly like the forwarded
-     * host. A client can send these headers; without BOARD_TRUST_PROXY they
-     * are ignored, so a direct instance cannot be told where its visitors
-     * are.
-     *
-     * TWO HEADERS, IN ORDER. x-fdfpv-country is the one the Worker in
-     * edge/router.js sets on purpose. cf-ipcountry is Cloudflare's own,
-     * put on every proxied request when the zone's geolocation is on, and
-     * the Worker forwards it with the rest of the headers whether or not it
-     * has learned to set the first. That is the case this fallback exists
-     * for: the Worker is deployed by hand, a push to main does not touch
-     * it, and the first day of this page counted every visitor as Unknown
-     * because the Worker in front of it was the one from before. Both are
-     * the same two letters from the same edge, and both are believed under
-     * the same rule.
-     */
-    const country = normaliseCountry(
-      process.env.BOARD_TRUST_PROXY === '1'
-        ? (req.headers['x-fdfpv-country'] || req.headers['cf-ipcountry'])
-        : '',
-    );
-    await store.recordStats(inspected.event, { day: statsDay(), country });
-    res.writeHead(204, { 'cache-control': 'no-store' });
-    res.end();
-    return;
-  }
-
-  /*
-   * What the statistics page reads. Counters, and four numbers off the
-   * board's own tables, which are not events and never were.
-   *
-   * Cached for twenty seconds in process AND in the browser. This is the
-   * only response besides a card animation that is not no-store, which is
-   * why the header is written here rather than through send.
-   */
-  if (req.method === 'GET' && path === '/api/stats') {
-    const now = Date.now();
-    if (!statsCache.body || now - statsCache.at >= STATS_CACHE_MS) {
-      const [counts, board] = await Promise.all([
-        store.readStats({ days: STATS_WINDOW_DAYS, now }),
-        store.boardFacts(),
-      ]);
-      statsCache = {
-        at: now,
-        body: JSON.stringify({
-          ...counts,
-          /* The sponsor's printed name travels with its row, so the page
-           * never has to hold a second copy of the list to read one. */
-          sources: counts.sources.map((row) => ({ ...row, name: sponsorName(row.key) })),
-          live: { flying: flyingNow() },
-          board,
-        }),
-      };
-    }
-    res.writeHead(200, {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': `public, max-age=${Math.round(STATS_CACHE_MS / 1000)}`,
-    });
-    res.end(statsCache.body);
-    return;
-  }
-
-  /* The tag vocabulary rides along with the list rather than having a
-   * request of its own. It used to ride the freestyle board's request, and
-   * the page that read it no longer asks for that. One request, and the
-   * vocabulary the page offers cannot drift from the one this board
-   * accepts, because validate.js is the copy of record for both. */
-  if (req.method === 'GET' && path === '/api/tracks') {
-    send(res, 200, { tracks: await store.listTracks(), tags: TAGS });
-    return;
-  }
-
-  const one = path.match(/^\/api\/tracks\/([^/]+)$/);
-  if (req.method === 'GET' && one) {
-    const id = trackIdFrom(one[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const track = await store.getTrack(id);
-    if (!track) {
-      send(res, 404, { error: 'That track is not on the board.' });
-      return;
-    }
-    send(res, 200, track);
-    return;
-  }
-
-  const doc = path.match(/^\/api\/tracks\/([^/]+)\/document$/);
-  if (req.method === 'GET' && doc) {
-    const id = trackIdFrom(doc[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const payload = await store.getDocument(id);
-    if (!payload) {
-      send(res, 404, { error: 'That track is not on the board.' });
-      return;
-    }
-    send(res, 200, payload);
-    return;
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* The card animation                                                 */
-  /* ---------------------------------------------------------------- */
-
-  /*
-   * THE ONE ROUTE ON THIS BOARD THAT DOES NOT ANSWER IN JSON.
-   *
-   * It is an image, fetched by an <img> in the card grid, so it answers
-   * with the bytes and the type. Everything else about it is ordinary: the
-   * id is validated the same way, a track with no animation is a 404, and
-   * the board still renders nothing.
-   *
-   * Cached hard, and it is safe to: the card's src carries gifUtc, so a
-   * replaced animation is a different URL and an old one is never served
-   * for a new layout. This is the only response on the board that is not
-   * no-store, which is why the header is written here rather than in send.
-   */
-  const gif = path.match(/^\/api\/tracks\/([^/]+)\/gif$/);
-  if (req.method === 'GET' && gif) {
-    const id = trackIdFrom(gif[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const found = await store.getGif(id);
-    if (!found) {
-      send(res, 404, { error: 'That track has no animation.' });
-      return;
-    }
-    res.writeHead(200, {
-      'content-type': 'image/gif',
-      'content-length': found.bytes.length,
-      'cache-control': 'public, max-age=31536000, immutable',
-    });
-    res.end(found.bytes);
-    return;
-  }
-
-  /*
-   * Uploading one. POST rather than PUT because the CORS grant above names
-   * GET, POST and OPTIONS, and a fourth method would widen it for one
-   * route that does nothing a POST cannot.
-   *
-   * Two ways in. The browser that published the track holds its edit key,
-   * which is how the builder uploads an animation seconds after publishing
-   * one. BOARD_ADMIN_TOKEN is the other, for the rooms published before
-   * any of this existed, and it is unset by default.
-   */
-  if (req.method === 'POST' && gif) {
-    const id = trackIdFrom(gif[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(
-        req,
-        MAX_GIF_BASE64_CHARS + 4_000,
-        'That animation is too large for this board.',
-      ));
-    } catch (e) {
-      if (e.status) {
-        throw e;
-      }
-      send(res, 400, { error: 'That upload was not readable.' });
-      return;
-    }
-    /* The class rule is read off the STORED document, not off anything the
-     * uploader said about it. See inspectGif. */
-    const held = await store.getDocument(id);
-    if (!held) {
-      send(res, 404, { error: 'That track is not on the board.' });
-      return;
-    }
-    const checked = inspectGif({ base64: body.gif, document: held.document });
-    if (checked.error) {
-      send(res, 400, { error: checked.error });
-      return;
-    }
-    const done = await store.setGif({
-      id,
-      bytes: checked.bytes,
-      editKey: typeof body.editKey === 'string' ? body.editKey : '',
-      admin: adminAuthorized(req),
-    });
-    if (!done) {
-      send(res, 404, { error: 'That track is not on the board.' });
-      return;
-    }
-    if (done.error) {
-      send(res, done.status || 400, { error: done.error });
-      return;
-    }
-    send(res, 200, { id, gifUtc: done.gifUtc, bytes: checked.bytes.length });
-    return;
-  }
-
-  /*
-   * TAKING A TRACK OFF THE BOARD.
-   *
-   * POST rather than DELETE, for the same reason the upload above is a POST
-   * rather than a PUT: the CORS grant names GET, POST and OPTIONS, and a
-   * fourth method would widen it for one route that does nothing a POST
-   * cannot. Nothing in a browser calls this anyway.
-   *
-   * ADMIN ONLY, AND THE EDIT KEY IS NOT A WAY IN. See removeTrack in
-   * src/store.js for why: an edit key is enough to clear times against a
-   * layout that no longer exists, and it is not enough to delete other
-   * pilots' records outright. Admin means BOARD_ADMIN_TOKEN or a signed in
-   * address off the whitelist in src/admin.js, which is what the Admin
-   * panel on the board's own page holds.
-   *
-   * The 404 and the 403 are told apart on purpose. An unauthorised caller
-   * learns nothing about which ids exist, because adminAuthorized is checked
-   * FIRST and answers the same way whether the id is real or not.
-   */
-  const remove = path.match(/^\/api\/tracks\/([^/]+)\/remove$/);
-  if (req.method === 'POST' && remove) {
-    const who = adminIdentity(req);
-    if (!who) {
-      send(res, 403, { error: 'Removing a track from this board needs an admin.' });
-      return;
-    }
-    const id = trackIdFrom(remove[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const gone = await store.removeTrack(id);
-    if (!gone) {
-      send(res, 404, { error: 'That track is not on the board.' });
-      return;
-    }
-    /*
-     * The only line this server logs about a write, because it is the only
-     * write that destroys somebody else's work: a track, and every time
-     * flown on it, gone with no undo. A host's log is the only record that
-     * it happened and who did it, so it says both.
-     */
-    console.log(`removed ${gone.id} "${gone.name}" by ${gone.author}, ${gone.times} time(s), by ${who.email || 'BOARD_ADMIN_TOKEN'}`);
-    send(res, 200, {
-      id: gone.id, name: gone.name, author: gone.author, times: gone.times,
-    });
-    return;
-  }
-
-  if (req.method === 'POST' && path === '/api/tracks') {
-    let body;
-    try {
-      body = JSON.parse(await readBody(req));
-    } catch (e) {
-      /* An oversize body carries its own status and its own message; only
-       * a JSON parse failure is this route's 400. Swallowing the status
-       * here used to turn every 413 into a 400. */
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    /* 'null', '7' and '[]' all parse. Reading .author off them threw a
-     * TypeError that came back as a 500. */
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      send(res, 400, { error: 'That request was not a JSON object.' });
-      return;
-    }
-    const author = normaliseName(body.author);
-    if (!author) {
-      send(res, 400, { error: 'A published track needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens.' });
-      return;
-    }
-    const inspected = inspectDocument(body.document);
-    if (inspected.error) {
-      send(res, 400, { error: inspected.error });
-      return;
-    }
-    /*
-     * TAGS TRAVEL IN THE ENVELOPE, BESIDE THE AUTHOR, NOT INSIDE THE
-     * DOCUMENT, and that is the whole reason this is a two line change
-     * rather than a deploy dance.
-     *
-     * A tag says what the author MEANT the track for. It is not part of the
-     * layout, it is not something the simulator reads to fly the track, and
-     * it is not something a visitor loading a shared document needs. Putting
-     * it in the document would mean a schemaVersion bump, which means
-     * DEPLOY.md's rule that the board ships before the simulator, which
-     * means a simulator deployed first publishes tracks this board refuses
-     * with a message about a version number rather than about anything the
-     * author did. It would also have to be kept out of layoutHash by hand,
-     * and layoutHash getting that wrong silently clears every republished
-     * track's times.
-     *
-     * In the envelope it is none of those things: an old builder sends no
-     * tags and gets an empty list, a new builder sends tags to an old board
-     * and they are ignored, and nobody's lap times move.
-     */
-    const tagged = inspectTags(body.tags);
-    if (tagged.error) {
-      send(res, 400, { error: tagged.error });
-      return;
-    }
-    const result = await store.publish({
-      inspected,
-      author,
-      editKey: typeof body.editKey === 'string' ? body.editKey : '',
-      tags: tagged.tags,
-    });
-    if (result.error) {
-      send(res, result.status || 400, { error: result.error, conflict: Boolean(result.conflict) });
-      return;
-    }
-    send(res, result.updated ? 200 : 201, result);
-    return;
-  }
-
-  const times = path.match(/^\/api\/tracks\/([^/]+)\/times$/);
-  if (req.method === 'POST' && times) {
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, 660_000, 'That time is too large to post.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    /* 'null', '7' and '[]' all parse. Reading .author off them threw a
-     * TypeError that came back as a 500. */
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      send(res, 400, { error: 'That request was not a JSON object.' });
-      return;
-    }
-    const name = normaliseName(body.name);
-    const lapMs = normaliseLapMs(body.lapMs);
-    if (!name) {
-      send(res, 400, { error: 'A time on the board needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens.' });
-      return;
-    }
-    if (lapMs == null) {
-      send(res, 400, { error: 'That lap time is not usable.' });
-      return;
-    }
-    /* The ghost is optional and refused loudly when malformed rather than
-     * silently dropped: the simulator proves its own encoding before it
-     * sends, so a bad blob here is a bug someone needs to hear about. */
-    const ghost = inspectGhost(body.ghost, lapMs);
-    if (ghost.error) {
-      send(res, 400, { error: ghost.error });
-      return;
-    }
-    if (!ghost.ghost) {
-      send(res, 400, { error: 'A time on the board comes with its ghost. The simulator records one for every lap; post from there.' });
-      return;
-    }
-    const trackId = trackIdFrom(times[1]);
-    if (!trackId) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    /*
-     * THE PLANE BOARD. A fixed wing's lap on a track built inside a world
-     * names its aircraft, and that files it on a board of its own beside
-     * the quads' on the same track: a quad and a plane through the same
-     * gates are not one race. The name is under the signature, so a signed
-     * lap cannot be moved from one board to the other, and the lap check
-     * below refuses a plane that is not a fixed wing, a track that is not a
-     * map track, and a plane that does not fit every gate.
-     */
-    const craft = inspectCraft(body.craft);
-    if (craft.error) {
-      send(res, 400, { error: craft.error });
-      return;
-    }
-    /*
-     * The name is claimed by a key. The post carries the pilot's public key
-     * and a signature over this exact post (track, rounded lap, ghost), so
-     * a signed post cannot be moved to another track or have its ghost
-     * swapped; then the first key seen for a name owns it. Checked before
-     * the lap, because a signature is microseconds and a lap is a course
-     * build.
-     */
-    const auth = inspectAuth(body);
-    if (auth.error) {
-      send(res, 400, { error: auth.error });
-      return;
-    }
-    if (!(await verifyTimeSignature({
-      key: auth.key, sig: auth.sig, trackId, lapMs, ghost: ghost.ghost, craft: craft.craft,
-    }))) {
-      send(res, 401, { error: 'That signature does not match this post.' });
-      return;
-    }
-    /*
-     * The ghost is the lap. Before a time goes on the board, the simulator's
-     * own gate detector is run over it against the course as published,
-     * and a ghost that did not start on the line, pass every gate in order,
-     * cross the line again and keep the clock honest is refused with the
-     * reason. This is what makes a time here worth more than a number
-     * somebody typed into a POST.
-     */
-    const published = await store.getDocument(trackId);
-    if (!published) {
-      send(res, 404, { error: 'No track with that id is on the board.' });
-      return;
-    }
-    const verdict = checkLap(published.document, new Uint8Array(Buffer.from(ghost.ghost, 'base64')), lapMs, craft.craft);
-    if (!verdict.ok) {
-      send(res, 422, { error: `That lap does not hold up against the track: ${verdict.reason}.` });
-      return;
-    }
-    const claim = await store.claimName(name, auth.key);
-    if (claim.error) {
-      send(res, claim.status || 403, { error: claim.error });
-      return;
-    }
-    const result = await store.addTime({
-      trackId,
-      name,
-      lapMs,
-      /*
-       * The RaceGOW metric, and it is OPTIONAL rather than validated into an
-       * error. A time posted from the sixty metre field has no such number
-       * and never will; a time posted from a room has one only when the run
-       * put three clean laps together. Absent, null and unusable all mean
-       * the same thing to the board, which is that there is nothing to
-       * print, and refusing the whole post over it would lose a good lap.
-       */
-      threeMs: normaliseThreeMs(body.threeMs, lapMs),
-      ghost: ghost.ghost,
-      key: auth.key,
-      craft: craft.craft,
-    });
-    if (result.error) {
-      send(res, result.status || 400, { error: result.error });
-      return;
-    }
-    send(res, 201, result);
-    return;
-  }
-
-  const ghostPath = path.match(/^\/api\/tracks\/([^/]+)\/times\/([^/]+)\/ghost$/);
-  if (req.method === 'GET' && ghostPath) {
-    const trackId = trackIdFrom(ghostPath[1]);
-    const timeId = timeIdFrom(ghostPath[2]);
-    if (!trackId || !timeId) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const row = await store.getGhost(trackId, timeId);
-    if (!row) {
-      send(res, 404, { error: 'That time is not on the board.' });
-      return;
-    }
-    if (!row.ghost) {
-      send(res, 404, { error: 'That time was posted without a ghost.' });
-      return;
-    }
-    send(res, 200, row);
-    return;
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* The freestyle board                                                */
-  /* ---------------------------------------------------------------- */
-
-  /*
-   * A NAME CLAIMED AHEAD OF A TIME, and A KEY HANDED ON: the simulator's
-   * optional sign-in, src/pilotkeys.js says why. Both ride the bug route's
-   * flood gate under their own label, twenty in ten minutes from one
-   * address: a pilot picks a callsign or signs in a computer now and then.
-   */
-  if (req.method === 'POST' && (path === '/api/pilots' || path === '/api/pilots/link')) {
-    const ip = clientIp(req);
-    if (bugFlooded(`pilot:${ip}`, 20)) {
-      send(res, 429, { error: 'Too many name changes from here. Try again shortly.' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, 4_000, 'That request is too large.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    recordBugHit(`pilot:${ip}`);
-    if (!body || typeof body !== 'object') {
-      send(res, 400, { error: 'That request was not usable.' });
-      return;
-    }
-    if (path === '/api/pilots') {
-      const name = normaliseName(body.name);
-      if (!name) {
-        send(res, 400, { error: 'A pilot name is 2 to 24 letters, numbers, spaces, dots, underscores or hyphens.' });
-        return;
-      }
-      const auth = inspectAuth(body);
-      if (auth.error) {
-        send(res, 400, { error: auth.error });
-        return;
-      }
-      if (!(await verifyKeySignature({ key: auth.key, sig: auth.sig, message: nameClaimMessage(name) }))) {
-        send(res, 401, { error: 'That signature does not match this name.' });
-        return;
-      }
-      const claim = await store.claimName(name, auth.key);
-      if (claim.error) {
-        send(res, claim.status || 403, { error: claim.error });
-        return;
-      }
-      send(res, claim.claimed ? 201 : 200, { name, claimed: claim.claimed });
-      return;
-    }
-    const from = inspectAuth({ key: body.from, sig: body.fromSig });
-    const to = inspectAuth({ key: body.to, sig: body.toSig });
-    if (from.error || to.error || from.key === to.key) {
-      send(res, 400, { error: 'A link names two different pilot keys, each with its signature.' });
-      return;
-    }
-    const message = keyLinkMessage(from.key, to.key);
-    if (!(await verifyKeySignature({ key: from.key, sig: from.sig, message }))
-      || !(await verifyKeySignature({ key: to.key, sig: to.sig, message }))) {
-      send(res, 401, { error: 'Both pilot keys must sign a link.' });
-      return;
-    }
-    send(res, 200, await store.moveKey(from.key, to.key));
-    return;
-  }
-
-  if (req.method === 'GET' && path === '/api/runs') {
-    const map = url.searchParams.get('map') || '';
-    if (map && !RUN_MAPS.includes(map)) {
-      send(res, 400, { error: 'That is not a map this board keeps scores for.' });
-      return;
-    }
-    send(res, 200, { runs: await store.listRuns({ map }), tags: TAGS, maps: RUN_MAPS });
-    return;
-  }
-
-  /*
-   * The first public write on this board with no owner and no edit key, so
-   * it carries every guard the bug route carries and one the bug route does
-   * not need: a pilot holds one row per map, replaced only by a better run.
-   * That, rather than the flood gate, is what stops a table being filled.
-   */
-  if (req.method === 'POST' && path === '/api/runs') {
-    const ip = clientIp(req);
-    if (bugFlooded(`run:${ip}`)) {
-      send(res, 429, { error: 'Too many runs posted from here. Fly another and try again shortly.' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, 20_000, 'That run is too large to post.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    const inspected = inspectRun(body);
-    if (inspected.error) {
-      send(res, 400, { error: inspected.error });
-      return;
-    }
-    recordBugHit(`run:${ip}`);
-    const result = await store.addRun(inspected.run);
-    if (result.error) {
-      send(res, result.status || 400, { error: result.error });
-      return;
-    }
-    /*
-     * 200 rather than 201 when the pilot already held a better run: nothing
-     * was created, and the body says so with `improved: false` so the
-     * simulator can tell a pilot they did not beat themselves rather than
-     * congratulating them on a score that is not on the board.
-     */
-    send(res, result.improved ? 201 : 200, result);
-    return;
-  }
-
-  if (req.method === 'GET' && path === '/api/bugs') {
-    if (!bugsAuthorized(req, url)) {
-      send(res, 401, { error: 'A token is needed to read tickets.' });
-      return;
-    }
-    const status = url.searchParams.get('status');
-    const kind = url.searchParams.get('kind');
-    if (status && !BUG_STATUSES.includes(status)) {
-      send(res, 400, { error: 'Status is open, in_progress, fixed, wontfix or duplicate.' });
-      return;
-    }
-    if (kind && !BUG_KINDS.includes(kind)) {
-      send(res, 400, { error: 'Kind is crash, blocking, wrong, visual, feel or other.' });
-      return;
-    }
-    send(res, 200, { bugs: await store.listBugs({ status, kind, limit: url.searchParams.get('limit') }) });
-    return;
-  }
-
-  if (req.method === 'POST' && path === '/api/bugs') {
-    const ip = clientIp(req);
-    if (bugFlooded(ip)) {
-      send(res, 429, { error: 'Too many reports from here. Try again in a few minutes.' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, BUG_BODY_MAX, 'That report is too large.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    const inspected = inspectBugCreate(body);
-    if (inspected.error) {
-      send(res, 400, { error: inspected.error });
-      return;
-    }
-    recordBugHit(ip);
-    send(res, 201, await store.addBug(inspected));
-    return;
-  }
-
-  /*
-   * A screenshot on a ticket, behind the gate the ticket itself is behind:
-   * a signed in admin, or BUGS_TOKEN. It is fetched by the inbox with the
-   * bearer header and shown from a blob, never by a bare <img src>, because
-   * an <img> cannot carry the header and a token in a query string ends up
-   * in a history. The type is the one validate.js read off the bytes, and
-   * nosniff holds the browser to it.
-   */
-  const bugImage = path.match(/^\/api\/bugs\/([^/]+)\/images\/([0-9]+)$/);
-  if (req.method === 'GET' && bugImage) {
-    if (!bugsAuthorized(req, url)) {
-      send(res, 401, { error: 'A token is needed to read tickets.' });
-      return;
-    }
-    const id = bugIdFrom(bugImage[1]);
-    const n = Number(bugImage[2]);
-    if (!id || !Number.isInteger(n) || n < 1 || n > MAX_BUG_IMAGES) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    const found = await store.getBugImage(id, n);
-    if (!found) {
-      send(res, 404, { error: 'That ticket has no such image.' });
-      return;
-    }
-    res.writeHead(200, {
-      'content-type': found.type,
-      'content-length': found.bytes.length,
-      'cache-control': 'private, no-store',
-      'x-content-type-options': 'nosniff',
-    });
-    res.end(found.bytes);
-    return;
-  }
-
-  const bugOne = path.match(/^\/api\/bugs\/([^/]+)$/);
-  if (bugOne && (req.method === 'GET' || req.method === 'POST')) {
-    if (!bugsAuthorized(req, url)) {
-      send(res, 401, { error: 'A token is needed to read or update tickets.' });
-      return;
-    }
-    const id = bugIdFrom(bugOne[1]);
-    if (!id) {
-      send(res, 400, { error: 'That address is not usable.' });
-      return;
-    }
-    if (req.method === 'GET') {
-      const ticket = await store.getBug(id);
-      if (!ticket) {
-        send(res, 404, { error: 'That ticket is not on the board.' });
-        return;
-      }
-      send(res, 200, ticket);
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req, 20_000, 'That update is too large.'));
-    } catch (e) {
-      if (e && e.status) {
-        throw e;
-      }
-      send(res, 400, { error: e.message || 'That request was not JSON.' });
-      return;
-    }
-    const patch = inspectBugPatch(body);
-    if (patch.error) {
-      send(res, 400, { error: patch.error });
-      return;
-    }
-    const result = await store.updateBug(id, patch);
-    if (result.error) {
-      send(res, result.status || 400, { error: result.error });
-      return;
-    }
-    send(res, 200, result);
-    return;
-  }
-
-  send(res, 404, { error: 'Nothing at that address.' });
+  const found = await read(id);
+  return found ? reply(res, 200, found) : refuse(res, 404, missing);
 }
 
-async function handleStatic(req, res, url) {
+/*
+ * The one route that reads a password. Every failure gets one sentence,
+ * and checkPassword spends the same scrypt run on an unknown address, so
+ * neither the words nor the timing say which addresses are admins.
+ * Failures (only) spend the flood allowance.
+ */
+async function signIn({ req, res }) {
+  const gate = `admin:${clientAddress(req)}`;
+  if (overLimit(gate)) {
+    return refuse(res, 429, 'Too many sign in attempts from here. Try again in a few minutes.');
+  }
+  if (!adminCount()) {
+    return refuse(res, 503, 'This board has no admin accounts.');
+  }
+  const { json, unreadable } = await bodyJson(req, 4_000, 'That sign in was too large.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, NOT_JSON);
+  }
+  if (!isPlainObject(json)) {
+    return refuse(res, 400, NOT_AN_OBJECT);
+  }
+  const email = normaliseEmail(json.email);
+  const password = stringOr(json.password);
+  const admin = email && password && password.length <= PASSWORD_MAX ? checkPassword(email, password) : null;
+  if (!admin) {
+    spend(gate);
+    return refuse(res, 401, 'That email and password do not open this board.');
+  }
+  const token = mintSession(admin);
+  return reply(res, 200, {
+    token, email: admin, expiresUtc: readSession(token)?.expiresUtc ?? null, sponsors: sponsorsWithLinks(),
+  });
+}
+
+/* The Admin panel asks on load with the token it kept, so a reload needs
+ * no second sign in and a revoked token is found out quietly. */
+function whoAmI({ req, res }) {
+  const admin = adminOf(req);
+  if (!admin) {
+    return refuse(res, 401, 'Not signed in.');
+  }
+  return reply(res, 200, {
+    email: admin.email, kind: admin.kind, expiresUtc: admin.expiresUtc || null, sponsors: sponsorsWithLinks(),
+  });
+}
+
+function noContent(res) {
+  res.writeHead(204, { 'cache-control': 'no-store' });
+  res.end();
+}
+
+/*
+ * One event added to a daily total. No cookie, no address stored (it is
+ * read for the flood gate and dropped), no tab handle stored, nothing finer
+ * than a day. A browser that sends Global Privacy Control is answered the
+ * same 204 as an accepted event and nothing is counted: a different
+ * answer would tell a script the signal was seen. A beacon cannot set a
+ * content type, so none is required.
+ *
+ * The country is the edge's two letters, believed only behind a trusted
+ * proxy: x-fdfpv-country (set by the simulator's edge Worker) and then
+ * Cloudflare's own cf-ipcountry, which the Worker forwards either way and
+ * which saved the first day of counts when the Worker in front was old.
+ */
+async function countEvent({ req, res }) {
+  if (String(req.headers['sec-gpc'] || '') === '1') {
+    return noContent(res);
+  }
+  const gate = `stats:${clientAddress(req)}`;
+  if (overLimit(gate, STATS_EVENTS_PER_WINDOW)) {
+    return refuse(res, 429, 'Too many events from here.');
+  }
+  const { json, unreadable } = await bodyJson(req, 2_000, 'That event is too large.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, 'That event was not readable.');
+  }
+  const checked = inspectStatsEvent(json, sourceKey);
+  if (checked.error) {
+    return refuse(res, 400, checked.error);
+  }
+  spend(gate);
+  if (checked.event.kind === 'flush') {
+    sawFlying(checked.event.tab);
+  }
+  const edge = trustProxy() ? (req.headers['x-fdfpv-country'] || req.headers['cf-ipcountry']) : '';
+  await store.recordStats(checked.event, { day: statsDay(), country: normaliseCountry(edge) });
+  return noContent(res);
+}
+
+async function readCounters({ res }) {
+  const now = Date.now();
+  if (!statsCache.body || now - statsCache.at >= STATS_CACHE_MS) {
+    const [counts, board] = await Promise.all([store.readStats({ days: STATS_DAYS, now }), store.boardFacts()]);
+    statsCache = {
+      at: now,
+      body: JSON.stringify({
+        ...counts,
+        sources: counts.sources.map((row) => ({ ...row, name: sponsorName(row.key) })),
+        live: { flying: flyingCount() },
+        board,
+      }),
+    };
+  }
+  res.writeHead(200, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': `public, max-age=${Math.round(STATS_CACHE_MS / 1000)}`,
+  });
+  res.end(statsCache.body);
+}
+
+/* The tag vocabulary rides with the list so the page offers exactly what
+ * this board accepts; validate.js is the copy of record for both. */
+async function listTracks({ res }) {
+  reply(res, 200, { tracks: await store.listTracks(), tags: TAGS });
+}
+
+/* A card animation, as an image. Hard cached: the card's src carries
+ * gifUtc, so a replaced animation is a new address. */
+async function animation({ res, params }) {
+  const id = pathPart(params[0], TRACK_ID_RE);
+  if (!id) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const found = await store.getGif(id);
+  if (!found) {
+    return refuse(res, 404, 'That track has no animation.');
+  }
+  return replyBytes(res, { 'content-type': 'image/gif', 'cache-control': 'public, max-age=31536000, immutable' }, found.bytes);
+}
+
+/*
+ * Uploading one: the publishing browser's edit key, or an admin (for the
+ * rooms published from browsers nobody still has). POST, because the
+ * CORS grant names GET, POST and OPTIONS and widening it buys nothing.
+ * The class rule is read off the stored document, not the upload.
+ */
+async function uploadAnimation({ req, res, params }) {
+  const id = pathPart(params[0], TRACK_ID_RE);
+  if (!id) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const { json, unreadable } = await bodyJson(req, MAX_GIF_BASE64_CHARS + 4_000, 'That animation is too large for this board.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, 'That upload was not readable.');
+  }
+  const held = await store.getDocument(id);
+  if (!held) {
+    return refuse(res, 404, TRACK_GONE);
+  }
+  const checked = inspectGif({ base64: json.gif, document: held.document });
+  if (checked.error) {
+    return refuse(res, 400, checked.error);
+  }
+  const done = await store.setGif({
+    id, bytes: checked.bytes, editKey: stringOr(json.editKey), admin: Boolean(adminOf(req)),
+  });
+  if (!done) {
+    return refuse(res, 404, TRACK_GONE);
+  }
+  if (done.error) {
+    return refuse(res, done.status || 400, done.error);
+  }
+  return reply(res, 200, { id, gifUtc: done.gifUtc, bytes: checked.bytes.length });
+}
+
+/*
+ * Taking a track and every time on it off the board: admin only, never an
+ * edit key (src/store.js says why). Authority is checked before the id so
+ * a stranger learns nothing about which ids exist. The log line is the
+ * only one this server writes about a write, because it is the only write
+ * that destroys other people's work.
+ */
+async function removeTrack({ req, res, params }) {
+  const admin = adminOf(req);
+  if (!admin) {
+    return refuse(res, 403, 'Removing a track from this board needs an admin.');
+  }
+  const id = pathPart(params[0], TRACK_ID_RE);
+  if (!id) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const gone = await store.removeTrack(id);
+  if (!gone) {
+    return refuse(res, 404, TRACK_GONE);
+  }
+  console.log(`removed ${gone.id} "${gone.name}" by ${gone.author}, ${gone.times} time(s), by ${admin.email || 'BOARD_ADMIN_TOKEN'}`);
+  return reply(res, 200, {
+    id: gone.id, name: gone.name, author: gone.author, times: gone.times,
+  });
+}
+
+/*
+ * A publish. Tags travel in the envelope beside the author, not in the
+ * document: they are the author's intent, not layout, so they need no
+ * schema version, stay out of the layout hash, and an old builder or an
+ * old board simply sends or ignores them.
+ */
+async function publish({ req, res }) {
+  const { json, unreadable } = await bodyJson(req);
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  if (!isPlainObject(json)) {
+    return refuse(res, 400, NOT_AN_OBJECT);
+  }
+  const author = normaliseName(json.author);
+  if (!author) {
+    return refuse(res, 400, 'A published track needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens.');
+  }
+  const inspected = inspectDocument(json.document);
+  if (inspected.error) {
+    return refuse(res, 400, inspected.error);
+  }
+  const tagged = inspectTags(json.tags);
+  if (tagged.error) {
+    return refuse(res, 400, tagged.error);
+  }
+  const result = await store.publish({
+    inspected, author, editKey: stringOr(json.editKey), tags: tagged.tags,
+  });
+  if (result.error) {
+    return reply(res, result.status || 400, { error: result.error, conflict: Boolean(result.conflict) });
+  }
+  return reply(res, result.updated ? 200 : 201, result);
+}
+
+/*
+ * A time. In order: the body's shape, the ghost (required, and refused
+ * loudly when malformed: the simulator proves its encoding before sending,
+ * so a bad blob is a bug to hear about), the address, the aircraft (a
+ * plane's lap files on the plane board), the signature over exactly this
+ * post (microseconds, so before the lap), the lap itself through the
+ * simulator's own gate detector against the track as published, and then
+ * the name claim. The three lap total is optional and never refuses.
+ */
+async function postTime({ req, res, params }) {
+  const { json, unreadable } = await bodyJson(req, 660_000, 'That time is too large to post.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  if (!isPlainObject(json)) {
+    return refuse(res, 400, NOT_AN_OBJECT);
+  }
+  const name = normaliseName(json.name);
+  const lapMs = normaliseLapMs(json.lapMs);
+  if (!name) {
+    return refuse(res, 400, 'A time on the board needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens.');
+  }
+  if (lapMs === null) {
+    return refuse(res, 400, 'That lap time is not usable.');
+  }
+  const ghost = inspectGhost(json.ghost, lapMs);
+  if (ghost.error) {
+    return refuse(res, 400, ghost.error);
+  }
+  if (!ghost.ghost) {
+    return refuse(res, 400, 'A time on the board comes with its ghost. The simulator records one for every lap; post from there.');
+  }
+  const trackId = pathPart(params[0], TRACK_ID_RE);
+  if (!trackId) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const craft = inspectCraft(json.craft);
+  if (craft.error) {
+    return refuse(res, 400, craft.error);
+  }
+  const auth = inspectAuth(json);
+  if (auth.error) {
+    return refuse(res, 400, auth.error);
+  }
+  const signed = await verifyTimeSignature({
+    key: auth.key, sig: auth.sig, trackId, lapMs, ghost: ghost.ghost, craft: craft.craft,
+  });
+  if (!signed) {
+    return refuse(res, 401, 'That signature does not match this post.');
+  }
+  const published = await store.getDocument(trackId);
+  if (!published) {
+    return refuse(res, 404, 'No track with that id is on the board.');
+  }
+  const verdict = checkLap(published.document, new Uint8Array(Buffer.from(ghost.ghost, 'base64')), lapMs, craft.craft);
+  if (!verdict.ok) {
+    return refuse(res, 422, `That lap does not hold up against the track: ${verdict.reason}.`);
+  }
+  const claim = await store.claimName(name, auth.key);
+  if (claim.error) {
+    return refuse(res, claim.status || 403, claim.error);
+  }
+  const result = await store.addTime({
+    trackId, name, lapMs, threeMs: normaliseThreeMs(json.threeMs, lapMs), ghost: ghost.ghost, key: auth.key, craft: craft.craft,
+  });
+  if (result.error) {
+    return refuse(res, result.status || 400, result.error);
+  }
+  return reply(res, 201, result);
+}
+
+async function ghostOf({ res, params }) {
+  const trackId = pathPart(params[0], TRACK_ID_RE);
+  const timeId = pathPart(params[1], TIME_ID_RE);
+  if (!trackId || !timeId) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const row = await store.getGhost(trackId, timeId);
+  if (!row) {
+    return refuse(res, 404, 'That time is not on the board.');
+  }
+  if (!row.ghost) {
+    return refuse(res, 404, 'That time was posted without a ghost.');
+  }
+  return reply(res, 200, row);
+}
+
+/*
+ * A name claimed ahead of any time, or every name and time of one pilot
+ * key handed to another (src/pilotkeys.js says when). Twenty a window per
+ * address: a pilot picks a callsign or signs in a computer now and then.
+ */
+async function pilotKeys({ req, res, url }) {
+  const gate = `pilot:${clientAddress(req)}`;
+  if (overLimit(gate, 20)) {
+    return refuse(res, 429, 'Too many name changes from here. Try again shortly.');
+  }
+  const { json, unreadable } = await bodyJson(req, 4_000, 'That request is too large.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  spend(gate);
+  if (!json || typeof json !== 'object') {
+    return refuse(res, 400, 'That request was not usable.');
+  }
+  return url.pathname.replace(/\/+$/, '') === '/api/pilots' ? claimName(res, json) : linkKeys(res, json);
+}
+
+async function claimName(res, json) {
+  const name = normaliseName(json.name);
+  if (!name) {
+    return refuse(res, 400, 'A pilot name is 2 to 24 letters, numbers, spaces, dots, underscores or hyphens.');
+  }
+  const auth = inspectAuth(json);
+  if (auth.error) {
+    return refuse(res, 400, auth.error);
+  }
+  if (!(await verifyKeySignature({ key: auth.key, sig: auth.sig, message: nameClaimMessage(name) }))) {
+    return refuse(res, 401, 'That signature does not match this name.');
+  }
+  const claim = await store.claimName(name, auth.key);
+  if (claim.error) {
+    return refuse(res, claim.status || 403, claim.error);
+  }
+  return reply(res, claim.claimed ? 201 : 200, { name, claimed: claim.claimed });
+}
+
+async function linkKeys(res, json) {
+  const from = inspectAuth({ key: json.from, sig: json.fromSig });
+  const to = inspectAuth({ key: json.to, sig: json.toSig });
+  if (from.error || to.error || from.key === to.key) {
+    return refuse(res, 400, 'A link names two different pilot keys, each with its signature.');
+  }
+  const message = keyLinkMessage(from.key, to.key);
+  const bothSigned = await verifyKeySignature({ key: from.key, sig: from.sig, message })
+    && await verifyKeySignature({ key: to.key, sig: to.sig, message });
+  if (!bothSigned) {
+    return refuse(res, 401, 'Both pilot keys must sign a link.');
+  }
+  return reply(res, 200, await store.moveKey(from.key, to.key));
+}
+
+async function listRuns({ res, url }) {
+  const map = url.searchParams.get('map') || '';
+  if (map && !RUN_MAPS.includes(map)) {
+    return refuse(res, 400, 'That is not a map this board keeps scores for.');
+  }
+  return reply(res, 200, { runs: await store.listRuns({ map }), tags: TAGS, maps: RUN_MAPS });
+}
+
+/* A public write with no owner, so it has the flood gate; what really
+ * bounds the table is one row per pilot per map. A run that did not beat
+ * the pilot's own is a 200 with improved: false, not a 201. */
+async function postRun({ req, res }) {
+  const gate = `run:${clientAddress(req)}`;
+  if (overLimit(gate)) {
+    return refuse(res, 429, 'Too many runs posted from here. Fly another and try again shortly.');
+  }
+  const { json, unreadable } = await bodyJson(req, 20_000, 'That run is too large to post.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  const checked = inspectRun(json);
+  if (checked.error) {
+    return refuse(res, 400, checked.error);
+  }
+  spend(gate);
+  const result = await store.addRun(checked.run);
+  if (result.error) {
+    return refuse(res, result.status || 400, result.error);
+  }
+  return reply(res, result.improved ? 201 : 200, result);
+}
+
+async function listTickets({ req, res, url }) {
+  if (!mayReadTickets(req, url)) {
+    return refuse(res, 401, 'A token is needed to read tickets.');
+  }
+  const status = url.searchParams.get('status');
+  const kind = url.searchParams.get('kind');
+  if (status && !BUG_STATUSES.includes(status)) {
+    return refuse(res, 400, 'Status is open, in_progress, fixed, wontfix or duplicate.');
+  }
+  if (kind && !BUG_KINDS.includes(kind)) {
+    return refuse(res, 400, 'Kind is crash, blocking, wrong, visual, feel or other.');
+  }
+  return reply(res, 200, { bugs: await store.listBugs({ status, kind, limit: url.searchParams.get('limit') }) });
+}
+
+async function fileTicket({ req, res }) {
+  const gate = clientAddress(req);
+  if (overLimit(gate)) {
+    return refuse(res, 429, 'Too many reports from here. Try again in a few minutes.');
+  }
+  const { json, unreadable } = await bodyJson(req, BUG_BODY_MAX, 'That report is too large.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  const checked = inspectBugCreate(json);
+  if (checked.error) {
+    return refuse(res, 400, checked.error);
+  }
+  spend(gate);
+  return reply(res, 201, await store.addBug(checked));
+}
+
+/*
+ * A ticket's screenshot, behind the ticket's own gate, fetched by the
+ * inbox with the bearer header and shown from a blob (an <img src> could
+ * not carry the header, and a query token lands in history). The type is
+ * the one read off the bytes, and nosniff holds the browser to it.
+ */
+async function ticketImage({ req, res, url, params }) {
+  if (!mayReadTickets(req, url)) {
+    return refuse(res, 401, 'A token is needed to read tickets.');
+  }
+  const id = pathPart(params[0], BUG_ID_RE);
+  const n = Number(params[1]);
+  if (!id || !Number.isInteger(n) || n < 1 || n > MAX_BUG_IMAGES) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  const shot = await store.getBugImage(id, n);
+  if (!shot) {
+    return refuse(res, 404, 'That ticket has no such image.');
+  }
+  return replyBytes(res, { 'content-type': shot.type, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' }, shot.bytes);
+}
+
+async function ticket({ req, res, url, params }) {
+  if (!mayReadTickets(req, url)) {
+    return refuse(res, 401, 'A token is needed to read or update tickets.');
+  }
+  const id = pathPart(params[0], BUG_ID_RE);
+  if (!id) {
+    return refuse(res, 400, UNUSABLE_ADDRESS);
+  }
+  if (req.method === 'GET') {
+    const found = await store.getBug(id);
+    return found ? reply(res, 200, found) : refuse(res, 404, 'That ticket is not on the board.');
+  }
+  const { json, unreadable } = await bodyJson(req, 20_000, 'That update is too large.');
+  if (unreadable !== undefined) {
+    return refuse(res, 400, unreadable || NOT_JSON);
+  }
+  const patch = inspectBugPatch(json);
+  if (patch.error) {
+    return refuse(res, 400, patch.error);
+  }
+  const result = await store.updateBug(id, patch);
+  if (result.error) {
+    return refuse(res, result.status || 400, result.error);
+  }
+  return reply(res, 200, result);
+}
+
+/*
+ * The API, first match wins. A path is compared without trailing slashes;
+ * `methods` lists what a route answers, and anything else falls through to
+ * the 404 at the end, as an unknown path does.
+ */
+const ROUTES = [
+  [['GET'], '/api/health', ({ res }) => reply(res, 200, { ok: true, store: store.kind })],
+  [['GET'], '/api/version', ({ res }) => reply(res, 200, revision)],
+  [['GET'], '/api/config', ({ req, res }) => reply(res, 200, { simOrigin, boardOrigin: boardOrigin(req) })],
+  [['POST'], '/api/admin/login', signIn],
+  [['GET'], '/api/admin/session', whoAmI],
+  [['POST'], '/api/stats/events', countEvent],
+  [['GET'], '/api/stats', readCounters],
+  [['GET'], '/api/tracks', listTracks],
+  [['GET'], /^\/api\/tracks\/([^/]+)$/, (ctx) => trackGet(ctx, (id) => store.getTrack(id))],
+  [['GET'], /^\/api\/tracks\/([^/]+)\/document$/, (ctx) => trackGet(ctx, (id) => store.getDocument(id))],
+  [['GET'], /^\/api\/tracks\/([^/]+)\/gif$/, animation],
+  [['POST'], /^\/api\/tracks\/([^/]+)\/gif$/, uploadAnimation],
+  [['POST'], /^\/api\/tracks\/([^/]+)\/remove$/, removeTrack],
+  [['POST'], '/api/tracks', publish],
+  [['POST'], /^\/api\/tracks\/([^/]+)\/times$/, postTime],
+  [['GET'], /^\/api\/tracks\/([^/]+)\/times\/([^/]+)\/ghost$/, ghostOf],
+  [['POST'], /^\/api\/pilots(\/link)?$/, pilotKeys],
+  [['GET'], '/api/runs', listRuns],
+  [['POST'], '/api/runs', postRun],
+  [['GET'], '/api/bugs', listTickets],
+  [['POST'], '/api/bugs', fileTicket],
+  [['GET'], /^\/api\/bugs\/([^/]+)\/images\/([0-9]+)$/, ticketImage],
+  [['GET', 'POST'], /^\/api\/bugs\/([^/]+)$/, ticket],
+];
+
+function routeFor(method, path) {
+  for (const [methods, pattern, handler] of ROUTES) {
+    const params = typeof pattern === 'string' ? (pattern === path ? [] : null) : path.match(pattern)?.slice(1);
+    if (params && methods.includes(method)) {
+      return { handler, params };
+    }
+  }
+  return null;
+}
+
+async function api(req, res, url) {
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+  const route = routeFor(req.method, path);
+  if (!route) {
+    return refuse(res, 404, 'Nothing at that address.');
+  }
+  return route.handler({
+    req, res, url, params: route.params,
+  });
+}
+
+/* ================================================================== */
+/* The page                                                            */
+/* ================================================================== */
+
+async function staticFile(res, url) {
   let decoded;
   try {
     decoded = decodeURIComponent(url.pathname);
-  } catch (e) {
-    send(res, 400, 'bad path', 'text/plain; charset=utf-8');
-    return;
+  } catch {
+    return reply(res, 400, 'bad path', 'text/plain; charset=utf-8');
   }
-  let rel = normalize(decoded).replace(/^([/\\])+/, '');
+  let rel = normalize(decoded).replace(/^[/\\]+/, '');
   if (rel === '' || rel === '.') {
     rel = 'index.html';
-  }
-  if (rel === 'bugs') {
+  } else if (rel === 'bugs') {
     rel = 'bugs.html';
   }
-  const root = resolve(publicDir);
-  const path = resolve(root, rel);
-  const inside = path === root || path.startsWith(root + sep);
-  if (!inside || relative(root, path).split(sep).includes('..')) {
-    send(res, 403, 'forbidden', 'text/plain; charset=utf-8');
-    return;
+  const file = resolve(publicDir, rel);
+  const inside = file === publicDir || file.startsWith(publicDir + sep);
+  if (!inside || relative(publicDir, file).split(sep).includes('..')) {
+    return reply(res, 403, 'forbidden', 'text/plain; charset=utf-8');
   }
+  let bytes;
   try {
-    const body = await readFile(path);
-    res.writeHead(200, {
-      'content-type': MIME.get(extname(path)) ?? 'application/octet-stream',
-      'cache-control': 'no-store',
-    });
-    res.end(body);
-  } catch (e) {
-    send(res, 404, 'not found', 'text/plain; charset=utf-8');
+    bytes = await readFile(file);
+  } catch {
+    return reply(res, 404, 'not found', 'text/plain; charset=utf-8');
   }
+  res.writeHead(200, { 'content-type': CONTENT_TYPES[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
+  return res.end(bytes);
 }
 
 const server = http.createServer(async (req, res) => {
-  cors(req, res);
+  allowOrigin(req, res);
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
@@ -1449,38 +984,31 @@ const server = http.createServer(async (req, res) => {
     let url;
     try {
       url = new URL(req.url, 'http://localhost');
-    } catch (e) {
-      send(res, 400, { error: 'That address is not usable.' });
+    } catch {
+      refuse(res, 400, UNUSABLE_ADDRESS);
       return;
     }
-    if (url.pathname.startsWith('/api/')) {
-      await handleApi(req, res, url);
-      return;
-    }
-    await handleStatic(req, res, url);
-  } catch (e) {
-    /* Only errors this code raised on purpose carry a status, and only
-     * those have a message meant for a stranger. Everything else is a
-     * stack from pg or the filesystem, and echoing it told the internet
-     * about the schema and the paths. */
-    if (e && e.status) {
-      /* Only a body readBody gave up draining: the rest of it is still on
-       * the socket, so the socket cannot carry another request. */
-      if (e.close) {
+    await (url.pathname.startsWith('/api/') ? api(req, res, url) : staticFile(res, url));
+  } catch (err) {
+    /* Only a Refusal has a message meant for a stranger. Anything else is
+     * a stack from pg or the filesystem, and echoing it would describe the
+     * schema and the paths to the internet. */
+    if (err instanceof Refusal) {
+      if (err.close) {
         res.setHeader('connection', 'close');
       }
-      send(res, e.status, { error: e.message });
+      refuse(res, err.status, err.message);
       return;
     }
-    console.error(e);
-    send(res, 500, { error: 'The board failed.' });
+    console.error(err);
+    refuse(res, 500, 'The board failed.');
   }
 });
 
-/* Live rooms ride the same port as an upgrade; see live.js. */
+/* Live rooms share the port as a WebSocket upgrade; see live.js. */
 attachLive(server, store);
 
-if (process.env.BOARD_LISTEN !== '0') {
+if (env.BOARD_LISTEN !== '0') {
   server.listen(port, listenHost, () => {
     console.log(`FDFPV leaderboard: http://127.0.0.1:${port}/`);
     console.log(`Store: ${store.kind}. Simulator: ${simOrigin}`);

@@ -1,2588 +1,1708 @@
 /*
- * selftest.js: the board's own checks. Names, documents, the file store,
- * and a live HTTP pass against the server.
+ * selftest.js: `npm test`. The board's behaviour, checked end to end.
  *
- * This file is part of WebFPVLeaderboard.
+ * Units first (the origins the page guesses, the admin whitelist, what
+ * validate.js takes and refuses, the file store, the statistics
+ * counters), then the real server started on a loopback port with a file
+ * store and driven over HTTP and WebSocket the way the simulator, the
+ * builder and the page drive it. With BOARD_SELFTEST_DATABASE_URL naming
+ * an EMPTY Postgres database, the HTTP half runs again against it, since
+ * the live board is the Postgres store; the pass counts from zero and
+ * drops nothing, so pointing it at a board with data fails rather than
+ * harms it. Unset, it says `skip` rather than passing quietly.
  *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * The goldens under tests/ pin exact answers; this file pins the rules
+ * behind them, with a sentence each, and the places the board leans on the
+ * pinned simulator (its lap check, identity module, builder types, map
+ * registry), so re-pinning vendor/fdfpv fails here first.
+ *
+ * This file is part of the Paraguayan Drone Combat Simulator.
+ *
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
+ *
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY, without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
-import {
-  inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName, MAP_IDS,
-  creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
-  inspectStatsEvent, STATS_CRAFT, normaliseCountry, statsDay, MAP_ELEMENT_TYPES, RUN_MAPS,
-  inspectBugImages, MAX_BUG_IMAGE_BYTES,
-} from './validate.js';
+import { guessSimOrigin, isLoopback, landingOrigin } from '../public/origins.js';
+import { BUILD_TYPES } from '../vendor/fdfpv/src/builder/course.js';
+import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
+import { MAPS } from '../vendor/fdfpv/src/maps/registry.js';
+import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identity.js';
+import { mapTrackDocument } from '../vendor/fdfpv/tests/lib/maptrack.js';
+import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
 import { sourceKey } from './sponsors.js';
 import { openStore, rowToSummary, summaryOf } from './store.js';
-import { guessSimOrigin, landingOrigin, isLoopback } from '../public/origins.js';
-import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
-import { mapTrackDocument } from '../vendor/fdfpv/tests/lib/maptrack.js';
-import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identity.js';
-import { BUILD_TYPES } from '../vendor/fdfpv/src/builder/course.js';
-import { MAPS } from '../vendor/fdfpv/src/maps/registry.js';
-import { checkLap } from '../vendor/fdfpv/src/game/verify.js';
+import {
+  creditOf, inspectBugCreate, inspectBugImages, inspectBugPatch, inspectDocument, inspectGhost, inspectStatsEvent,
+  layoutHash, normaliseCountry, normaliseLapMs, normaliseName, normaliseThreeMs, planFromDocument, statsDay,
+  trackClassOf, MAP_ELEMENT_TYPES, MAP_IDS, MAX_BUG_IMAGE_BYTES, RUN_MAPS, STATS_CRAFT, TRACK_CLASSES,
+} from './validate.js';
 
-/*
- * Documents with two gates, for the routes that post times. A course of one
- * gate is a lap every millisecond by the detector's own rules (the gate is
- * both the start and the next gate, and the craft is still in its slab), so
- * a lap that the board can measure needs somewhere to go in between.
- */
-function lapDoc(id = 'trk-1a2b3c4d', extra = {}) {
-  const gate = (gid, x) => ({
-    id: gid, type: 'gate', name: 'Gate', position: { x, y: 8, z: 0 }, yaw: 0, pitch: 0, yawOverridden: false,
-    dims: { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 },
-  });
-  return sampleDoc(id, {
-    ...extra,
-    elements: [gate('el-1', 10), gate('el-2', 30)],
-    sequence: [
-      { id: 'seq-1', elementId: 'el-1', apertureIndex: 0, entry: 1 },
-      { id: 'seq-2', elementId: 'el-2', apertureIndex: 0, entry: 1 },
-    ],
-  });
-}
+const repo = dirname(dirname(fileURLToPath(import.meta.url)));
 
-function lapRoom(id = 'trk-2b3c4d5e') {
-  const room = roomDoc(id);
-  room.elements.push({
-    id: 'el-3', type: 'gate', position: { x: 2, y: 0.6, z: 0 }, yaw: 0,
-    dims: { clearW: 0.7112, clearH: 0.7112, sillH: 0, levels: 1 },
-  });
-  room.sequence.push({ id: 'seq-2', elementId: 'el-3', apertureIndex: 0, entry: 1 });
-  return room;
-}
+/* ================================================================== */
+/* The harness                                                         */
+/* ================================================================== */
 
-/* A lap the board must accept: flown through every gate of the document by
- * the simulator's own test helper, as the base64 the simulator would post. */
-function honestLap(document, opts = {}) {
-  const lap = syntheticLapBytes(document, opts);
-  return { ghost: Buffer.from(lap.bytes).toString('base64'), lapMs: lap.lapMs, durationMs: lap.durationMs };
-}
+let failures = 0;
 
-/* One browser's pilot key each, made in memory the way the simulator makes
- * them in localStorage. */
-const adaKey = createIdentity(memoryStorage());
-const boKey = createIdentity(memoryStorage());
-
-/* The body the simulator posts: the time, its ghost, and the signature the
- * pilot key puts over exactly those. */
-async function signedTime(identity, trackId, name, lap, extra = {}) {
-  const lapMs = Math.round(lap.lapMs);
-  const auth = await identity.signTime({ trackId, lapMs, ghost: lap.ghost });
-  return JSON.stringify({ name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, ...extra });
-}
-
-/* A plane's lap on a map track: the same post naming its aircraft, which
- * the signature covers too. */
-async function signedPlaneTime(identity, trackId, name, lap, craft) {
-  const lapMs = Math.round(lap.lapMs);
-  const auth = await identity.signTime({ trackId, lapMs, ghost: lap.ghost, craft });
-  return JSON.stringify({ name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, craft });
-}
-
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-let failed = 0;
-
-function check(name, cond, detail = '') {
-  if (cond) {
+function check(name, holds, detail = '') {
+  if (holds) {
     console.log(`  pass  ${name}`);
     return;
   }
-  failed += 1;
-  console.log(`  FAIL  ${name}${detail ? `  ${detail}` : ''}`);
+  failures += 1;
+  console.log(`  FAIL  ${name}${detail === '' || detail === undefined ? '' : `  ${detail}`}`);
 }
 
-/*
- * A RaceGOW room: a 5 by 6 m field, a 28 inch gate out of 26.7 mm PVC and a
- * single 100 mm start stand, because there are no heats and every pilot
- * flies alone at home. It is the only kind of track this board keeps a card
- * animation for, so both halves of this file want one and both want the
- * same one.
- */
-/*
- * A structurally valid, and entirely empty, 64 by 64 GIF89a: the signature,
- * the logical screen descriptor, and the trailer. inspectGif reads the first
- * ten bytes and the byte count, so this exercises everything the board does
- * with an upload without a hundred kilobytes of rendered track in the source
- * of a test file. The real ones come out of the simulator's animate.js.
- */
-const GIF_64 = Buffer.concat([
-  Buffer.from('GIF89a', 'latin1'),
-  Buffer.from([64, 0, 64, 0, 0x00, 0x00, 0x00]),
-  Buffer.from([0x3b]),
-]);
+const section = (title) => console.log(`\n${title}`);
+const skip = (what) => console.log(`  skip  ${what}`);
+const b64 = (bytes) => Buffer.from(bytes).toString('base64');
+const utf8 = (text) => new TextEncoder().encode(text);
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+/* Keys sorted, so a document handed back by Postgres (JSONB keeps its own
+ * key order) compares equal to the one sent. */
+const sortedJson = (value) => JSON.stringify(value, (k, v) => (v && typeof v === 'object' && !Array.isArray(v)
+  ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, v[key]]))
+  : v));
+const sameMembers = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 
-/* The token the http half starts its server with, so both halves of the
- * admin path are exercised: it opens the door, and an unset one has no
- * door at all. */
-const ADMIN_TOKEN = 'selftest-admin-token';
+/* ================================================================== */
+/* Fixtures                                                            */
+/* ================================================================== */
 
-/*
- * THE ADMIN THE HTTP HALF SIGNS IN AS, AND WHY IT IS NOT THE REAL ONE.
- *
- * The board ships with one address on its whitelist and the password behind
- * an scrypt hash, so the word itself is not in this repository. Writing it
- * into a test file would put it back, in plaintext, in the one file
- * everybody reads. So the http half starts its server with BOARD_ADMINS set
- * to this instead: a made up address, a made up password, and the whole
- * login path exercised end to end against them.
- *
- * What that leaves uncovered is whether the SHIPPED hash matches the
- * password somebody was given for it, which no test in a public repository
- * can check without publishing that password. Set BOARD_SELFTEST_PASSWORD
- * to check it on a machine where knowing it is fine; the unit half below
- * uses it when it is there and says so when it is not.
- *
- * `plain:` is also the one thing in src/admin.js that nothing else would
- * exercise, so this doubles as its check.
- */
-const ADMIN_EMAIL = 'boardkeeper@example.com';
-const ADMIN_PASSWORD = 'selftest-password-42';
+/* Credentials the HTTP half starts its servers with. `plain:` on purpose:
+ * it is the record shape nothing else exercises, and the selftest's own
+ * password is no secret. */
+const SCRIPT_TOKEN = 'selftest-admin-token';
+const KEEPER = 'boardkeeper@example.com';
+const KEEPER_PASSWORD = 'selftest-password-42';
+const BUGS_SECRET = 'selftest-bugs-token';
 
-/* Screenshots for the bug form's attachments. A real one pixel PNG, so the
- * round trip is a real image's bytes; the JPEG and WebP only have to carry
- * their magic, which is all the board reads. */
-const PNG_1PX = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64',
-);
+/* A 64 by 64 GIF header, the smallest animation the board takes. */
+const GIF_64 = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.from([64, 0, 64, 0, 0, 0, 0]), Buffer.from([0x3b])]);
+/* A real one pixel PNG, so its magic and its length are a real file's. */
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const JPEG_HEAD = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60, 7)]);
 const WEBP_HEAD = Buffer.concat([Buffer.from('RIFF\x40\x00\x00\x00WEBPVP8 ', 'latin1'), Buffer.alloc(60, 3)]);
-const b64 = (buf) => buf.toString('base64');
 
-function roomDoc(id = 'trk-2b3c4d5e') {
-  const room = sampleDoc(id, {
-    elements: [
-      {
-        id: 'el-1',
-        type: 'startPads',
-        position: { x: 0, y: 1.5, z: 0 },
-        yaw: 0,
-        dims: { pads: 1, spacing: 0.3, padSize: 0.1 },
-      },
-      {
-        id: 'el-2',
-        type: 'gate',
-        position: { x: 0, y: 0.6, z: 0 },
-        yaw: 0,
-        dims: { clearW: 0.7112, clearH: 0.7112, sillH: 0, levels: 1 },
-      },
-    ],
-    sequence: [{ id: 'seq-1', elementId: 'el-2', apertureIndex: 0, entry: 1 }],
-  });
-  room.schemaVersion = 3;
-  room.trackClass = 'micro';
-  room.field = { width: 5, depth: 6, gridSize: 0.0254 };
-  return room;
+const FIELD_GATE_DIMS = { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 };
+const ROOM_GATE_DIMS = { clearW: 0.7112, clearH: 0.7112, sillH: 0, levels: 1 };
+
+function gate(id, x, y, { z = 0, dims = FIELD_GATE_DIMS, type = 'gate', yaw = 0 } = {}) {
+  return {
+    id, type, name: 'Gate', position: { x, y, z }, yaw, pitch: 0, yawOverridden: false, dims,
+  };
 }
+
+const flyingOrder = (...ids) => ids.map((elementId, i) => ({
+  id: `seq-${i + 1}`, elementId, apertureIndex: 0, entry: 1,
+}));
 
 /*
- * A WING COURSE: four five metre gates round the 400 by 300 m airfield, the
- * simulator's own defaults for the class (src/trackbuilder/elements.js),
- * with the yaws its builder decides for that loop. Flown at the wing's
- * cruise, 20 m/s, which is what the vendored lap check has to accept.
+ * A schema 1 track on the sixty metre field, one gate unless told
+ * otherwise. `logo` and `logos` spell branding the two ways stored tracks
+ * spell it.
  */
-function wingDoc(id = 'trk-3c4d5e6f') {
-  const gate = (gid, x, y, yaw) => ({
-    id: gid, type: 'gate', name: 'Gate', position: { x, y, z: 0 }, yaw, pitch: 0, yawOverridden: false,
-    dims: { levels: 1, sillH: 0, clearW: 5, clearH: 5, levelPitch: 5.0334 },
-  });
-  const wing = sampleDoc(id, {
-    name: 'Airfield Loop',
-    elements: [
-      gate('el-1', 100, 75, 0),
-      gate('el-2', 300, 75, 0.643501),
-      gate('el-3', 300, 225, 2.498092),
-      gate('el-4', 100, 225, 3.141593),
-    ],
-    sequence: [1, 2, 3, 4].map((n) => ({ id: `seq-${n}`, elementId: `el-${n}`, apertureIndex: 0, entry: 1 })),
-  });
-  wing.schemaVersion = 3;
-  wing.trackClass = 'wing';
-  wing.field = { width: 400, depth: 300, gridSize: 5 };
-  wing.settings = { tangentScale: 1.1, minCurveRadius: 20, samplesPerSegment: 48 };
-  return wing;
-}
-
-function sampleDoc(id = 'trk-1a2b3c4d', extra = {}) {
+function field(id = 'trk-1a2b3c4d', { name = 'Ladder Loop', elements, sequence, logo = null, logos } = {}) {
+  const els = elements || [gate('el-1', 10, 8)];
   return {
     schemaVersion: 1,
     id,
-    name: extra.name || 'Ladder Loop',
+    name,
     createdUtc: '2026-01-01T00:00:00Z',
     modifiedUtc: '2026-01-01T00:00:00Z',
     field: { width: 60, depth: 40, gridSize: 1 },
     settings: { tangentScale: 0.4, minCurveRadius: 2, samplesPerSegment: 24 },
-    branding: extra.logos
-      ? { logos: extra.logos }
-      : {
-        logo: extra.logo === undefined ? null : extra.logo,
-        logoName: extra.logoName || '',
-      },
-    elements: extra.elements || [
-      {
-        id: 'el-1',
-        type: 'gate',
-        name: 'Gate',
-        position: { x: 10, y: 8, z: 0 },
-        yaw: 0,
-        pitch: 0,
-        yawOverridden: false,
-        dims: { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 },
-      },
-    ],
-    sequence: extra.sequence || [{ id: 'seq-1', elementId: 'el-1', apertureIndex: 0, entry: 1 }],
+    branding: logos ? { logos } : { logo, logoName: '' },
+    elements: els,
+    sequence: sequence || flyingOrder(els[0].id),
   };
 }
 
-/*
- * A well formed ghost blob, built by hand. MIRRORS the wire format in the
- * simulator's src/share/ghostdata.js the same way inspectGhost does: header,
- * splits, then 20 byte samples. The overrides exist to build the malformed
- * blobs the inspector must refuse.
- */
-function makeGhostB64(durationMs, {
-  rateHz = 30, splits = null, magic = 'FPVGHST1', version = 1, trimBytes = 0,
-} = {}) {
-  const count = Math.floor((durationMs * rateHz) / 1000) + 2;
-  const splitList = splits ?? [durationMs];
-  const bytes = Buffer.alloc(32 + splitList.length * 4 + count * 20);
-  bytes.write(magic, 0, 'latin1');
-  bytes.writeUInt32LE(version, 8);
-  bytes.writeUInt32LE(rateHz, 12);
-  bytes.writeUInt32LE(count, 16);
-  bytes.writeUInt32LE(durationMs, 20);
-  bytes.writeUInt32LE(splitList.length, 24);
-  let at = 32;
-  for (const s of splitList) {
-    bytes.writeUInt32LE(s, at);
-    at += 4;
+/* Two gates twenty metres apart: a field track a synthetic lap can fly. */
+const lapField = (id = 'trk-1a2b3c4d', options = {}) => field(id, {
+  ...options, elements: [gate('el-1', 10, 8), gate('el-2', 30, 8)], sequence: flyingOrder('el-1', 'el-2'),
+});
+
+/* A RaceGOW room: 5 by 6 m, a 28 inch gate, one 100 mm start stand. */
+function room(id = 'trk-2b3c4d5e', { flyable = false } = {}) {
+  const doc = field(id, {
+    elements: [
+      {
+        id: 'el-1', type: 'startPads', position: { x: 0, y: 1.5, z: 0 }, yaw: 0, dims: { pads: 1, spacing: 0.3, padSize: 0.1 },
+      },
+      { id: 'el-2', type: 'gate', position: { x: 0, y: 0.6, z: 0 }, yaw: 0, dims: ROOM_GATE_DIMS },
+    ],
+    sequence: flyingOrder('el-2'),
+  });
+  if (flyable) {
+    doc.elements.push({ id: 'el-3', type: 'gate', position: { x: 2, y: 0.6, z: 0 }, yaw: 0, dims: ROOM_GATE_DIMS });
+    doc.sequence = flyingOrder('el-2', 'el-3');
   }
-  for (let i = 0; i < count; i += 1) {
+  return { ...doc, schemaVersion: 3, trackClass: 'micro', field: { width: 5, depth: 6, gridSize: 0.0254 } };
+}
+
+/* A fixed wing's airfield: four five metre gates round 400 by 300 m, at
+ * the yaws the simulator's builder gives that loop. */
+function airfield(id = 'trk-3c4d5e6f') {
+  const wingGate = (gid, x, y, yaw) => gate(gid, x, y, {
+    yaw, dims: { levels: 1, sillH: 0, clearW: 5, clearH: 5, levelPitch: 5.0334 },
+  });
+  return {
+    ...field(id, {
+      name: 'Airfield Loop',
+      elements: [wingGate('el-1', 100, 75, 0), wingGate('el-2', 300, 75, 0.643501), wingGate('el-3', 300, 225, 2.498092), wingGate('el-4', 100, 225, 3.141593)],
+      sequence: flyingOrder('el-1', 'el-2', 'el-3', 'el-4'),
+    }),
+    schemaVersion: 3,
+    trackClass: 'wing',
+    field: { width: 400, depth: 300, gridSize: 5 },
+    settings: { tangentScale: 1.1, minCurveRadius: 20, samplesPerSegment: 48 },
+  };
+}
+
+/* A ghost blob in the simulator's format, by hand, with knobs to break
+ * it: 32 byte header, a u32 per split, 20 bytes per sample. */
+function ghostBlob(durationMs, {
+  rateHz = 30, magic = 'FPVGHST1', version = 1, trimBytes = 0,
+} = {}) {
+  const samples = Math.floor((durationMs * rateHz) / 1000) + 2;
+  const bytes = Buffer.alloc(32 + 4 + samples * 20);
+  bytes.write(magic, 0, 'latin1');
+  [version, rateHz, samples, durationMs, 1].forEach((word, i) => bytes.writeUInt32LE(word, 8 + i * 4));
+  bytes.writeUInt32LE(durationMs, 32);
+  for (let i = 0; i < samples; i += 1) {
+    const at = 36 + i * 20;
     bytes.writeFloatLE(i * 0.4, at);
     bytes.writeFloatLE(3, at + 4);
-    bytes.writeFloatLE(0, at + 8);
-    bytes.writeInt16LE(0, at + 12);
-    bytes.writeInt16LE(0, at + 14);
-    bytes.writeInt16LE(0, at + 16);
     bytes.writeInt16LE(32767, at + 18);
-    at += 20;
   }
   return bytes.subarray(0, bytes.length - trimBytes).toString('base64');
 }
 
-async function testValidate() {
-  console.log('validate');
-  check('accepts a real name', normaliseName('Ada Rook') === 'Ada Rook');
-  check('rejects a one letter name', normaliseName('A') == null);
-  check('rejects a symbol name', normaliseName('Ada!') == null);
-  check('accepts a lap', normaliseLapMs(12345) === 12345);
-  check('rejects a zero lap', normaliseLapMs(0) == null);
-  check('rejects a boolean lap', normaliseLapMs(true) == null);
-  check('rejects an array lap', normaliseLapMs([1234]) == null);
-  const ok = inspectDocument(sampleDoc());
-  check('accepts a schema 1 track', !ok.error && ok.id === 'trk-1a2b3c4d' && ok.gates === 1);
-  /* The field is what the plan is drawn on. The old message named it and
-   * then never checked it. */
-  const noField = sampleDoc();
-  delete noField.field;
-  check('refuses a track with no field', Boolean(inspectDocument(noField).error));
-  /*
-   * gates is the count of things you FLY THROUGH, not the length of the
-   * flying order: a waypoint pins the line and nothing stands there. This
-   * is the number printed on the card beside the plan, and the plan's own
-   * badges come from the same rule in planFromDocument.
-   */
-  const withWaypoint = inspectDocument(sampleDoc('trk-1a2b3c4d', {
+/* A lap the board must take: flown through every gate by the simulator's
+ * own test helper, as the base64 the simulator posts. */
+function flown(document, options = {}) {
+  const lap = syntheticLapBytes(document, options);
+  return { ghost: b64(lap.bytes), lapMs: lap.lapMs, durationMs: lap.durationMs };
+}
+
+/* One browser's pilot key each, kept in memory the way the simulator
+ * keeps one in localStorage. */
+const adaKey = createIdentity(memoryStorage());
+const boKey = createIdentity(memoryStorage());
+
+/* The body the simulator posts for a time: the lap, its ghost, and the
+ * pilot key's signature over exactly those. `extra` rides in the body
+ * unsigned, which is how a field added after signing is tested. */
+async function signedTime(identity, trackId, name, lap, extra = {}) {
+  const lapMs = Math.round(lap.lapMs);
+  const auth = await identity.signTime({ trackId, lapMs, ghost: lap.ghost });
+  return JSON.stringify({
+    name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, ...extra,
+  });
+}
+
+/* A plane's lap: the aircraft is in the body and under the signature. */
+async function signedPlaneTime(identity, trackId, name, lap, craft) {
+  const lapMs = Math.round(lap.lapMs);
+  const auth = await identity.signTime({
+    trackId, lapMs, ghost: lap.ghost, craft,
+  });
+  return JSON.stringify({
+    name, lapMs, ghost: lap.ghost, key: auth.key, sig: auth.sig, craft,
+  });
+}
+
+/* A board server on a free loopback port, with a scratch file store. */
+function freePort() {
+  return new Promise((done, fail) => {
+    const probe = createServer();
+    probe.on('error', fail);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => done(port));
+    });
+  });
+}
+
+async function bootBoard(env) {
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
+  const port = await freePort();
+  const child = spawn(process.execPath, [join(repo, 'src', 'server.js')], {
+    cwd: repo,
+    env: {
+      ...process.env, PORT: String(port), BOARD_HOST: '127.0.0.1', BOARD_FILE: join(dir, 'board.json'), ...env,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let log = '';
+  child.stdout.on('data', (d) => { log += d; });
+  child.stderr.on('data', (d) => { log += d; });
+  for (let i = 0; i < 160 && !log.includes('FDFPV leaderboard'); i += 1) {
+    await sleep(50);
+  }
+  if (!log.includes('FDFPV leaderboard')) {
+    child.kill();
+    throw new Error(`the board did not start:\n${log}`);
+  }
+  const base = `http://127.0.0.1:${port}`;
+  return {
+    base,
+    port,
+    get: (path, headers = {}) => fetch(`${base}${path}`, { headers }),
+    json: (path, headers = {}) => fetch(`${base}${path}`, { headers }).then((r) => r.json()),
+    post: (path, body, headers = {}) => fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+    async stop() {
+      child.kill('SIGTERM');
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/* ================================================================== */
+/* Where the page's links go, worked out without the server            */
+/* ================================================================== */
+
+/*
+ * The page's links have to be right whether or not /api/config answers:
+ * one failed request once left every cross origin link on the loopback
+ * address written into the HTML. app.js touches `document` at load and
+ * cannot be imported here, which is why the guessing lives in origins.js.
+ */
+function originsUnit() {
+  section('origins, without asking the server');
+  /* The page's location and its own directory, as app.js passes them. */
+  const from = (href) => [new URL(href), new URL('./', href)];
+  const PAGES = 'https://fdflabs.github.io/fdfpv';
+  const simCases = [
+    ['a checkout on 127.0.0.1 finds the simulator on 8000', 'http://127.0.0.1:3180/', 'http://127.0.0.1:8000'],
+    ['localhost by name finds it on localhost', 'http://localhost:3180/', 'http://localhost:8000'],
+    ['a hash on the address changes nothing', 'http://127.0.0.1:3180/#course=trk-1a2b3c4d', 'http://127.0.0.1:8000'],
+    ['the /board mount on the VM finds the simulator on GitHub Pages', 'https://129.151.39.48/board/', PAGES],
+    ['and so does the bug page under that mount', 'https://129.151.39.48/board/bugs', PAGES],
+    /* A board on a host of its own cannot know where the simulator is, and
+     * a loopback guess there is the defect origins.js exists to prevent. */
+    ['a board on its own host does not guess', 'https://fdfpv-board.onrender.com/', null],
+    ['nor does one at the root of a public address', 'https://129.151.39.48/', null],
+  ];
+  for (const [name, href, want] of simCases) {
+    check(name, guessSimOrigin(...from(href)) === want, guessSimOrigin(...from(href)));
+  }
+  check('no location at all is null, not a throw', guessSimOrigin(null, null) === null);
+  /* The front door always has an answer: the landing page named in
+   * origins.js is where the masthead's mark goes from anywhere. */
+  const doorCases = [
+    ['a checkout on 127.0.0.1 finds the front door on 8080', 'http://127.0.0.1:3180/', 'http://127.0.0.1:8080'],
+    ['localhost by name finds it on localhost', 'http://localhost:3180/', 'http://localhost:8080'],
+    ['the VM mount names the published front door, not the VM', 'https://129.151.39.48/board/', PAGES],
+    ['and so does its bug page', 'https://129.151.39.48/board/bugs', PAGES],
+    ['a board on its own host still names the front door', 'https://fdfpv-board.onrender.com/', PAGES],
+  ];
+  for (const [name, href, want] of doorCases) {
+    check(name, landingOrigin(...from(href)) === want, landingOrigin(...from(href)));
+  }
+  check('no location at all still names the front door', landingOrigin(null, null) === PAGES);
+  check('the loopback hosts are the ones a checkout uses, and no other',
+    ['127.0.0.1', 'localhost', '::1'].every(isLoopback) && !isLoopback('fdfpv.example'));
+}
+
+/* ================================================================== */
+/* The admin whitelist and its tokens                                   */
+/* ================================================================== */
+
+/*
+ * src/admin.js reads BOARD_ADMINS once, at import, so it is imported here
+ * under two query strings (two module instances): with the variable
+ * unset, which is what this repository ships, and with one address.
+ */
+async function adminUnit() {
+  section('admin');
+  delete process.env.BOARD_ADMINS;
+  const shipped = await import('./admin.js?nobody');
+  check('nobody is an admin out of the box', shipped.adminEmails().length === 0, shipped.adminEmails().join());
+  check('so no address and password open the board until BOARD_ADMINS names one',
+    shipped.checkPassword('anyone@example.com', 'anything at all') === null);
+
+  process.env.BOARD_ADMINS = `${KEEPER}:plain:${KEEPER_PASSWORD}`;
+  const admin = await import('./admin.js?keeper');
+  delete process.env.BOARD_ADMINS;
+  check('BOARD_ADMINS is the whole list', sameMembers(admin.adminEmails(), [KEEPER]), admin.adminEmails().join());
+  check('an address is trimmed and lower cased', admin.normaliseEmail('  Someone@Example.COM ') === 'someone@example.com');
+  check('and what is not an address is the empty string',
+    ['not an address', 'a@b', null, 'x:y@example.com'].every((raw) => admin.normaliseEmail(raw) === ''));
+  check('a wrong password opens nothing', admin.checkPassword(KEEPER, 'not it') === null);
+  check('an empty password opens nothing', admin.checkPassword(KEEPER, '') === null);
+  check('an address off the list opens nothing, whatever it brings', admin.checkPassword('stranger@example.com', KEEPER_PASSWORD) === null);
+  check('the address and its password open the board', admin.checkPassword(KEEPER, KEEPER_PASSWORD) === KEEPER);
+
+  const token = admin.mintSession(KEEPER);
+  const session = admin.readSession(token);
+  check('a minted token reads back as its address', session?.email === KEEPER);
+  check('and says when it runs out, in UTC', typeof session?.expiresUtc === 'string' && session.expiresUtc.endsWith('Z'));
+  check('a token whose signature was changed is nobody', admin.readSession(`${token.slice(0, -2)}zz`) === null);
+  const forgedClaims = Buffer.from(JSON.stringify({ e: KEEPER, x: Date.now() + 9e6 })).toString('base64url');
+  check('a token whose claims were changed is nobody', admin.readSession(`v1.${forgedClaims}.${token.split('.')[2]}`) === null);
+  check('an expired token is nobody', admin.readSession(admin.mintSession(KEEPER, { ms: -1000 })) === null);
+  /* Checked on every read, not only at sign in, so taking an address off
+   * the list locks it out at once rather than when its token expires. */
+  check('a token for an address off the list is nobody', admin.readSession(admin.mintSession('gone@example.com')) === null);
+  check('junk is nobody', ['', 'v1.a.b', null, 'v2.a.b'].every((junk) => admin.readSession(junk) === null));
+}
+
+/* ================================================================== */
+/* What validate.js takes and refuses                                   */
+/* ================================================================== */
+
+function namesAndLaps() {
+  section('validate');
+  check('a pilot name is taken as typed', normaliseName('Ada Rook') === 'Ada Rook');
+  check('one letter is not a name', normaliseName('A') === null);
+  check('punctuation outside the set is not a name', normaliseName('Ada!') === null);
+  check('a lap in milliseconds is taken', normaliseLapMs(12345) === 12345);
+  check('a lap of nought is not a lap', normaliseLapMs(0) === null);
+  check('true is not a lap', normaliseLapMs(true) === null);
+  check('a list holding a number is not a lap', normaliseLapMs([1234]) === null);
+}
+
+function fieldDocuments() {
+  const plain = inspectDocument(field());
+  check('a schema 1 track publishes, with its id and its one gate', !plain.error && plain.id === 'trk-1a2b3c4d' && plain.gates === 1);
+  const fieldless = field();
+  delete fieldless.field;
+  check('a track with no field is refused (it is what the plan is drawn on)', Boolean(inspectDocument(fieldless).error));
+  /* `gates` counts what is flown through; a waypoint pins the line with
+   * nothing standing there, and the plan's badges follow the same rule. */
+  const pinnedLine = inspectDocument(field('trk-1a2b3c4d', {
     elements: [
       { id: 'el-1', type: 'gate', position: { x: 0, y: 0, z: 0 }, yaw: 0, dims: { levels: 1 } },
       { id: 'el-2', type: 'waypoint', position: { x: 5, y: 5, z: 0 }, yaw: 0, dims: {} },
     ],
     sequence: [{ elementId: 'el-1' }, { elementId: 'el-2' }],
   }));
-  check('a waypoint in the order is not a gate', !withWaypoint.error && withWaypoint.gates === 1);
-  /*
-   * MIRROR CHECK. layoutHash decides whether a republished track keeps its
-   * times, and the simulator's layoutFingerprint predicts that answer so it
-   * can warn first. They hash differently on purpose; they must agree on
-   * which keys ARE the layout. If this list changes, change
-   * fdfpv/src/share/listing.js with it.
-   */
-  const layoutKeys = sampleDoc();
-  const movedGate = sampleDoc();
-  movedGate.elements = movedGate.elements.map((el) => ({ ...el, position: { ...el.position, x: 99 } }));
-  check('layoutHash follows elements', layoutHash(layoutKeys) !== layoutHash(movedGate));
-  const recoloured = sampleDoc();
-  recoloured.branding = { logo: null, logoName: 'ignored' };
-  check('layoutHash ignores branding', layoutHash(layoutKeys) === layoutHash(recoloured));
-  check('refuses an empty flying order', Boolean(inspectDocument(sampleDoc('trk-1a2b3c4d', { sequence: [] })).error));
-  check('refuses a flying order that names nothing', Boolean(inspectDocument(sampleDoc('trk-1a2b3c4d', {
-    sequence: [{ id: 'seq-1', elementId: 'missing', apertureIndex: 0, entry: 1 }],
-  })).error));
-  check('refuses a remote logo', Boolean(inspectDocument(sampleDoc('trk-1a2b3c4d', { logo: 'https://evil.example/x.png' })).error));
-  check('refuses an svg logo', Boolean(inspectDocument(sampleDoc('trk-1a2b3c4d', { logo: 'data:image/svg+xml;base64,PHN2Zy8+' })).error));
-  const withLogo = inspectDocument(sampleDoc('trk-1a2b3c4d', { logo: 'data:image/png;base64,aaa' }));
-  check('keeps an embedded logo', !withLogo.error && withLogo.hasLogo);
+  check('a waypoint in the flying order is not counted as a gate', !pinnedLine.error && pinnedLine.gates === 1);
 
-  /*
-   * FIVE MARKS. A schemaVersion 2 track spells its branding as a list, and
-   * the board has to read both spellings: the old one, because tracks
-   * published under it are already stored, and the new one, because that is
-   * what a current builder writes.
-   */
-  const png = (n) => `data:image/png;base64,${'a'.repeat(n)}`;
-  const logos = (count, size = 64) => Array.from({ length: count }, (unused, i) => ({
-    id: `logo-${i + 1}`, image: png(size), name: `m${i + 1}`,
+  /* The layout keys, which the simulator's layoutFingerprint must agree on:
+   * field, elements, sequence. */
+  const moved = field();
+  moved.elements = moved.elements.map((el) => ({ ...el, position: { ...el.position, x: 99 } }));
+  check('moving a gate changes the layout hash', layoutHash(field()) !== layoutHash(moved));
+  check('branding does not', layoutHash(field()) === layoutHash({ ...field(), branding: { logo: null, logoName: 'ignored' } }));
+  check('an empty flying order is refused', Boolean(inspectDocument(field('trk-1a2b3c4d', { sequence: [] })).error));
+  check('a flying order naming an element that is not there is refused',
+    Boolean(inspectDocument(field('trk-1a2b3c4d', { sequence: flyingOrder('missing') })).error));
+  check('a logo fetched from elsewhere is refused', Boolean(inspectDocument(field('trk-1a2b3c4d', { logo: 'https://evil.example/x.png' })).error));
+  check('an SVG logo is refused', Boolean(inspectDocument(field('trk-1a2b3c4d', { logo: 'data:image/svg+xml;base64,PHN2Zy8+' })).error));
+  const branded = inspectDocument(field('trk-1a2b3c4d', { logo: 'data:image/png;base64,aaa' }));
+  check('an embedded logo is kept and flagged', !branded.error && branded.hasLogo === true);
+
+  /* Schema 2 spells branding as a list of up to five; both spellings are
+   * read because tracks under the old one are already stored. */
+  const png = (chars) => `data:image/png;base64,${'a'.repeat(chars)}`;
+  const logoList = (count, chars = 64) => Array.from({ length: count }, (_, i) => ({ id: `logo-${i + 1}`, image: png(chars), name: `m${i + 1}` }));
+  const v2 = (logos) => ({ ...field('trk-1a2b3c4d', { logos }), schemaVersion: 2 });
+  const five = inspectDocument(v2(logoList(5)));
+  check('a schema 2 track with five logos publishes and counts them', !five.error && five.logoCount === 5);
+  check('a sixth logo is refused', Boolean(inspectDocument(v2(logoList(6))).error));
+  check('logos past their shared budget are refused', Boolean(inspectDocument(v2(logoList(3, 200 * 1024))).error));
+  check('a remote image in the list is refused', Boolean(inspectDocument(v2([{ id: 'logo-1', image: 'https://evil.example/x.png', name: 'x' }])).error));
+
+  /* Schema 3 adds the class and nothing else, so 1 and 2 keep their times
+   * across a republish and read as the field they were built on. */
+  const three = inspectDocument({ ...field(), schemaVersion: 3 });
+  check('a schema 3 track publishes', !three.error, three.error);
+  check('and with no class it is the field', three.trackClass === 'full', three.trackClass);
+  check('a version nobody taught this board is still refused', Boolean(inspectDocument({ ...field(), schemaVersion: 5 }).error));
+
+  /* Paint is not layout: a sponsor's ground logo added to a flown track
+   * must not clear its times (LAYOUT_SKIP in the simulator, mirrored). */
+  const painted = field();
+  painted.elements = [...painted.elements, {
+    id: 'el-9', type: 'groundLogo', name: '', position: { x: 30, y: 20, z: 0 }, yaw: 0, pitch: 0, yawOverridden: false, logoId: 'logo-1', dims: { width: 10, depth: 4 },
+  }];
+  check('paint on the grass leaves the layout hash alone', layoutHash(field()) === layoutHash(painted));
+  const paintedOut = inspectDocument(painted);
+  check('a ground logo is not counted as a gate', !paintedOut.error && paintedOut.gates === 1);
+  check('nor drawn on the plan', !paintedOut.error && !paintedOut.plan.marks.some((m) => m.type === 'groundLogo'));
+  check('a new title leaves the layout hash alone', layoutHash(field()) === layoutHash(field('trk-1a2b3c4d', { name: 'Renamed' })));
+
+  const withPinAndFlag = inspectDocument(field('trk-1a2b3c4d', {
+    elements: [
+      gate('el-1', 10, 8),
+      {
+        id: 'el-2', type: 'waypoint', name: 'Pin', position: { x: 22, y: 18, z: 1.2 }, yaw: 0.4, pitch: 0, yawOverridden: false, dims: { height: 1.6, poleRadius: 0.02, clearance: 0 },
+      },
+      {
+        id: 'el-3', type: 'flag', name: 'Dress', position: { x: 40, y: 30, z: 0 }, yaw: 0, pitch: 0, yawOverridden: false, dims: { height: 2.5, poleRadius: 0.025, clearance: 1.5 },
+      },
+    ],
+    sequence: flyingOrder('el-1', 'el-2'),
   }));
-  const v2 = sampleDoc('trk-1a2b3c4d', { logos: logos(5) });
-  v2.schemaVersion = 2;
-  const five = inspectDocument(v2);
-  check('accepts a schema 2 track with five logos', !five.error && five.logoCount === 5);
-  /*
-   * SCHEMA 3 IS THE TRACK CLASS, and this used to assert the refusal. It was
-   * right while there was one class: an unknown version is a document from a
-   * builder this board has not been taught, and letting one in unread is how
-   * a board ends up storing a shape it cannot draw.
-   *
-   * Version 3 has now been read. It adds `trackClass` and nothing else:
-   * field, elements and sequence are identical, so a version 1 or 2 track
-   * keeps its times across a republish and every stored track reads as the
-   * sixty metre field it was built on.
-   */
-  const v3 = sampleDoc('trk-1a2b3c4d');
-  v3.schemaVersion = 3;
-  const three = inspectDocument(v3);
-  check('accepts a schema 3 track', !three.error, three.error);
-  check('and a schema 3 track with no class is the field', three.trackClass === 'full', three.trackClass);
-  const v5 = sampleDoc('trk-1a2b3c4d');
-  v5.schemaVersion = 5;
-  check('but still refuses a version it has not been taught', Boolean(inspectDocument(v5).error));
+  const { plan } = withPinAndFlag;
+  check('the plan leaves waypoints out', plan.marks.every((m) => m.type !== 'waypoint'));
+  check('but its line still runs through them, in flying order',
+    plan.path.length === 2 && plan.path[0].x === 10 && plan.path[1].x === 22);
+  check('a flag nobody flies is marked as off the order', plan.marks.some((m) => m.type === 'flag' && m.seq === false));
+  check('the first gate in the order carries badge 1, and only gates carry badges',
+    plan.numbers.length === 1 && plan.numbers[0].n === 1);
+}
 
-  /*
-   * SCHEMA 4 IS A TRACK BUILT INSIDE A WORLD, and this used to assert its
-   * refusal too. The document is the simulator's own: three gates hung in a
-   * ring on swiss2 by the in-sim builder's functions, from its pinned
-   * checkout, so this is the shape a pilot's publish actually sends.
-   */
+/* A schema 4 track: built inside one of the simulator's worlds by its
+ * in-world builder, here with the builder's own functions from the pinned
+ * checkout, so this is the shape a pilot's publish sends. */
+function worldDocuments() {
   const ring = mapTrackDocument({ id: 'trk-4d5e6f70' });
-  const ringOut = inspectDocument(ring);
-  check('accepts a schema 4 track built on swiss2', !ringOut.error, ringOut.error);
-  check('and knows which world it stands in', ringOut.map === 'swiss2', ringOut.map);
-  check('and counts its three gates', ringOut.gates === 3, `${ringOut.gates}`);
-  check('and it is raced as the five inch field class', ringOut.trackClass === 'full', ringOut.trackClass);
-  check('its plan is framed on its own gates, not the world', ringOut.plan.map === 'swiss2'
-    && ringOut.plan.width > 60 && ringOut.plan.width < 200
-    && ringOut.plan.marks.every((m) => m.x >= 0 && m.y >= 0 && m.x <= ringOut.plan.width && m.y <= ringOut.plan.depth),
-  JSON.stringify(ringOut.plan).slice(0, 160));
-  check('and every gate on it carries its number', ringOut.plan.numbers.map((n) => n.n).join() === '1,2,3');
-  check('the worlds are swiss2 and alps and nothing else', MAP_IDS.join() === 'swiss2,alps', MAP_IDS.join());
-  check('accepts the same ring on alps', inspectDocument({ ...ring, map: 'alps' }).map === 'alps');
-  const unmapped = { ...ring };
-  delete unmapped.map;
-  check('refuses a version 4 track that names no world', /world it stands in/.test(inspectDocument(unmapped).error || ''));
+  const out = inspectDocument(ring);
+  check('a schema 4 track built on swiss2 publishes', !out.error, out.error);
+  check('and knows its world', out.map === 'swiss2', out.map);
+  check('and counts its three gates', out.gates === 3, `${out.gates}`);
+  check('and is raced as the five inch field class', out.trackClass === 'full', out.trackClass);
+  check('its plan is framed on its own gates, not on the world', out.plan.map === 'swiss2'
+    && out.plan.width > 60 && out.plan.width < 200
+    && out.plan.marks.every((m) => m.x >= 0 && m.y >= 0 && m.x <= out.plan.width && m.y <= out.plan.depth),
+  JSON.stringify(out.plan).slice(0, 160));
+  check('and every gate on it carries its badge', out.plan.numbers.map((n) => n.n).join() === '1,2,3');
+  check('the worlds are swiss2 and alps, in that order, and nothing else', MAP_IDS.join() === 'swiss2,alps', MAP_IDS.join());
+  check('the same ring publishes on alps', inspectDocument({ ...ring, map: 'alps' }).map === 'alps');
+  const worldless = { ...ring };
+  delete worldless.map;
+  check('a schema 4 track naming no world is refused, and told why', /world it stands in/.test(inspectDocument(worldless).error || ''));
   for (const world of ['city', 'yellowstone', 'custom', 'SWISS2']) {
-    check(`refuses a version 4 track on ${world}`, Boolean(inspectDocument({ ...ring, map: world }).error));
+    check(`a schema 4 track on ${world} is refused`, Boolean(inspectDocument({ ...ring, map: world }).error));
   }
-  const withEl = (fn) => ({ ...ring, elements: ring.elements.map((el, i) => (i === 1 ? fn({ ...el }) : el)) });
-  check('refuses an element the in-sim builder does not place', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'flag' }))).error));
-  check('refuses a label on a map track', Boolean(inspectDocument(withEl((el) => ({ ...el, type: 'label' }))).error));
-  check('accepts every type the builder places', BUILD_TYPES
-    .every((type) => !inspectDocument(withEl((el) => ({ ...el, type }))).error));
+  const second = (change) => ({ ...ring, elements: ring.elements.map((el, i) => (i === 1 ? change({ ...el }) : el)) });
+  check('an element the in-world builder cannot place is refused', Boolean(inspectDocument(second((el) => ({ ...el, type: 'flag' }))).error));
+  check('so is a label', Boolean(inspectDocument(second((el) => ({ ...el, type: 'label' }))).error));
+  check('every type the builder places is taken', BUILD_TYPES.every((type) => !inspectDocument(second((el) => ({ ...el, type }))).error));
 
-  /*
-   * THE MIRRORS, HELD TO WHAT THEY MIRROR. validate.js copies three closed
-   * lists out of the simulator rather than importing them, and each copy
-   * went stale once without a test noticing: the sky hoops made every hoop
-   * track unpublishable, and removing the freestyle town refused every run
-   * from the valleys. These compare each copy with the pinned simulator, so
-   * moving vendor/fdfpv forward fails here first.
-   */
-  const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
-  check('the map track element types are the builder\'s BUILD_TYPES',
-    sameSet(MAP_ELEMENT_TYPES, BUILD_TYPES), `${MAP_ELEMENT_TYPES.join()} vs ${BUILD_TYPES.join()}`);
+  /* The lists validate.js copies out of the simulator, held to what they
+   * copy. Each copy went stale once unnoticed (the sky hoops made hoop
+   * tracks unpublishable; dropping the town refused every valley run). */
+  check('the world element types are the builder\'s BUILD_TYPES', sameMembers(MAP_ELEMENT_TYPES, BUILD_TYPES), `${MAP_ELEMENT_TYPES} vs ${BUILD_TYPES}`);
   const buildable = MAPS.filter((m) => m.build).map((m) => m.id);
-  check('the worlds are the registry\'s buildable maps', sameSet(MAP_IDS, buildable), `${MAP_IDS.join()} vs ${buildable.join()}`);
+  check('the worlds are the registry\'s buildable maps', sameMembers(MAP_IDS, buildable), `${MAP_IDS} vs ${buildable}`);
   const freestyle = MAPS.filter((m) => m.mode === 'freestyle').map((m) => m.id);
-  check('the run maps are the registry\'s freestyle maps', sameSet(RUN_MAPS, freestyle), `${RUN_MAPS.join()} vs ${freestyle.join()}`);
+  check('the run maps are the registry\'s freestyle maps', sameMembers(RUN_MAPS, freestyle), `${RUN_MAPS} vs ${freestyle}`);
 
-  /* A ring of sky hoops, built with the builder's own functions, is a map
-   * track and a lap through it is a lap by the simulator's own detector. */
   const hoops = mapTrackDocument({ id: 'trk-7a8b9c0d', types: ['hoop250', 'hoop175', 'hoop30'], radius: 60 });
   const hoopsOut = inspectDocument(hoops);
-  check('accepts a ring of sky hoops', !hoopsOut.error, hoopsOut.error);
-  check('and numbers every hoop on its plan', hoopsOut.plan && hoopsOut.plan.numbers.map((n) => n.n).join() === '1,2,3');
+  check('a ring of sky hoops publishes', !hoopsOut.error, hoopsOut.error);
+  check('with every hoop badged on its plan', hoopsOut.plan?.numbers.map((n) => n.n).join() === '1,2,3');
   const hoopLap = syntheticLapBytes(hoops);
-  const hoopCheck = checkLap(hoops, hoopLap.bytes, Math.round(hoopLap.lapMs));
-  check('and a lap flown through the hoops verifies', hoopCheck.ok === true, JSON.stringify(hoopCheck).slice(0, 160));
-  check('refuses a gate outside the world across it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, x: 3001 } }))).error));
-  check('refuses a gate outside the world along it', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, y: -3001 } }))).error));
-  check('refuses a gate three kilometres up', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, z: 3001 } }))).error));
-  check('refuses a gate under the floor', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, z: -101 } }))).error));
-  check('accepts a gate on the world\'s edge', !inspectDocument(withEl((el) => ({ ...el, position: { x: 3000, y: -3000, z: 0 } }))).error);
-  check('refuses a position that is text', Boolean(inspectDocument(withEl((el) => ({ ...el, position: { ...el.position, x: '10' } }))).error));
-  check('refuses a gate with no position', Boolean(inspectDocument(withEl((el) => { delete el.position; return el; })).error));
-  check('refuses a gate with no orientation', Boolean(inspectDocument(withEl((el) => { delete el.orientation; return el; })).error));
-  check('refuses an orientation that is not a rotation', Boolean(inspectDocument(withEl((el) => ({ ...el, orientation: { w: 2, x: 0, y: 0, z: 0 } }))).error));
-  check('refuses an orientation with a hole in it', Boolean(inspectDocument(withEl((el) => ({ ...el, orientation: { w: 1, x: 0, y: null, z: 0 } }))).error));
-  check('accepts an orientation within rounding of unit length', !inspectDocument(withEl((el) => ({ ...el, orientation: { w: 0.9999, x: 0, y: 0, z: 0 } }))).error);
-  const crowded = mapTrackDocument({ id: 'trk-4d5e6f70', gates: 257, radius: 900 });
-  check('refuses a map track with more gates than a ghost can split', /at most 256/.test(inspectDocument(crowded).error || ''), inspectDocument(crowded).error);
-  check('accepts one at the limit', !inspectDocument(mapTrackDocument({ id: 'trk-4d5e6f70', gates: 256, radius: 900 })).error);
+  const hoopVerdict = checkLap(hoops, hoopLap.bytes, Math.round(hoopLap.lapMs));
+  check('and a lap flown through the hoops passes the simulator\'s own check', hoopVerdict.ok === true, JSON.stringify(hoopVerdict).slice(0, 160));
 
-  /*
-   * THE LAYOUT HASH. A field track's must be byte for byte what it was, or
-   * every published track loses its times on its next republish: the
-   * expected value below is computed here from the three keys, independently
-   * of layoutHash. A map track's carries its world, so the same ring on
-   * another world is another race, and its poses, so turning a gate is too.
-   */
-  const fieldDoc = sampleDoc('trk-1a2b3c4d');
+  const at = (position) => second((el) => ({ ...el, position: { ...el.position, ...position } }));
+  check('a gate past the world\'s edge across it is refused', Boolean(inspectDocument(at({ x: 3001 })).error));
+  check('a gate past the world\'s edge along it is refused', Boolean(inspectDocument(at({ y: -3001 })).error));
+  check('a gate three kilometres up is refused', Boolean(inspectDocument(at({ z: 3001 })).error));
+  check('a gate under the floor is refused', Boolean(inspectDocument(at({ z: -101 })).error));
+  check('a gate on the world\'s very corner is taken', !inspectDocument(second((el) => ({ ...el, position: { x: 3000, y: -3000, z: 0 } }))).error);
+  check('a coordinate written as text is refused', Boolean(inspectDocument(at({ x: '10' })).error));
+  check('a gate with no position is refused', Boolean(inspectDocument(second((el) => { delete el.position; return el; })).error));
+  check('a gate with no orientation is refused', Boolean(inspectDocument(second((el) => { delete el.orientation; return el; })).error));
+  check('an orientation that is not a rotation is refused', Boolean(inspectDocument(second((el) => ({ ...el, orientation: { w: 2, x: 0, y: 0, z: 0 } }))).error));
+  check('an orientation with a hole in it is refused', Boolean(inspectDocument(second((el) => ({ ...el, orientation: { w: 1, x: 0, y: null, z: 0 } }))).error));
+  check('an orientation a rounding away from unit length is taken', !inspectDocument(second((el) => ({ ...el, orientation: { w: 0.9999, x: 0, y: 0, z: 0 } }))).error);
+  const tooMany = inspectDocument(mapTrackDocument({ id: 'trk-4d5e6f70', gates: 257, radius: 900 }));
+  check('a world track with more gates than a ghost has splits is refused', /at most 256/.test(tooMany.error || ''), tooMany.error);
+  check('one at the limit is taken', !inspectDocument(mapTrackDocument({ id: 'trk-4d5e6f70', gates: 256, radius: 900 })).error);
+
+  /* A field track's hash must be byte for byte what it always was, or
+   * every published track loses its times on its next republish; the
+   * expected value is computed here from the three keys, independently. */
+  const plainField = field();
   const byHand = createHash('sha256').update(JSON.stringify({
-    field: fieldDoc.field, elements: fieldDoc.elements, sequence: fieldDoc.sequence,
+    field: plainField.field, elements: plainField.elements, sequence: plainField.sequence,
   })).digest('hex');
-  check('a field track hashes exactly as it did before map tracks', layoutHash(fieldDoc) === byHand);
-  check('a field track that says map is still hashed as a field', layoutHash({ ...fieldDoc, map: 'swiss2' }) === byHand);
-  check('the same ring on another world is another layout', layoutHash(ring) !== layoutHash({ ...ring, map: 'alps' }));
-  check('the same ring on the same world is the same layout', layoutHash(ring) === layoutHash(mapTrackDocument({ id: 'trk-4d5e6f70' })));
-  check('a ring renamed is the same layout', layoutHash(ring) === layoutHash({ ...ring, name: 'Another name' }));
-  const turned = withEl((el) => ({ ...el, orientation: { w: 1, x: 0, y: 0, z: 0 } }));
-  check('turning one gate is another layout', layoutHash(ring) !== layoutHash(turned));
-  check('raising one gate is another layout', layoutHash(ring) !== layoutHash(withEl((el) => ({ ...el, position: { ...el.position, z: el.position.z + 1 } }))));
+  check('a field track hashes exactly as it did before world tracks', layoutHash(plainField) === byHand);
+  check('a field track that says map is still hashed as a field', layoutHash({ ...plainField, map: 'swiss2' }) === byHand);
+  check('the same ring in another world is another layout', layoutHash(ring) !== layoutHash({ ...ring, map: 'alps' }));
+  check('the same ring in the same world is the same layout', layoutHash(ring) === layoutHash(mapTrackDocument({ id: 'trk-4d5e6f70' })));
+  check('a renamed ring is the same layout', layoutHash(ring) === layoutHash({ ...ring, name: 'Another name' }));
+  check('turning one gate is another layout', layoutHash(ring) !== layoutHash(second((el) => ({ ...el, orientation: { w: 1, x: 0, y: 0, z: 0 } }))));
+  check('raising one gate is another layout', layoutHash(ring) !== layoutHash(at({ z: ring.elements[1].position.z + 1 })));
+}
 
-  /*
-   * A ROOM. RaceGOW's own dimensions: a 5 by 6 m field, a 28 inch gate out
-   * of 26.7 mm PVC, and a single 100 mm start stand, because there are no
-   * heats and every pilot flies alone at home.
-   *
-   * The three things checked here are the three the drawer cannot guess and
-   * used to assume: the class, the gate's own opening and the start row.
-   * Held at the MultiGP figures, that plan drew a gate a third of the width
-   * of the room and a start line two thirds of the way across it.
-   */
-  const room = roomDoc();
-  const roomOut = inspectDocument(room);
-  check('accepts a RaceGOW room', !roomOut.error, roomOut.error);
-  check('and reads its class', roomOut.trackClass === 'micro', roomOut.trackClass);
-  check('trackClassOf defaults anything else to the field',
-    trackClassOf({}) === 'full' && trackClassOf(null) === 'full'
-    && trackClassOf({ trackClass: 'nonsense' }) === 'full');
+function classesCreditsAndPlans() {
+  const roomOut = inspectDocument(room());
+  check('a RaceGOW room publishes', !roomOut.error, roomOut.error);
+  check('and reads as micro', roomOut.trackClass === 'micro', roomOut.trackClass);
+  check('anything that is not a known class is the field',
+    [{}, null, { trackClass: 'nonsense' }].every((doc) => trackClassOf(doc) === 'full'));
+  const wingOut = inspectDocument(airfield());
+  check('a wing course publishes', !wingOut.error, wingOut.error);
+  check('and reads as wing', wingOut.trackClass === 'wing', wingOut.trackClass);
+  check('and its plan carries the class', wingOut.plan?.trackClass === 'wing', wingOut.plan?.trackClass);
+  check('and keeps the airfield\'s size', wingOut.plan.width === 400 && wingOut.plan.depth === 300, `${wingOut.plan.width} by ${wingOut.plan.depth}`);
+  check('the classes are the three the simulator writes, in its order', TRACK_CLASSES.join() === 'full,micro,wing', TRACK_CLASSES.join());
 
-  /* AN AIRFIELD. The third class, a fixed wing's, and the mirror check:
-   * the board has to read the word the simulator writes. */
-  const wingOut = inspectDocument(wingDoc());
-  check('accepts a wing course', !wingOut.error, wingOut.error);
-  check('and reads its class', wingOut.trackClass === 'wing', wingOut.trackClass);
-  check('and its plan carries the class', wingOut.plan && wingOut.plan.trackClass === 'wing', wingOut.plan && wingOut.plan.trackClass);
-  check('and the plan keeps the airfield', wingOut.plan.width === 400 && wingOut.plan.depth === 300, `${wingOut.plan.width} by ${wingOut.plan.depth}`);
-  check('TRACK_CLASSES names the three the simulator writes',
-    TRACK_CLASSES.join() === 'full,micro,wing', TRACK_CLASSES.join());
-
-  /*
-   * THE DESIGNER SURVIVES THE ROUND TRIP.
-   *
-   * Eight of the tracks on this board were built by six other people and
-   * published by one, and for a while the card said "Built by" the
-   * publisher. The document has always carried the designer; this is the
-   * read that puts it in front of a visitor, so it is checked here.
-   */
-  const credited = { ...roomDoc(), credit: { designer: '  Skittles  ', series: 'RaceGOW5', broughtOverBy: 'andAgainFPV' } };
-  const creditOut = inspectDocument(credited);
-  check('a credited track is accepted', !creditOut.error, creditOut.error);
-  check('and its designer is kept on the document',
-    creditOut.document.credit.designer === '  Skittles  ', JSON.stringify(creditOut.document.credit));
-  const read = creditOf(creditOut.document);
-  check('and creditOf trims it for the page',
-    read.designer === 'Skittles' && read.series === 'RaceGOW5', JSON.stringify(read));
-  check('creditOf is empty on a track with no credit block',
-    creditOf(roomDoc()).designer === '' && creditOf(null).designer === ''
-    && creditOf({ credit: 'nonsense' }).designer === '');
-  /*
-   * AND IT READS STRINGS AND NOTHING ELSE. The simulator's writer only ever
-   * sends strings, but the document is whatever the publish request said it
-   * was, and String() of an object or an array is a name nobody typed.
-   */
+  /* The designer, who on the RaceGOW rooms is not the publisher. */
+  const credited = inspectDocument({ ...room(), credit: { designer: '  Skittles  ', series: 'RaceGOW5', broughtOverBy: 'andAgainFPV' } });
+  check('a track with a credit block publishes', !credited.error, credited.error);
+  check('and the document keeps the credit as written', credited.document.credit.designer === '  Skittles  ', JSON.stringify(credited.document.credit));
+  const trimmed = creditOf(credited.document);
+  check('creditOf hands the page the trimmed names', trimmed.designer === 'Skittles' && trimmed.series === 'RaceGOW5', JSON.stringify(trimmed));
+  check('and nothing for a track with no usable credit block',
+    [room(), null, { credit: 'nonsense' }].every((doc) => creditOf(doc).designer === ''));
+  /* Only strings are names; String() of an object or a list is a name
+   * nobody typed. */
   const odd = creditOf({ credit: { designer: { name: 'x' }, series: ['a', 'b'] } });
-  check('creditOf reads a string and nothing else',
-    odd.designer === '' && odd.series === ''
-    && creditOf({ credit: { designer: 7, series: true } }).designer === ''
-    && creditOf({ credit: ['MrE'] }).designer === '',
-    JSON.stringify(odd));
+  check('creditOf reads strings and nothing else', odd.designer === '' && odd.series === ''
+    && creditOf({ credit: { designer: 7, series: true } }).designer === '' && creditOf({ credit: ['MrE'] }).designer === '', JSON.stringify(odd));
   const spaced = creditOf({ credit: { designer: ' Cumber \n\n and\t Hotspur\u0000 ' } });
-  check('creditOf closes up whitespace and drops control characters',
-    spaced.designer === 'Cumber and Hotspur', JSON.stringify(spaced.designer));
-  check('creditOf caps a name at eighty characters',
-    creditOf({ credit: { designer: 'x'.repeat(200) } }).designer.length === 80);
-  const rowOdd = rowToSummary({
-    id: 'trk-00000002', name: 'Room', author: 'somebody', document: { ...roomDoc(), credit: { designer: ['a'] } },
-    gates: 1, elements: 1, has_logo: false, published_utc: '', updated_utc: '', tags: [],
+  check('creditOf closes up whitespace and drops control characters', spaced.designer === 'Cumber and Hotspur', JSON.stringify(spaced.designer));
+  check('creditOf stops a name at eighty characters', creditOf({ credit: { designer: 'x'.repeat(200) } }).designer.length === 80);
+  const junkRow = rowToSummary({
+    id: 'trk-00000002', name: 'Room', author: 'somebody', document: { ...room(), credit: { designer: ['a'] } }, gates: 1, elements: 1, has_logo: false, published_utc: '', updated_utc: '', tags: [],
   });
-  check('a Postgres row with a junk credit block still summarises, with no designer',
-    rowOdd.designer === '' && rowOdd.series === '' && rowOdd.name === 'Room', JSON.stringify(rowOdd.designer));
+  check('a Postgres row with a junk credit still summarises, with no designer',
+    junkRow.designer === '' && junkRow.series === '' && junkRow.name === 'Room', JSON.stringify(junkRow.designer));
 
-  /*
-   * THE TWO WRITERS OF ONE CONTRACT, HELD AGAINST EACH OTHER.
-   *
-   * A track summary is built twice: summaryOf from the file store's object
-   * and rowToSummary from a Postgres row. The comment on rowToSummary has
-   * said for a while that anything added to one has to be added to the
-   * other, because `best` was once missing from it. The designer was missing
-   * from it too, for exactly one deploy: the file store named the builder,
-   * the live board went on naming the publisher, and nothing here noticed.
-   * So the shapes are compared now rather than trusted.
-   */
-  const credDoc = { ...roomDoc(), credit: { designer: 'MrE', series: 'RaceGOW5' } };
-  const fileSide = summaryOf({
-    id: 'trk-00000001', name: 'Room', author: 'somebody', document: credDoc,
-    gates: 1, elements: 1, hasLogo: false, publishedUtc: '', updatedUtc: '', tags: [],
+  /* summaryOf (the file store) and rowToSummary (Postgres) write one
+   * contract; the designer was once missing from one of them for a whole
+   * deploy, so their shapes are compared rather than trusted. `times` and
+   * `best` are added around the row by the Postgres queries. */
+  const creditDoc = { ...room(), credit: { designer: 'MrE', series: 'RaceGOW5' } };
+  const fromFile = summaryOf({
+    id: 'trk-00000001', name: 'Room', author: 'somebody', document: creditDoc, gates: 1, elements: 1, hasLogo: false, publishedUtc: '', updatedUtc: '', tags: [],
   }, []);
-  const pgSide = rowToSummary({
-    id: 'trk-00000001', name: 'Room', author: 'somebody', document: credDoc,
-    gates: 1, elements: 1, has_logo: false, published_utc: '', updated_utc: '', tags: [],
+  const fromRow = rowToSummary({
+    id: 'trk-00000001', name: 'Room', author: 'somebody', document: creditDoc, gates: 1, elements: 1, has_logo: false, published_utc: '', updated_utc: '', tags: [],
   });
-  /* `times` and `best` are the two the Postgres path adds around
-   * rowToSummary, from its own queries, so they are not expected on the row
-   * side. Everything else has to match. */
-  const keysOf = (o) => Object.keys(o).filter((k) => k !== 'times' && k !== 'best').sort().join(',');
-  check('the file store and the Postgres row build the same summary shape',
-    keysOf(fileSide) === keysOf(pgSide),
-    `file ${keysOf(fileSide)} | row ${keysOf(pgSide)}`);
-  check('and both of them name the designer',
-    fileSide.designer === 'MrE' && pgSide.designer === 'MrE'
-    && fileSide.series === 'RaceGOW5' && pgSide.series === 'RaceGOW5',
-    `${fileSide.designer}/${pgSide.designer}`);
-  const roomPlan = planFromDocument(room);
-  check('the plan carries the class', roomPlan.trackClass === 'micro', roomPlan.trackClass);
-  check('the plan carries the room, not a field',
-    roomPlan.width === 5 && roomPlan.depth === 6, `${roomPlan.width} by ${roomPlan.depth}`);
-  const planGate = roomPlan.marks.find((m) => m.type === 'gate');
-  check('the plan carries the gate\u2019s own opening',
-    planGate && Math.abs(planGate.clearW - 0.7112) < 1e-9, planGate && planGate.clearW);
-  const planStart = roomPlan.marks.find((m) => m.type === 'startPads');
-  check('the plan carries the start row',
-    planStart && planStart.pads === 1 && planStart.spacing === 0.3 && planStart.padSize === 0.1,
-    JSON.stringify(planStart));
-  /* And the field is untouched: every track already on this board is one. */
-  const fieldPlan = planFromDocument(sampleDoc());
-  check('a field plan is still a field plan',
-    fieldPlan.trackClass === 'full' && fieldPlan.width === 60 && fieldPlan.depth === 40);
+  const shape = (o) => Object.keys(o).filter((k) => k !== 'times' && k !== 'best').sort().join();
+  check('both stores build a summary of the same shape', shape(fromFile) === shape(fromRow), `${shape(fromFile)} | ${shape(fromRow)}`);
+  check('and both name the designer and the series',
+    [fromFile, fromRow].every((s) => s.designer === 'MrE' && s.series === 'RaceGOW5'), `${fromFile.designer}/${fromRow.designer}`);
+
+  /* The three numbers a plan cannot guess on a room: its class, a gate's
+   * own opening, the start row. */
+  const roomPlan = planFromDocument(room());
+  check('a room\'s plan carries its class', roomPlan.trackClass === 'micro', roomPlan.trackClass);
+  check('and the room\'s size, not a field\'s', roomPlan.width === 5 && roomPlan.depth === 6, `${roomPlan.width} by ${roomPlan.depth}`);
+  const roomGate = roomPlan.marks.find((m) => m.type === 'gate');
+  check('and the gate’s own opening', roomGate && Math.abs(roomGate.clearW - 0.7112) < 1e-9, roomGate?.clearW);
+  const stand = roomPlan.marks.find((m) => m.type === 'startPads');
+  check('and the start row', stand?.pads === 1 && stand.spacing === 0.3 && stand.padSize === 0.1, JSON.stringify(stand));
+  const fieldPlan = planFromDocument(field());
+  check('a field\'s plan is still a sixty by forty field', fieldPlan.trackClass === 'full' && fieldPlan.width === 60 && fieldPlan.depth === 40);
   const fieldGate = fieldPlan.marks.find((m) => m.type === 'gate');
-  check('and it carries its own 5 ft opening',
-    fieldGate && Math.abs(fieldGate.clearW - 1.524) < 1e-9, fieldGate && fieldGate.clearW);
+  check('with its gate\'s five foot opening', fieldGate && Math.abs(fieldGate.clearW - 1.524) < 1e-9, fieldGate?.clearW);
 
-  /*
-   * THE THREE LAP TOTAL is optional, and every way of not having one has to
-   * come out as null rather than as an error: a time from the field never
-   * has one, and a run in a room only has one when it put three clean laps
-   * together. The lower bound is the run's own arithmetic. Three laps cannot
-   * be faster than three of the run's best lap, and the posted lap IS the
-   * best lap, so anything under three times it is a claim the run's own
-   * numbers contradict.
-   */
-  check('a three lap total is kept', normaliseThreeMs(21590, 6990) === 21590);
-  check('no three lap total is null', normaliseThreeMs(undefined, 6990) === null);
-  check('an explicit null is null', normaliseThreeMs(null, 6990) === null);
-  check('a string is null, not a NaN', normaliseThreeMs('21590', 6990) === null);
-  check('a total faster than three of its own lap is null',
-    normaliseThreeMs(20000, 6990) === null);
-  check('exactly three of its own lap is kept', normaliseThreeMs(6990 * 3, 6990) === 20970);
-  check('a negative total is null', normaliseThreeMs(-1, 6990) === null);
-  const six = sampleDoc('trk-1a2b3c4d', { logos: logos(6) });
-  six.schemaVersion = 2;
-  check('refuses a sixth logo', Boolean(inspectDocument(six).error));
-  const fat = sampleDoc('trk-1a2b3c4d', { logos: logos(3, 200 * 1024) });
-  fat.schemaVersion = 2;
-  check('refuses logos past the shared budget', Boolean(inspectDocument(fat).error));
-  const remoteInList = sampleDoc('trk-1a2b3c4d', {
-    logos: [{ id: 'logo-1', image: 'https://evil.example/x.png', name: 'x' }],
-  });
-  remoteInList.schemaVersion = 2;
-  check('refuses a remote logo in the list', Boolean(inspectDocument(remoteInList).error));
-
-  /*
-   * PAINT IS NOT LAYOUT. Selling a sponsor a place on a track that people
-   * have already flown must not clear the times on it, so a ground logo is
-   * filtered out of the layout hash. MIRRORS LAYOUT_SKIP in the simulator's
-   * src/share/listing.js: change one and change the other.
-   */
-  const painted = sampleDoc();
-  painted.elements = [...painted.elements, {
-    id: 'el-9',
-    type: 'groundLogo',
-    name: '',
-    position: { x: 30, y: 20, z: 0 },
-    yaw: 0,
-    pitch: 0,
-    yawOverridden: false,
-    logoId: 'logo-1',
-    dims: { width: 10, depth: 4 },
-  }];
-  check('layoutHash ignores paint on the grass', layoutHash(layoutKeys) === layoutHash(painted));
-  const paintedPlan = inspectDocument(painted);
-  check('a ground logo is not a gate', !paintedPlan.error && paintedPlan.gates === 1);
-  check('a ground logo is not drawn on the plan',
-    !paintedPlan.error && !paintedPlan.plan.marks.some((m) => m.type === 'groundLogo'));
-  const a = layoutHash(sampleDoc());
-  const b = layoutHash(sampleDoc('trk-1a2b3c4d', { name: 'Renamed' }));
-  check('layout hash ignores the title', a === b);
-  const pinned = inspectDocument(sampleDoc('trk-1a2b3c4d', {
-    elements: [
-      {
-        id: 'el-1',
-        type: 'gate',
-        name: 'Gate',
-        position: { x: 10, y: 8, z: 0 },
-        yaw: 0,
-        pitch: 0,
-        yawOverridden: false,
-        dims: { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 },
-      },
-      {
-        id: 'el-2',
-        type: 'waypoint',
-        name: 'Pin',
-        position: { x: 22, y: 18, z: 1.2 },
-        yaw: 0.4,
-        pitch: 0,
-        yawOverridden: false,
-        dims: { height: 1.6, poleRadius: 0.02, clearance: 0 },
-      },
-      {
-        id: 'el-3',
-        type: 'flag',
-        name: 'Dress',
-        position: { x: 40, y: 30, z: 0 },
-        yaw: 0,
-        pitch: 0,
-        yawOverridden: false,
-        dims: { height: 2.5, poleRadius: 0.025, clearance: 1.5 },
-      },
-    ],
-    sequence: [
-      { id: 'seq-1', elementId: 'el-1', apertureIndex: 0, entry: 1 },
-      { id: 'seq-2', elementId: 'el-2', apertureIndex: 0, entry: 1 },
-    ],
-  }));
-  check('plan omits waypoints', pinned.plan.marks.every((m) => m.type !== 'waypoint'));
-  check('plan path follows the flying order through a waypoint',
-    pinned.plan.path.length === 2
-    && pinned.plan.path[0].x === 10
-    && pinned.plan.path[1].x === 22);
-  check('an unused flag is marked off the flying order',
-    pinned.plan.marks.some((m) => m.type === 'flag' && m.seq === false));
-  check('the start of the flying order is numbered 1',
-    pinned.plan.numbers.length === 1 && pinned.plan.numbers[0].n === 1);
-  const bugOk = inspectBugCreate({
-    kind: 'visual',
-    title: 'Trees flicker at the shrine',
-    what: 'Flying past the shrine the treeline pops in and out every few frames.',
-    reporter: 'Ada Rook',
-    context: { map: 'city', screen: 'paused' },
-  });
-  check('accepts a real bug report', !bugOk.error && bugOk.reporter === 'Ada Rook' && bugOk.kind === 'visual');
-  check('blank reporter becomes Anonymous', inspectBugCreate({
-    kind: 'other',
-    title: 'A short enough title here',
-    what: 'Twenty characters at least in this description.',
-  }).reporter === 'Anonymous');
-  check('refuses a one word title', Boolean(inspectBugCreate({
-    kind: 'other', title: 'Short', what: 'Twenty characters at least in this description.',
-  }).error));
-  check('refuses an unknown kind', Boolean(inspectBugCreate({
-    kind: 'explode', title: 'A short enough title here', what: 'Twenty characters at least in this description.',
-  }).error));
-  check('refuses a symbol reporter', Boolean(inspectBugCreate({
-    kind: 'other', title: 'A short enough title here', what: 'Twenty characters at least in this description.', reporter: 'Ada!',
-  }).error));
-  check('accepts a status patch', inspectBugPatch({ status: 'fixed', resolution: 'Trees no longer pop.' }).status === 'fixed');
-  check('refuses a made up status', Boolean(inspectBugPatch({ status: 'maybe' }).error));
-  /* Feel reports carry a wide context: twenty keys today, and the cap has
-   * to keep headroom over that or feedback bounces with "too many fields". */
-  const wide = {};
-  for (let i = 0; i < 32; i += 1) {
-    wide[`k${i}`] = i;
+  /* The best three consecutive laps: optional, and every way of not
+   * having one is null; never faster than three of the run's own best. */
+  const threeCases = [
+    ['a three lap total is kept', [21590, 6990], 21590],
+    ['an absent one is null', [undefined, 6990], null],
+    ['an explicit null is null', [null, 6990], null],
+    ['text is null, not NaN', ['21590', 6990], null],
+    ['one faster than three of its own lap is null', [20000, 6990], null],
+    ['exactly three of its own lap is kept', [6990 * 3, 6990], 20970],
+    ['a negative one is null', [-1, 6990], null],
+  ];
+  for (const [name, args, want] of threeCases) {
+    check(name, normaliseThreeMs(...args) === want);
   }
-  check('a thirty two key context is accepted', !inspectBugCreate({
-    kind: 'feel', title: 'Flight feel: about right', what: 'The quad felt about right this run, no complaints.', context: wide,
-  }).error);
-  wide.k32 = 32;
-  check('a thirty three key context is refused', Boolean(inspectBugCreate({
-    kind: 'feel', title: 'Flight feel: about right', what: 'The quad felt about right this run, no complaints.', context: wide,
-  }).error));
-
-  const ghostB64 = makeGhostB64(29110);
-  check('accepts a well formed ghost', inspectGhost(ghostB64, 29110).ghost === ghostB64);
-  check('an absent ghost is not an error', inspectGhost(null, 29110).ghost === null && inspectGhost('', 29110).ghost === null);
-  check('refuses a ghost that is not a string', Boolean(inspectGhost(42, 29110).error));
-  check('refuses a ghost that is not base64', Boolean(inspectGhost('not*base64!!'.repeat(8), 29110).error));
-  check('refuses a ghost with the wrong magic', Boolean(inspectGhost(makeGhostB64(29110, { magic: 'NOTGHOST' }), 29110).error));
-  check('refuses a ghost from another format version', Boolean(inspectGhost(makeGhostB64(29110, { version: 3 }), 29110).error));
-  check('refuses a ghost whose bytes disagree with its header', Boolean(inspectGhost(makeGhostB64(29110, { trimBytes: 20 }), 29110).error));
-  check('refuses a ghost that does not match the lap beside it', Boolean(inspectGhost(ghostB64, 35000).error));
-  check('refuses a ghost past the size cap', Boolean(inspectGhost('A'.repeat(500_004), 1000).error));
-  check('refuses a ghost claiming an hour of lap', Boolean(inspectGhost(makeGhostB64(3_000_000, { rateHz: 1 }), 3_000_000).error));
 }
 
-async function testStore() {
-  console.log('store');
+function reportsAndGhosts() {
+  const words = 'Twenty characters at least in this description.';
+  const good = inspectBugCreate({
+    kind: 'visual', title: 'Trees flicker at the shrine', what: 'Flying past the shrine the treeline pops in and out every few frames.', reporter: 'Ada Rook', context: { map: 'city', screen: 'paused' },
+  });
+  check('a real report is taken, with its kind and its reporter', !good.error && good.reporter === 'Ada Rook' && good.kind === 'visual');
+  check('a blank reporter is filed as Anonymous', inspectBugCreate({ kind: 'other', title: 'A short enough title here', what: words }).reporter === 'Anonymous');
+  check('a one word title is refused', Boolean(inspectBugCreate({ kind: 'other', title: 'Short', what: words }).error));
+  check('a kind off the list is refused', Boolean(inspectBugCreate({ kind: 'explode', title: 'A short enough title here', what: words }).error));
+  check('a reporter that is not a name is refused', Boolean(inspectBugCreate({
+    kind: 'other', title: 'A short enough title here', what: words, reporter: 'Ada!',
+  }).error));
+  check('an update with a status is taken', inspectBugPatch({ status: 'fixed', resolution: 'Trees no longer pop.' }).status === 'fixed');
+  check('a status off the list is refused', Boolean(inspectBugPatch({ status: 'maybe' }).error));
+  /* Feel reports already attach about twenty keys of context. */
+  const context = Object.fromEntries(Array.from({ length: 32 }, (_, i) => [`k${i}`, i]));
+  const feel = (ctx) => inspectBugCreate({
+    kind: 'feel', title: 'Flight feel: about right', what: 'The quad felt about right this run, no complaints.', context: ctx,
+  });
+  check('a context of thirty two keys is taken', !feel(context).error);
+  check('thirty three is refused', Boolean(feel({ ...context, k32: 32 }).error));
+
+  const blob = ghostBlob(29110);
+  check('a well formed ghost is kept as sent', inspectGhost(blob, 29110).ghost === blob);
+  check('no ghost is not an error', inspectGhost(null, 29110).ghost === null && inspectGhost('', 29110).ghost === null);
+  check('a ghost that is not a string is refused', Boolean(inspectGhost(42, 29110).error));
+  check('a ghost that is not base64 is refused', Boolean(inspectGhost('not*base64!!'.repeat(8), 29110).error));
+  check('a ghost with another format\'s magic is refused', Boolean(inspectGhost(ghostBlob(29110, { magic: 'NOTGHOST' }), 29110).error));
+  check('a ghost from a format version not taught here is refused', Boolean(inspectGhost(ghostBlob(29110, { version: 3 }), 29110).error));
+  check('a ghost whose length disagrees with its header is refused', Boolean(inspectGhost(ghostBlob(29110, { trimBytes: 20 }), 29110).error));
+  check('a ghost for another lap time is refused', Boolean(inspectGhost(blob, 35000).error));
+  check('a ghost past the size cap is refused', Boolean(inspectGhost('A'.repeat(500_004), 1000).error));
+  check('a ghost claiming an hour of lap is refused', Boolean(inspectGhost(ghostBlob(3_000_000, { rateHz: 1 }), 3_000_000).error));
+}
+
+function validateUnit() {
+  namesAndLaps();
+  fieldDocuments();
+  worldDocuments();
+  classesCreditsAndPlans();
+  reportsAndGhosts();
+}
+
+/* ================================================================== */
+/* The file store                                                      */
+/* ================================================================== */
+
+async function withFileStore(run) {
   const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
+  delete process.env.DATABASE_URL;
   process.env.BOARD_FILE = join(dir, 'board.json');
-  delete process.env.DATABASE_URL;
-  const store = await openStore();
-  const inspected = inspectDocument(sampleDoc());
-  const first = await store.publish({ inspected, author: 'Ada Rook', editKey: '' });
-  check('first publish returns an edit key', Boolean(first.editKey) && first.updated === false);
-  const clash = await store.publish({ inspected, author: 'Ada Rook', editKey: '' });
-  check('second publish without the key is refused', clash.status === 409 && clash.conflict === true);
-  const again = await store.publish({ inspected, author: 'Ada Rook', editKey: first.editKey });
-  check('second publish with the key updates', again.updated === true && !again.editKey);
-  await store.addTime({ trackId: inspected.id, name: 'Ada Rook', lapMs: 42000 });
-  const renamed = inspectDocument(sampleDoc('trk-1a2b3c4d', { name: 'Renamed Loop' }));
-  const named = await store.publish({ inspected: renamed, author: 'Ada Rook', editKey: first.editKey });
-  check('a rename does not clear times', named.timesCleared === false);
-  const afterName = await store.getTrack(inspected.id);
-  check('the board shows the new name and keeps the time', afterName.name === 'Renamed Loop' && afterName.times.length === 1 && afterName.times[0].lapMs === 42000);
-  await store.addTime({ trackId: inspected.id, name: 'Bo', lapMs: 51000 });
-  const reauthor = await store.publish({ inspected: renamed, author: 'Ada Two', editKey: first.editKey });
-  check('an author rename does not clear times', reauthor.timesCleared === false);
-  const afterAuthor = await store.getTrack(inspected.id);
-  check('an author rename retitles their times and leaves others', afterAuthor.author === 'Ada Two' && afterAuthor.times[0].name === 'Ada Two' && afterAuthor.times[1].name === 'Bo');
-  const moved = inspectDocument(sampleDoc('trk-1a2b3c4d', {
-    elements: [{
-      id: 'el-1',
-      type: 'gate',
-      name: 'Gate',
-      position: { x: 20, y: 8, z: 0 },
-      yaw: 0,
-      pitch: 0,
-      yawOverridden: false,
-      dims: { clearW: 1.524, clearH: 1.524, sillH: 0, levels: 1 },
-    }],
-  }));
-  const cleared = await store.publish({ inspected: moved, author: 'Ada Rook', editKey: first.editKey });
-  check('a layout change clears times', cleared.timesCleared === true);
-  const after = await store.getTrack(inspected.id);
-  check('cleared board has no times', after.times.length === 0);
-  const posted = await store.addTime({ trackId: inspected.id, name: 'Ada Rook', lapMs: 33400 });
-  check('a posted time is rank 1', posted.rank === 1);
-  const slower = await store.addTime({ trackId: inspected.id, name: 'Bo', lapMs: 40000 });
-  check('a slower time is rank 2', slower.rank === 2);
-  await Promise.all([
-    store.addTime({ trackId: inspected.id, name: 'Cy', lapMs: 45000 }),
-    store.addTime({ trackId: inspected.id, name: 'Di', lapMs: 46000 }),
-  ]);
-  const afterParallel = await store.getTrack(inspected.id);
-  check('parallel posts both land', afterParallel.times.length === 4);
-  const ghostBlob = makeGhostB64(47000);
-  const ghosted = await store.addTime({
-    trackId: inspected.id, name: 'Ev', lapMs: 47000, ghost: ghostBlob,
-  });
-  check('a posted time gets a public id', /^tm-[0-9a-f]{8}$/.test(String(ghosted.id)));
-  const withGhost = await store.getTrack(inspected.id);
-  const evRow = withGhost.times.find((t) => t.name === 'Ev');
-  check('the list marks the ghost and keeps the blob out of it', Boolean(evRow) && evRow.hasGhost === true && !('ghost' in evRow));
-  check('times posted without a ghost read hasGhost false', withGhost.times.filter((t) => t.name !== 'Ev').every((t) => t.hasGhost === false));
-  const fetchedGhost = await store.getGhost(inspected.id, ghosted.id);
-  check('the ghost comes back whole', Boolean(fetchedGhost) && fetchedGhost.ghost === ghostBlob && fetchedGhost.lapMs === 47000);
-  check('an unknown time id has no ghost row', (await store.getGhost(inspected.id, 'tm-00000000')) === null);
-  /*
-   * THE THREE LAP TOTAL, through the store. It is optional at every step, so
-   * the two cases that matter are that one posted comes back and one not
-   * posted comes back as null rather than as undefined: the page prints it
-   * or does not, and undefined would print the word.
-   */
-  const withThree = await store.addTime({
-    trackId: inspected.id, name: 'Fi', lapMs: 48000, threeMs: 146000,
-  });
-  check('a posted three lap total comes back', withThree.threeMs === 146000, withThree.threeMs);
-  const threeListed = (await store.getTrack(inspected.id)).times.find((t) => t.name === 'Fi');
-  check('and it is in the list', threeListed && threeListed.threeMs === 146000,
-    threeListed && threeListed.threeMs);
-  const adaListed = (await store.getTrack(inspected.id)).times.find((t) => t.name === 'Ada Rook');
-  check('a time posted without one lists null, not undefined',
-    adaListed && adaListed.threeMs === null, adaListed && String(adaListed.threeMs));
-  /* A row written before ghosts existed: no id, no ghost key at all. It
-   * has to list cleanly, not crash the mapper. */
-  store.data.times[inspected.id].push({ name: 'Old Row', lapMs: 60000, postedUtc: '2026-01-01T00:00:00.000Z' });
-  const legacyRow = (await store.getTrack(inspected.id)).times.find((t) => t.name === 'Old Row');
-  check('a time from before ghosts lists with a null id and no ghost', Boolean(legacyRow) && legacyRow.id === null && legacyRow.hasGhost === false);
-  const list = await store.listTracks();
-  check('the list names the author', list[0].author === 'Ada Rook' && list[0].best.lapMs === 33400);
-  store.data.tracks[inspected.id].plan = {
-    width: 60,
-    depth: 40,
-    marks: [{ type: 'waypoint', x: 1, y: 1, yaw: 0 }],
-  };
-  const relist = await store.listTracks();
-  check('the list plan is rebuilt from the document',
-    relist[0].plan.marks.every((m) => m.type !== 'waypoint')
-    && relist[0].plan.path.length === 1
-    && relist[0].plan.path[0].x === 20);
-  const doc = await store.getDocument(inspected.id);
-  check('the document is still there', doc.document.id === inspected.id);
-  const filed = await store.addBug(inspectBugCreate({
-    kind: 'feel',
-    title: 'Yaw feels late on the field',
-    what: 'A right yaw stick on the field map takes a beat before the quad turns.',
-    reporter: 'Ada Rook',
-    context: { map: 'field', screen: 'flight' },
-  }));
-  check('a filed bug has an id and is open', Boolean(filed.id) && /^bug-[0-9a-f]{8}$/.test(filed.id) && filed.status === 'open');
-  const listed = await store.listBugs({ status: 'open' });
-  check('the open list names the bug', listed.length === 1 && listed[0].id === filed.id && listed[0].title === filed.title);
-  const got = await store.getBug(filed.id);
-  check('the full ticket keeps what happened', got.what.includes('yaw stick') && got.context.map === 'field');
-  const marked = await store.updateBug(filed.id, { status: 'fixed', resolution: 'Checked rates. Not a sim bug.' });
-  check('an update marks the ticket fixed', marked.status === 'fixed' && marked.resolution.includes('rates'));
-  const stillOpen = await store.listBugs({ status: 'open' });
-  check('a fixed ticket leaves the open list', stillOpen.length === 0);
-  const missing = await store.updateBug('bug-00000000', { status: 'open' });
-  check('updating a missing ticket is a 404', missing.status === 404);
-
-  const kinds = inspectBugImages([
-    `data:image/png;base64,${b64(PNG_1PX)}`, b64(JPEG_HEAD), `data:image/webp;base64,${b64(WEBP_HEAD)}`,
-  ]);
-  check('PNG, JPEG and WebP screenshots are read by their magic',
-    !kinds.error && kinds.images.map((i) => i.type).join() === 'image/png,image/jpeg,image/webp');
-  const lying = inspectBugImages([`data:image/png;base64,${b64(JPEG_HEAD)}`]);
-  check('the stored type is the bytes\' own, not the one declared', !lying.error && lying.images[0].type === 'image/jpeg');
-  check('text sent as an image is refused',
-    /not a PNG, JPEG or WebP/.test(inspectBugImages([b64(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))]).error || ''));
-  check('an image over a mebibyte is refused',
-    /larger than a megabyte/.test(inspectBugImages([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]).error || ''));
-  check('a fifth image is refused',
-    /at most four/.test(inspectBugImages(Array(5).fill(b64(PNG_1PX))).error || ''));
-  check('images that are not a list are refused', Boolean(inspectBugImages('nope').error));
-  check('a report with no images has an empty list', inspectBugCreate({
-    kind: 'other', title: 'No pictures here', what: 'Twenty characters or more of words.',
-  }).images.length === 0);
-  const shot = await store.addBug(inspectBugCreate({
-    kind: 'visual',
-    title: 'Screenshot attached here',
-    what: 'The picture shows it better than twenty words do.',
-    images: [b64(PNG_1PX), b64(JPEG_HEAD)],
-  }));
-  check('a ticket lists its images by number, type and size',
-    shot.images.length === 2 && shot.images[0].n === 1 && shot.images[0].type === 'image/png'
-    && shot.images[0].size === PNG_1PX.length && shot.images[1].type === 'image/jpeg');
-  const back = await store.getBugImage(shot.id, 1);
-  check('the file store hands a screenshot back byte for byte', Boolean(back) && back.type === 'image/png' && back.bytes.equals(PNG_1PX));
-  check('an image a ticket does not have is null', (await store.getBugImage(shot.id, 3)) === null);
-  const shotAfter = await store.updateBug(shot.id, { status: 'in_progress' });
-  check('an update keeps the ticket\'s images', shotAfter.images.length === 2);
-  check('an old ticket without images reads as none', (await store.getBug(filed.id)).images.length === 0);
-  await rm(dir, { recursive: true, force: true });
-
-  const legacyDir = await mkdtemp(join(tmpdir(), 'fdfpv-board-legacy-'));
-  process.env.BOARD_FILE = join(legacyDir, 'board.json');
-  delete process.env.DATABASE_URL;
-  await writeFile(join(legacyDir, 'board.json'), JSON.stringify({ tracks: {}, times: {} }), 'utf8');
-  const legacy = await openStore();
-  const legacyBugs = await legacy.listBugs();
-  check('a board.json without bugs still lists an empty ticket list', Array.isArray(legacyBugs) && legacyBugs.length === 0);
-  const stillTracks = await legacy.listTracks();
-  check('a board.json without bugs still lists tracks', Array.isArray(stillTracks) && stillTracks.length === 0);
-  await rm(legacyDir, { recursive: true, force: true });
-}
-
-function sortedJson(value) {
-  return JSON.stringify(value, (key, v) => (v && typeof v === 'object' && !Array.isArray(v)
-    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]]))
-    : v));
-}
-
-function waitFor(child, needle, ms = 8000) {
-  return new Promise((resolve, reject) => {
-    let buf = '';
-    const timer = setTimeout(() => reject(new Error(`timed out waiting for ${needle}`)), ms);
-    const onData = (chunk) => {
-      buf += chunk;
-      if (buf.includes(needle)) {
-        clearTimeout(timer);
-        child.stdout.off('data', onData);
-        resolve();
-      }
-    };
-    child.stdout.on('data', onData);
-    child.stderr.on('data', onData);
-  });
-}
-
-/*
- * The HTTP pass runs against the file store always, and a second time
- * against Postgres when BOARD_SELFTEST_DATABASE_URL names one, because the
- * production board is the Postgres store and nothing else here reaches it.
- * The database must be EMPTY, a fresh one made for this run: the pass
- * asserts counts from zero, and it never drops anything, so pointing it at
- * a board with data fails rather than harms it. Unset says `skip`, the way
- * BOARD_SELFTEST_PASSWORD does, rather than passing quietly.
- */
-async function testHttp(databaseUrl = '') {
-  console.log(databaseUrl ? '\nhttp, against Postgres' : 'http');
-  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
-  const child = spawn(process.execPath, [join(root, 'src', 'server.js')], {
-    cwd: root,
-    env: {
-      ...process.env,
-      PORT: '3199',
-      BOARD_FILE: join(dir, 'board.json'),
-      DATABASE_URL: databaseUrl,
-      SIM_ORIGIN: 'http://127.0.0.1:8000',
-      BOARD_ADMIN_TOKEN: ADMIN_TOKEN,
-      BOARD_ADMINS: `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`,
-      /* One sponsor, so the fold has a real slug to keep as well as an
-       * invented one to refuse, and BOARD_TRUST_PROXY so the country header
-       * is believed the way it is behind the edge. */
-      BOARD_SPONSORS: 'rotorriot:Rotor Riot',
-      BOARD_TRUST_PROXY: '1',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
   try {
-    await waitFor(child, 'FDFPV leaderboard');
-    const health = await fetch('http://127.0.0.1:3199/api/health').then((r) => r.json());
-    check('health', health.ok === true && health.store === (databaseUrl ? 'postgres' : 'file'));
-    const version = await fetch('http://127.0.0.1:3199/api/version').then((r) => r.json());
-    check('a checkout with no REVISION says so: both commits null', version.commit === null && version.fdfpv === null, JSON.stringify(version));
-    const created = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: lapDoc() }),
-    });
-    const body = await created.json();
-    check('publish over HTTP', created.status === 201 && body.id === 'trk-1a2b3c4d');
-    const adaLap = honestLap(lapDoc());
-    const time = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', adaLap),
-    });
-    const posted = await time.json();
-    check('post a time over HTTP', time.status === 201 && posted.rank === 1, `${time.status} ${JSON.stringify(posted).slice(0, 120)}`);
-    const bare = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Rook', lapMs: adaLap.lapMs }),
-    });
-    check('a time without a ghost is refused', bare.status === 400);
-    const unsigned = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Rook', lapMs: Math.round(adaLap.lapMs), ghost: adaLap.ghost }),
-    });
-    check('a time without a signature is refused', unsigned.status === 400, `${unsigned.status}`);
-    const forgedBody = JSON.parse(await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', adaLap));
-    /* Inside the ghost's 250 ms slack, so only the signature can catch it. */
-    forgedBody.lapMs -= 100;
-    const forged = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(forgedBody),
-    });
-    check('a signed post with its lap changed afterwards is refused', forged.status === 401, `${forged.status}`);
-    const squatter = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-1a2b3c4d', 'ada rook', adaLap),
-    });
-    const squatterBody = await squatter.json();
-    check('another key posting under a claimed name is refused, case and all',
-      squatter.status === 403 && /belongs to another pilot/.test(squatterBody.error), `${squatter.status} ${squatterBody.error}`);
-    const renamed = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook',
-        document: { ...lapDoc(), name: 'HTTP Rename' },
-        editKey: body.editKey,
-      }),
-    });
-    const renamedBody = await renamed.json();
-    check('rename over HTTP', renamed.status === 200 && renamedBody.updated === true && renamedBody.timesCleared !== true);
-    const page = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
-    check('expanded track has the new name and the time', page.name === 'HTTP Rename' && page.times[0].lapMs === Math.round(adaLap.lapMs));
-    const reauthor = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Two',
-        document: { ...lapDoc(), name: 'HTTP Rename' },
-        editKey: body.editKey,
-      }),
-    });
-    const reauthorBody = await reauthor.json();
-    check('author rename over HTTP', reauthor.status === 200 && reauthorBody.updated === true && reauthorBody.timesCleared !== true);
-    const renamedTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
-    check('author rename retitles the posted time', renamedTimes.author === 'Ada Two' && renamedTimes.times[0].name === 'Ada Two');
-    const boLap = honestLap(lapDoc(), { speed: 15 });
-    const ghostWire = boLap.ghost;
-    const ghostPost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', boLap),
-    });
-    const ghostPosted = await ghostPost.json();
-    check('post a time with a ghost over HTTP', ghostPost.status === 201 && /^tm-[0-9a-f]{8}$/.test(String(ghostPosted.id)));
-    const ghostList = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
-    const boRow = ghostList.times.find((t) => t.name === 'Bo');
-    check('the track lists the ghost without carrying it', Boolean(boRow) && boRow.hasGhost === true && boRow.ghost === undefined);
-    const ghostGet = await fetch(`http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times/${ghostPosted.id}/ghost`);
-    const ghostBody = await ghostGet.json();
-    check('the ghost is fetched whole', ghostGet.status === 200 && ghostBody.ghost === ghostWire && ghostBody.lapMs === Math.round(boLap.lapMs));
-    const skipped = honestLap(lapDoc(), { hoverAfterMs: 1500 });
-    const padded = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: skipped.ghost, lapMs: skipped.durationMs }),
-    });
-    const paddedBody = await padded.json();
-    check('a ghost that hovers past the line cannot claim the long time',
-      padded.status === 422 && /does not hold up/.test(paddedBody.error), `${padded.status} ${paddedBody.error}`);
-    const badGhostId = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times/constructor/ghost');
-    check('a non-time ghost address is not a 500', badGhostId.status === 400 || badGhostId.status === 404);
-    const badGhost = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Bo', lapMs: 31500, ghost: 'AAAA', key: 'x', sig: 'y' }),
-    });
-    check('a malformed ghost is refused, not stored', badGhost.status === 400);
-    const wrongLap = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: ghostWire, lapMs: 90000 }),
-    });
-    check('a ghost for a different lap is refused', wrongLap.status === 400);
-    const noSuch = await fetch('http://127.0.0.1:3199/api/tracks/trk-0000dead/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-0000dead', 'Bo', boLap),
-    });
-    check('a time on a track that is not on the board is a 404', noSuch.status === 404, `${noSuch.status}`);
-    /*
-     * A WING COURSE, published and flown. The lap check is the simulator's
-     * own, vendored, so this is the board accepting a wing lap through the
-     * wing class's five metre gates, and refusing one that missed a gate.
-     */
-    const wingPub = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: wingDoc() }),
-    });
-    const wingPubBody = await wingPub.json();
-    check('publish a wing course over HTTP', wingPub.status === 201 && wingPubBody.id === 'trk-3c4d5e6f', `${wingPub.status}`);
-    const wingList = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    const wingRow = (wingList.tracks || []).find((t) => t.id === 'trk-3c4d5e6f');
-    check('and the listing says it is a wing course', Boolean(wingRow) && wingRow.trackClass === 'wing', wingRow && wingRow.trackClass);
-    const wingLap = honestLap(wingDoc(), { speed: 20 });
-    const wingTime = await fetch('http://127.0.0.1:3199/api/tracks/trk-3c4d5e6f/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(adaKey, 'trk-3c4d5e6f', 'Ada Rook', wingLap),
-    });
-    const wingPosted = await wingTime.json();
-    check('a signed wing lap at cruise is accepted', wingTime.status === 201 && wingPosted.rank === 1, `${wingTime.status} ${JSON.stringify(wingPosted).slice(0, 120)}`);
-    const wingSkip = honestLap(wingDoc(), { speed: 20, skip: 2 });
-    const wingSkipped = await fetch('http://127.0.0.1:3199/api/tracks/trk-3c4d5e6f/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-3c4d5e6f', 'Bo', { ghost: wingSkip.ghost, lapMs: wingSkip.durationMs }),
-    });
-    const wingSkippedBody = await wingSkipped.json();
-    check('a wing lap that skipped a gate is refused',
-      wingSkipped.status === 422 && /does not hold up/.test(wingSkippedBody.error), `${wingSkipped.status} ${wingSkippedBody.error}`);
-    /*
-     * A TRACK BUILT INSIDE A WORLD, published, listed, served, flown and
-     * chased. The lap check is the simulator's, vendored, reading the ring's
-     * gates at their absolute poses the way the shell races them.
-     */
-    console.log('\nmap tracks');
-    const ringDoc = mapTrackDocument({ id: 'trk-4d5e6f70', name: 'Ring over the drop' });
-    const ringPub = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: ringDoc }),
-    });
-    const ringPubBody = await ringPub.json();
-    check('publish a swiss2 map track over HTTP', ringPub.status === 201 && ringPubBody.id === 'trk-4d5e6f70' && Boolean(ringPubBody.editKey), `${ringPub.status} ${JSON.stringify(ringPubBody).slice(0, 120)}`);
-    const mapList = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    const ringRow = (mapList.tracks || []).find((t) => t.id === 'trk-4d5e6f70');
-    check('the listing says which world it stands in', Boolean(ringRow) && ringRow.map === 'swiss2' && ringRow.trackClass === 'full' && ringRow.gates === 3,
-      ringRow && JSON.stringify({ map: ringRow.map, trackClass: ringRow.trackClass, gates: ringRow.gates }));
-    check('and a field track in the same listing names none', (mapList.tracks || []).find((t) => t.id === 'trk-1a2b3c4d').map === null);
-    const ringServed = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/document').then((r) => r.json());
-    const servedDoc = ringServed.document || ringServed;
-    /* Compared with sorted keys, because Postgres keeps a document as JSONB,
-     * which hands its keys back in its own order. Nothing reads a document by
-     * key order: the simulator's layoutFingerprint goes through toPlain. */
-    check('its document is served back whole', servedDoc.schemaVersion === 4 && servedDoc.map === 'swiss2'
-      && sortedJson(servedDoc.elements) === sortedJson(ringDoc.elements));
-    const ringLap = honestLap(ringDoc);
-    const ringTime = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', ringLap),
-    });
-    const ringPosted = await ringTime.json();
-    check('a signed lap of the ring is checked and kept', ringTime.status === 201 && ringPosted.rank === 1, `${ringTime.status} ${JSON.stringify(ringPosted).slice(0, 160)}`);
-    const ringGhost = await fetch(`http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times/${ringPosted.id}/ghost`).then((r) => r.json());
-    check('and its ghost is served back to chase', ringGhost.ghost === ringLap.ghost && ringGhost.lapMs === Math.round(ringLap.lapMs));
-    const ringSkip = honestLap(ringDoc, { skip: 1 });
-    const ringSkipped = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-4d5e6f70', 'Bo', { ghost: ringSkip.ghost, lapMs: ringSkip.durationMs }),
-    });
-    const ringSkippedBody = await ringSkipped.json();
-    check('a lap of the ring that skipped a gate is refused', ringSkipped.status === 422 && /does not hold up/.test(ringSkippedBody.error), `${ringSkipped.status} ${ringSkippedBody.error}`);
-    const fieldLapOnRing = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-4d5e6f70', 'Bo', boLap),
-    });
-    check('and so is a field lap posted to it', fieldLapOnRing.status === 422 || fieldLapOnRing.status === 400, `${fieldLapOnRing.status}`);
-    const ringTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-4d5e6f70').then((r) => r.json());
-    check('the ring keeps its own times and nobody else\'s', ringTimes.times.length === 1 && ringTimes.times[0].name === 'Ada Rook');
-    const fieldTimes = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d').then((r) => r.json());
-    check('and the field track kept its own', fieldTimes.times.every((t) => t.name !== 'Ada Rook' || t.lapMs !== Math.round(ringLap.lapMs)));
-    const retitled = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: { ...ringDoc, name: 'Ring, renamed' }, editKey: ringPubBody.editKey }),
-    });
-    const retitledBody = await retitled.json();
-    check('renaming the ring keeps its time', retitled.status === 200 && retitledBody.timesCleared !== true, `${retitled.status} ${JSON.stringify(retitledBody).slice(0, 120)}`);
-    const ringMoved = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: { ...ringDoc, map: 'alps' }, editKey: ringPubBody.editKey }),
-    });
-    const ringMovedBody = await ringMoved.json();
-    check('moving the ring to another world clears its times', ringMoved.status === 200 && ringMovedBody.timesCleared === true, `${ringMoved.status} ${JSON.stringify(ringMovedBody).slice(0, 120)}`);
-    const movedRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-4d5e6f70');
-    check('and the listing follows it there', movedRow.map === 'alps' && movedRow.times === 0, JSON.stringify({ map: movedRow.map, times: movedRow.times }));
-    const cityPub = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: mapTrackDocument({ id: 'trk-5e6f7081', map: 'city' }) }),
-    });
-    check('a map track on the town is refused over HTTP', cityPub.status === 400, `${cityPub.status}`);
-
-    /*
-     * PLANES ON A MAP TRACK. A ring of plane sized gates (the two wide gates
-     * and the air race pylon pair) takes every fixed wing, and a plane's lap
-     * names its aircraft and goes on a board of its own beside the quads'.
-     */
-    console.log('\nplanes on a map track');
-    const postLap = (id, body) => fetch(`http://127.0.0.1:3199/api/tracks/${id}/times`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body,
-    });
-    const wideDoc = mapTrackDocument({
-      id: 'trk-6f708192', name: 'Wide ring', radius: 70, types: ['wideGate5', 'pylonPair', 'wideGate3'],
-    });
-    const widePub = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: wideDoc }),
-    });
-    check('publish a ring of plane sized gates', widePub.status === 201, `${widePub.status}`);
-    const wideRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-6f708192');
-    check('the listing names every fixed wing as fitting it', Array.isArray(wideRow.planes) && wideRow.planes.includes('sky1800')
-      && wideRow.planes.includes('bramor2300') && wideRow.planes.includes('timber1500f'), JSON.stringify(wideRow.planes));
-    check('with an empty plane board beside the quads\'', wideRow.wing && wideRow.wing.times === 0 && wideRow.wing.best === null, JSON.stringify(wideRow.wing));
-    const fieldPlaneRow = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-1a2b3c4d');
-    check('a field track has no plane board and no plane', fieldPlaneRow.planes.length === 0 && fieldPlaneRow.wing === null, JSON.stringify({ planes: fieldPlaneRow.planes, wing: fieldPlaneRow.wing }));
-    const wideSlow = honestLap(wideDoc, { speed: 18 });
-    const wideFast = honestLap(wideDoc, { speed: 24 });
-    const skyPost = await postLap('trk-6f708192', await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, 'sky1800'));
-    const skyBody = await skyPost.json();
-    check('a Skyhunter\'s lap is checked and kept, first on the plane board', skyPost.status === 201 && skyBody.rank === 1 && skyBody.times === 1 && skyBody.craft === 'sky1800',
-      `${skyPost.status} ${JSON.stringify(skyBody).slice(0, 160)}`);
-    const quadPost = await postLap('trk-6f708192', await signedTime(boKey, 'trk-6f708192', 'Bo', wideFast));
-    const quadBody = await quadPost.json();
-    check('a quad\'s lap on the same gates is first on its own board, not ranked with the plane', quadPost.status === 201 && quadBody.rank === 1 && quadBody.times === 1 && quadBody.craft === null,
-      `${quadPost.status} ${JSON.stringify(quadBody).slice(0, 160)}`);
-    const floatPost = await postLap('trk-6f708192', await signedPlaneTime(boKey, 'trk-6f708192', 'Bo', wideFast, 'timber1500f'));
-    const floatBody = await floatPost.json();
-    check('the Timber on floats, faster, takes first on the plane board', floatPost.status === 201 && floatBody.rank === 1 && floatBody.times === 2,
-      `${floatPost.status} ${JSON.stringify(floatBody).slice(0, 160)}`);
-    const wideSheet = await fetch('http://127.0.0.1:3199/api/tracks/trk-6f708192').then((r) => r.json());
-    check('the sheet carries every time with the plane that flew it', wideSheet.times.length === 3
-      && wideSheet.times.filter((t) => t.craft).map((t) => t.craft).join() === 'timber1500f,sky1800'
-      && wideSheet.times.filter((t) => !t.craft).length === 1, JSON.stringify(wideSheet.times.map((t) => [t.name, t.lapMs, t.craft])));
-    check('the quads\' record is the quad\'s, and the planes\' the plane\'s',
-      wideSheet.best && wideSheet.best.name === 'Bo' && wideSheet.times.find((t) => !t.craft).lapMs === wideSheet.best.lapMs
-      && wideSheet.wing.times === 2 && wideSheet.wing.best.lapMs === floatBody.lapMs, JSON.stringify({ best: wideSheet.best, wing: wideSheet.wing, times: wideSheet.times.length }));
-    const wideListed = (await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json())).tracks.find((t) => t.id === 'trk-6f708192');
-    check('and the listing counts each board apart', wideListed.times === 1 && wideListed.wing.times === 2, JSON.stringify({ times: wideListed.times, wing: wideListed.wing }));
-    const floatGhost = await fetch(`http://127.0.0.1:3199/api/tracks/trk-6f708192/times/${floatBody.id}/ghost`).then((r) => r.json());
-    check('a plane\'s ghost is served back to chase', floatGhost.ghost === wideFast.ghost);
-    const unsignedCraft = await postLap('trk-6f708192', await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, { craft: 'bramor2300' }));
-    check('a quad\'s signed lap given a plane afterwards is refused: the plane is under the signature', unsignedCraft.status === 401, `${unsignedCraft.status}`);
-    const quadNamed = await postLap('trk-6f708192', await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow, '5inch'));
-    const quadNamedBody = await quadNamed.json();
-    check('a lap naming a quad is refused by the lap check', quadNamed.status === 422 && /not a fixed wing/.test(quadNamedBody.error), `${quadNamed.status} ${quadNamedBody.error}`);
-    const badCraft = await postLap('trk-6f708192', JSON.stringify({ ...JSON.parse(await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', wideSlow)), craft: 'Sky Hunter!' }));
-    check('a craft that is not an airframe id is refused before anything else', badCraft.status === 400, `${badCraft.status}`);
-    const ringForSky = honestLap(ringDoc);
-    const skyOnRing = await postLap('trk-4d5e6f70', await signedPlaneTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', ringForSky, 'sky1800'));
-    const skyOnRingBody = await skyOnRing.json();
-    check('a Skyhunter\'s lap through five inch gates is refused: it does not fit', skyOnRing.status === 422 && /does not fit/.test(skyOnRingBody.error), `${skyOnRing.status} ${skyOnRingBody.error}`);
-    const skyOnField = await postLap('trk-1a2b3c4d', await signedPlaneTime(boKey, 'trk-1a2b3c4d', 'Bo', boLap, 'sky1800'));
-    const skyOnFieldBody = await skyOnField.json();
-    check('and a lap naming a plane on a field track is refused', skyOnField.status === 422 && /field track/.test(skyOnFieldBody.error), `${skyOnField.status} ${skyOnFieldBody.error}`);
-    /* ---------------------------------------------------------------- */
-    console.log('\nlive rooms');
-    const nextMessage = (ws, ms = 3000) => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('no message')), ms);
-      ws.addEventListener('message', (ev) => { clearTimeout(timer); resolve(ev.data); }, { once: true });
-    });
-    const opened = (ws, ms = 3000) => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('no open')), ms);
-      ws.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
-      ws.addEventListener('error', () => { clearTimeout(timer); resolve(); }, { once: true });
-    });
-    const wsA = new WebSocket('ws://127.0.0.1:3199/api/live/trk-1a2b3c4d?name=Ada%20Rook');
-    wsA.binaryType = 'arraybuffer';
-    await opened(wsA);
-    const welcomeA = JSON.parse(await nextMessage(wsA));
-    check('a pilot joining a room is welcomed with an id and nobody else', welcomeA.type === 'welcome' && welcomeA.id > 0 && welcomeA.peers.length === 0, JSON.stringify(welcomeA));
-    const wsB = new WebSocket('ws://127.0.0.1:3199/api/live/trk-1a2b3c4d?name=Bo');
-    wsB.binaryType = 'arraybuffer';
-    const joinSeenByA = nextMessage(wsA);
-    await opened(wsB);
-    const welcomeB = JSON.parse(await nextMessage(wsB));
-    check('the second pilot is welcomed with the first in the roster', welcomeB.type === 'welcome' && welcomeB.peers.length === 1 && welcomeB.peers[0].name === 'Ada Rook', JSON.stringify(welcomeB));
-    const joinMsg = JSON.parse(await joinSeenByA);
-    check('and the first pilot is told', joinMsg.type === 'join' && joinMsg.id === welcomeB.id && joinMsg.name === 'Bo', JSON.stringify(joinMsg));
-    const frame = new Uint8Array(24);
-    new DataView(frame.buffer).setUint32(0, 4242, true);
-    frame[4] = 7;
-    const relayedToB = nextMessage(wsB);
-    wsA.send(frame);
-    const got = new Uint8Array(await relayedToB);
-    check('a frame reaches the other pilot with the sender id in front',
-      got.length === 26 && new DataView(got.buffer).getUint16(0, true) === welcomeA.id && new DataView(got.buffer).getUint32(2, true) === 4242 && got[6] === 7, `${got.length}`);
-    let echoed = false;
-    wsA.addEventListener('message', () => { echoed = true; }, { once: true });
-    wsA.send(new Uint8Array(10));
-    await new Promise((r) => setTimeout(r, 150));
-    check('a frame of the wrong size goes nowhere, and nothing comes back to the sender', echoed === false);
-    const leaveSeenByA = nextMessage(wsA);
-    wsB.close();
-    const leaveMsg = JSON.parse(await leaveSeenByA);
-    check('leaving is announced', leaveMsg.type === 'leave' && leaveMsg.id === welcomeB.id, JSON.stringify(leaveMsg));
-    wsA.close();
-    const wsNone = new WebSocket('ws://127.0.0.1:3199/api/live/trk-0000dead');
-    const roomRefused = await new Promise((resolve) => {
-      wsNone.addEventListener('error', () => resolve(true), { once: true });
-      wsNone.addEventListener('open', () => resolve(false), { once: true });
-      setTimeout(() => resolve(false), 3000);
-    });
-    check('a room for a track that is not on the board is refused', roomRefused === true);
-
-    const html = await fetch('http://127.0.0.1:3199/').then((r) => r.text());
-    check('the page is served', html.includes('Tracks and Statistics') && html.includes('app.js'));
-    /* The two tabs are in the MARKUP rather than built by the script, so a
-     * pasted #stats link works on a board whose track list failed to load
-     * and a reader with no JavaScript still sees what this page holds. */
-    check('the page carries both tabs', html.includes('id="tab-tracks"') && html.includes('id="tab-stats"'));
-    check('the statistics section is in the markup', html.includes('id="view-stats"'));
-    /* The promise, in the one place a visitor reads it. If this sentence
-     * ever stops being true the check below is the thing that has to be
-     * argued with rather than quietly deleted. */
-    check('the page says what it counts', html.includes('No cookie is set'));
-    /* Relative, not root absolute. The board is served at its own root here
-     * and under /board/ on fdfpv.example, and a leading slash on either of these
-     * asks the landing page for the board's script. The old assertion above
-     * matched both spellings, so it could not see the difference. */
-    check('the page loads its script relatively', html.includes('src="./app.js"'));
-    check('the page has no root absolute reference', !html.includes('src="/') && !html.includes('href="/'));
-    check('the page does not load a webfont', !html.includes('fonts.googleapis.com'));
-    const app = await fetch('http://127.0.0.1:3199/app.js').then((r) => r.text());
-    /*
-     * app.js imports origins.js. A module import that 404s takes the WHOLE
-     * page down, not just the links, so the one thing this file must prove
-     * about it is that it is actually served and is actually a module.
-     */
-    const origins = await fetch('http://127.0.0.1:3199/origins.js');
-    const originsBody = await origins.text();
-    check('origins.js is served', origins.status === 200);
-    check('origins.js is served as javascript',
-      String(origins.headers.get('content-type') || '').includes('javascript'));
-    check('app.js imports it relatively', app.includes("from './origins.js'"));
-    check('origins.js exports what app.js imports',
-      originsBody.includes('export function guessSimOrigin')
-      && originsBody.includes('export function landingOrigin'));
-    /* The mark in the masthead and the one in the spine are the same mark
-     * and both are the way home, so both carry the id bindHome looks for.
-     * A rename on one side and not the other leaves a link pointed at a
-     * checkout's port 8080 on a public board, and it looks fine. */
-    check('both marks are bound to the front door',
-      html.includes('id="brand-home"') && html.includes('id="spine-home"')
-      && app.includes("['brand-home', 'spine-home']"));
-    const homeAnchors = html.match(/<a\b[^>]*id="(?:brand|spine)-home"[^>]*>/g) || [];
-    check('the way home stays in this tab',
-      homeAnchors.length === 2 && homeAnchors.every((a) => !a.includes('target=')));
-    const cardFn = app.slice(app.indexOf('function cardFor('));
-    const attach = cardFn.indexOf('card.append(body)');
-    const paint = cardFn.indexOf('paintPodium(');
-    check('a track card is attached before its times are painted', attach !== -1 && paint !== -1 && attach < paint);
-    const cfg = await fetch('http://127.0.0.1:3199/api/config').then((r) => r.json());
-    check('config names the simulator', cfg.simOrigin === 'http://127.0.0.1:8000');
-    /*
-     * One simulator tab. A named target is the whole mechanism, and a
-     * rel="noopener" sitting beside it undoes it in silence: the spec
-     * rewrites a noopener target to "_blank" before looking the name up,
-     * so the link opens a fresh simulator on every click and the page
-     * looks correct while doing it. Both halves are asserted, on the
-     * fallback anchors in the page and on the links app.js builds.
-     */
-    const simAnchors = html.match(/<a\b[^>]*href="http:\/\/127\.0\.0\.1:8000[^"]*"[^>]*>/g) || [];
-    check('every fallback link to the simulator names the simulator tab',
-      simAnchors.length === 7 && simAnchors.every((a) => a.includes('target="fdfpv-sim"')));
-    /* Six: the card's Fly, the sheet's Fly and Remix, the header and
-     * footer rewrite helper, the empty-page Build link, and the chase link
-     * builder the podium and the sheet's table both go through. Credits
-     * uses the same rewrite helper.
-     *
-     * It was eight while the freestyle board had a Fly button on an empty
-     * table and another under a full one. That board is gone, so those two
-     * links are gone, and the number moved because the page did.
-     *
-     * The number is the point of the check rather than a detail of it: a
-     * new link that forgets the tab name opens a fresh simulator on every
-     * click, each one running a physics loop and holding a WebGL context,
-     * and the page looks perfectly correct while doing it. */
-    check('the links app.js builds name the simulator tab',
-      app.includes("const SIM_WINDOW = 'fdfpv-sim'")
-      && (app.match(/\.target = SIM_WINDOW/g) || []).length === 6);
-    check('nothing app.js builds opens a bare new tab or asks for noopener',
-      !app.includes("'_blank'") && !app.includes("noopener'"));
-    const sneak = await fetch('http://127.0.0.1:3199/%2e%2e/package.json');
-    const sneakText = await sneak.text();
-    check('encoded parent path cannot read the package', sneak.status !== 200 && !sneakText.includes('fdfpvboard'));
-    const badPct = await fetch('http://127.0.0.1:3199/%');
-    check('a malformed percent is not a 500', badPct.status === 400 || badPct.status === 404);
-    const filed = await fetch('http://127.0.0.1:3199/api/bugs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'visual',
-        title: 'City trees flicker at dusk',
-        what: 'Near the shrine the treeline pops in and out every few frames.',
-        expected: 'Trees stay put.',
-        steps: 'Load city. Fly to the shrine. Look at the treeline.',
-        reporter: 'Ada Rook',
-        context: { map: 'city', screen: 'paused', graphics: 'high' },
-      }),
-    });
-    const ticket = await filed.json();
-    check('file a bug over HTTP', filed.status === 201 && /^bug-[0-9a-f]{8}$/.test(ticket.id) && ticket.status === 'open');
-    const short = await fetch('http://127.0.0.1:3199/api/bugs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'other', title: 'Nope', what: 'Too short.' }),
-    });
-    check('a short bug title is refused', short.status === 400);
-    const listed = await fetch('http://127.0.0.1:3199/api/bugs?status=open').then((r) => r.json());
-    check('the open list includes the new ticket', listed.bugs.some((b) => b.id === ticket.id && b.map === 'city'));
-    const one = await fetch(`http://127.0.0.1:3199/api/bugs/${ticket.id}`).then((r) => r.json());
-    check('the full ticket keeps context', one.context.map === 'city' && one.what.includes('shrine'));
-    const patched = await fetch(`http://127.0.0.1:3199/api/bugs/${ticket.id}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'in_progress' }),
-    });
-    const patchedBody = await patched.json();
-    check('an agent can mark a ticket in progress', patched.status === 200 && patchedBody.status === 'in_progress');
-    const feel = await fetch('http://127.0.0.1:3199/api/bugs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'feel',
-        title: 'Flight feel: about right',
-        what: 'The quad felt about right this run. Locked in, no complaints.',
-        reporter: 'Ada Rook',
-        context: { map: 'field', tune: 'crapshack' },
-      }),
-    });
-    const feelTicket = await feel.json();
-    check('flight feel feedback lands as a ticket', feel.status === 201 && feelTicket.kind === 'feel');
-    const feelList = await fetch('http://127.0.0.1:3199/api/bugs?kind=feel').then((r) => r.json());
-    check('the feedback filter lists only feel reports',
-      feelList.bugs.length === 1 && feelList.bugs[0].id === feelTicket.id
-      && feelList.bugs.every((b) => b.kind === 'feel'));
-    const inbox = await fetch('http://127.0.0.1:3199/bugs.html').then((r) => r.text());
-    check('the inbox page is served', inbox.includes('Bugs and feedback') && inbox.includes('bugs.js'));
-    check('the inbox can filter by kind', inbox.includes('id="kind"') && inbox.includes('Feedback, flight feel'));
-    check('the inbox loads its script relatively', inbox.includes('src="bugs.js"'));
-    check('the inbox has no root absolute reference', !inbox.includes('src="/') && !inbox.includes('href="/'));
-    const bugsJs = await fetch('http://127.0.0.1:3199/bugs.js').then((r) => r.text());
-    check('neither script fetches from the site root',
-      !app.includes("fetch('/") && !app.includes('fetch(`/')
-      && !bugsJs.includes("fetch('/") && !bugsJs.includes('fetch(`/'));
-    const inboxShort = await fetch('http://127.0.0.1:3199/bugs');
-    check('/bugs serves the inbox', inboxShort.status === 200 && (await inboxShort.text()).includes('Bugs and feedback'));
-    const proto = await fetch('http://127.0.0.1:3199/api/bugs/constructor');
-    check('a non-ticket id is not a 500', proto.status === 400 || proto.status === 404);
-    const stillBoard = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    /* By id rather than as tracks[0]: the wing course published above is
-     * newer and lists first, and the question is whether Ada's is still
-     * there with its time. */
-    const stillAda = stillBoard.tracks.find((t) => t.id === 'trk-1a2b3c4d');
-    check('filing a bug does not drop tracks', Boolean(stillAda) && stillAda.best.lapMs === Math.round(adaLap.lapMs));
-
-    /* ---------------------------------------------------------------- */
-    /* Tags                                                              */
-    /* ---------------------------------------------------------------- */
-
-    const untagged = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('a track published without tags carries an empty list, never undefined',
-      Array.isArray(untagged.tracks[0].tags) && untagged.tracks[0].tags.length === 0);
-    const tagged = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook',
-        document: lapDoc('trk-7a7a7a7a'),
-        tags: ['experiment', 'race', 'race'],
-      }),
-    });
-    const taggedBody = await tagged.json();
-    check('a track can be published with tags', tagged.status === 201);
-    const withTags = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    const tagRow = withTags.tracks.find((t) => t.id === 'trk-7a7a7a7a');
-    /* Deduplicated, and in the board's own order rather than the order they
-     * were sent, so two tracks wearing the same tags carry the same list. */
-    check('and they come back deduplicated in the board\'s order',
-      tagRow && tagRow.tags.join() === 'race,experiment');
-    const badTag = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook', document: sampleDoc('trk-8b8b8b8b'), tags: ['racing'],
-      }),
-    });
-    /* Refused, not dropped: a builder that offered a tag and a board that
-     * ignored it would disagree silently and the author would never learn. */
-    check('an unknown tag is refused rather than dropped', badTag.status === 400);
-    const manyTags = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook',
-        document: sampleDoc('trk-9c9c9c9c'),
-        tags: ['race', 'skills', 'experiment', 'freestyle', 'beginner', 'technical'],
-      }),
-    });
-    check('and a track cannot wear every tag on the board', manyTags.status === 400);
-    /*
-     * A tag is not part of the layout, so retagging must not clear a time.
-     * That is the whole reason tags travel in the envelope beside the
-     * author rather than inside the document, where they would have to be
-     * kept out of layoutHash by hand.
-     */
-    const finchLap = honestLap(lapDoc('trk-7a7a7a7a'));
-    await fetch('http://127.0.0.1:3199/api/tracks/trk-7a7a7a7a/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-7a7a7a7a', 'Bo Finch', finchLap),
-    });
-    const retagged = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook',
-        document: lapDoc('trk-7a7a7a7a'),
-        editKey: taggedBody.editKey,
-        tags: ['skills'],
-      }),
-    });
-    const retaggedBody = await retagged.json();
-    const afterRetag = await fetch('http://127.0.0.1:3199/api/tracks/trk-7a7a7a7a').then((r) => r.json());
-    check('retagging a track keeps its times',
-      retagged.status === 200 && retaggedBody.timesCleared === false
-      && afterRetag.times.length === 1 && afterRetag.tags.join() === 'skills');
-    /* And clearing them is one empty list, not an omission: an omitted list
-     * is "this builder does not know about tags" and must leave them be. */
-    const cleared = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        author: 'Ada Rook',
-        document: lapDoc('trk-7a7a7a7a'),
-        editKey: taggedBody.editKey,
-        tags: [],
-      }),
-    });
-    const afterClear = await fetch('http://127.0.0.1:3199/api/tracks/trk-7a7a7a7a').then((r) => r.json());
-    check('and a track can be untagged again',
-      cleared.status === 200 && afterClear.tags.length === 0);
-
-    /* ---------------------------------------------------------------- */
-    /* The freestyle board                                               */
-    /* ---------------------------------------------------------------- */
-
-    const aRun = (over) => ({
-      name: 'Ada Rook',
-      map: 'alps',
-      style: 'expert',
-      score: 24800,
-      durationMs: 120000,
-      tricks: 31,
-      unique: 14,
-      bestCombo: 9100,
-      bestTrick: 1450,
-      crashes: 2,
-      signature: 'Trippy Spin x2',
-      ...over,
-    });
-    const emptyRuns = await fetch('http://127.0.0.1:3199/api/runs').then((r) => r.json());
-    check('the freestyle board starts empty and still answers',
-      Array.isArray(emptyRuns.runs) && emptyRuns.runs.length === 0
-      && Array.isArray(emptyRuns.tags) && emptyRuns.tags.length > 0);
-    const firstRun = await fetch('http://127.0.0.1:3199/api/runs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(aRun()),
-    });
-    const firstBody = await firstRun.json();
-    check('post a freestyle run',
-      firstRun.status === 201 && firstBody.rank === 1 && firstBody.improved === true);
-    const rival = await fetch('http://127.0.0.1:3199/api/runs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(aRun({ name: 'Bo Finch', score: 31200 })),
-    });
-    const rivalBody = await rival.json();
-    check('a better run takes the top of the board', rivalBody.rank === 1);
-    const ordered = await fetch('http://127.0.0.1:3199/api/runs').then((r) => r.json());
-    check('and the board is ordered highest first',
-      ordered.runs.length === 2 && ordered.runs[0].name === 'Bo Finch'
-      && ordered.runs[1].name === 'Ada Rook');
-    /*
-     * ONE ROW PER PILOT. A leaderboard is a list of who is good, not a log
-     * of who pressed the button, and this endpoint is the board's only
-     * public write with no owner: without this rule one pilot could own the
-     * whole visible table.
-     */
-    const worse = await fetch('http://127.0.0.1:3199/api/runs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      /* A whole, plausible run that simply is not as good. bestCombo and
-       * bestTrick come down with the score, because a chain cannot be worth
-       * more than the run it is in and inspectRun refuses one that is. */
-      body: JSON.stringify(aRun({ score: 100, bestCombo: 90, bestTrick: 50 })),
-    });
-    const worseBody = await worse.json();
-    const afterWorse = await fetch('http://127.0.0.1:3199/api/runs').then((r) => r.json());
-    check('a worse run by the same pilot does not take their place',
-      worse.status === 200 && worseBody.improved === false && worseBody.score === 24800
-      && afterWorse.runs.length === 2);
-    const better = await fetch('http://127.0.0.1:3199/api/runs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(aRun({ name: 'ADA ROOK', score: 40000 })),
-    });
-    const afterBetter = await fetch('http://127.0.0.1:3199/api/runs').then((r) => r.json());
-    check('a better one replaces it, and a capital letter is the same pilot',
-      better.status === 201 && afterBetter.runs.length === 2
-      && afterBetter.runs[0].name === 'ADA ROOK' && afterBetter.runs[0].score === 40000);
-    /*
-     * The board cannot recompute a score, so it bounds the claim and checks
-     * it against itself. These are the refusals that catches.
-     */
-    const refusals = [
-      ['a score no number of tricks could reach', aRun({ score: 1e12 })],
-      ['a run with no tricks in it', aRun({ tricks: 0 })],
-      ['more distinct tricks than tricks', aRun({ unique: 99, tricks: 4 })],
-      ['one trick worth more than the whole run', aRun({ bestTrick: 999999 })],
-      ['a chain worth more than the whole run', aRun({ bestCombo: 999999 })],
-      ['a map this board keeps no scores for', aRun({ map: 'bando' })],
-      ['a physics model that does not exist', aRun({ style: 'godmode' })],
-      ['a run that lasted no time at all', aRun({ durationMs: 0 })],
-      ['a pilot name that is not a name', aRun({ name: '!!' })],
-    ];
-    let refused = 0;
-    for (const [, payload] of refusals) {
-      const r = await fetch('http://127.0.0.1:3199/api/runs', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (r.status === 400) {
-        refused += 1;
-      }
-    }
-    check('every implausible run is refused with a 400', refused === refusals.length);
-    const notObject = await fetch('http://127.0.0.1:3199/api/runs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '7',
-    });
-    check('and a JSON non-object is a 400, not a 500', notObject.status === 400);
-    const badMapQuery = await fetch('http://127.0.0.1:3199/api/runs?map=nowhere');
-    check('an unknown map in the query is a 400', badMapQuery.status === 400);
-    const stillTracks = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('and none of it disturbed the tracks',
-      stillTracks.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
-    /* The tag vocabulary moved here from the freestyle board's request when
-     * that board left the page, and the page reads it off this payload. */
-    check('the track list carries the tag vocabulary',
-      Array.isArray(stillTracks.tags) && stillTracks.tags.some((t) => t.id === 'skills'));
-
-    /* ---------------------------------------------------------------- */
-    /* The card animation                                                 */
-    /* ---------------------------------------------------------------- */
-
-    console.log('\nthe card animation');
-
-    const roomPosted = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: lapRoom() }),
-    });
-    const roomBody = await roomPosted.json();
-    check('publish a room', roomPosted.status === 201 && Boolean(roomBody.editKey));
-    const roomKey = roomBody.editKey;
-
-    const noArt = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif');
-    check('a track with no animation is a 404, not an empty image', noArt.status === 404);
-
-    const up = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: roomKey, gif: GIF_64.toString('base64') }),
-    });
-    const upBody = await up.json();
-    check('the browser that published a room can upload its animation',
-      up.status === 200 && upBody.bytes === GIF_64.length, JSON.stringify(upBody));
-
-    const served = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif');
-    const servedBytes = Buffer.from(await served.arrayBuffer());
-    check('and it comes back as an image, byte for byte',
-      served.status === 200
-      && served.headers.get('content-type') === 'image/gif'
-      && servedBytes.equals(GIF_64));
-    /* The card's src carries gifUtc, so this response may be cached hard.
-     * It is the only one on the board that is not no-store. */
-    check('and it is cacheable, which nothing else here is',
-      /max-age=\d\d\d/.test(served.headers.get('cache-control') || ''),
-      served.headers.get('cache-control'));
-
-    const withArt = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    const roomRow = withArt.tracks.find((t) => t.id === 'trk-2b3c4d5e');
-    const fieldRow = withArt.tracks.find((t) => t.id === 'trk-1a2b3c4d');
-    check('the list says there is one, and does not carry it',
-      roomRow.hasGif === true && Boolean(roomRow.gifUtc)
-      && !JSON.stringify(roomRow).includes(GIF_64.toString('base64')));
-    check('and a field track says there is not', fieldRow.hasGif === false);
-
-    /*
-     * A FIELD TRACK IS REFUSED ONE, and this is the rule rather than a
-     * default: a sixty metre course has a plan worth drawing and public
-     * plan.js draws it for nothing. Enforced in the board because a rule
-     * enforced in the page is a rule the next publisher walks past.
-     */
-    const onField = await fetch('http://127.0.0.1:3199/api/tracks/trk-1a2b3c4d/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: 'whatever', gif: GIF_64.toString('base64') }),
-    });
-    check('a field track is refused an animation', onField.status === 400);
-
-    const wrongKey = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: 'not-the-key', gif: GIF_64.toString('base64') }),
-    });
-    check('another browser cannot overwrite it', wrongKey.status === 403);
-
-    const notAGif = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: roomKey, gif: Buffer.from('not a gif at all').toString('base64') }),
-    });
-    check('and a file that is not a GIF is refused', notAGif.status === 400);
-
-    const tiny = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.from([1, 0, 1, 0]), Buffer.from([0x3b])]);
-    const tooSmall = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: roomKey, gif: tiny.toString('base64') }),
-    });
-    check('and a one pixel GIF is refused', tooSmall.status === 400);
-
-    /* The one way past the edit key, for the rooms published before any of
-     * this existed. Unset, there is no such way. */
-    const asAdmin = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${ADMIN_TOKEN}` },
-      body: JSON.stringify({ gif: GIF_64.toString('base64') }),
-    });
-    check('the admin token can upload without an edit key', asAdmin.status === 200);
-
-    /*
-     * A RELAYOUT THROWS IT AWAY AND A RENAME DOES NOT. It is a picture of a
-     * layout, so it goes for the same reason the times go.
-     */
-    const renamedRoom = lapRoom();
-    renamedRoom.name = 'The same room, renamed';
-    const roomRenamed = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: renamedRoom, editKey: roomKey }),
-    });
-    check('a rename republishes the room', roomRenamed.status === 200);
-    const afterRename = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('and the animation is still there',
-      afterRename.tracks.find((t) => t.id === 'trk-2b3c4d5e').hasGif === true);
-
-    const movedRoom = lapRoom();
-    movedRoom.elements[1].position = { x: 1, y: 1.2, z: 0 };
-    const roomMoved = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: movedRoom, editKey: roomKey }),
-    });
-    const movedBody = await roomMoved.json();
-    check('moving a gate republishes and clears the times',
-      roomMoved.status === 200 && movedBody.timesCleared === true, JSON.stringify(movedBody));
-    const afterMove = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('and the animation goes with them, because it is a picture of the old layout',
-      afterMove.tracks.find((t) => t.id === 'trk-2b3c4d5e').hasGif === false);
-    const goneArt = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/gif');
-    check('so the image is a 404 again', goneArt.status === 404);
-
-    /* ---------------------------------------------------------------- */
-    /* Taking a track off the board                                       */
-    /* ---------------------------------------------------------------- */
-
-    console.log('\ntaking a track off the board');
-
-    /* A time on it first, because the point of the route is that the times
-     * go with the track and the point of the gate is that the publisher
-     * alone may not throw somebody else's away. */
-    /* Against the room as it is on the board now, gate moved and all: a
-     * lap flown through the old layout is exactly what the check refuses. */
-    const roomNow = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/document').then((r) => r.json());
-    const kiteLap = honestLap(roomNow.document, { speed: 6 });
-    const kitePost = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/times', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: await signedTime(boKey, 'trk-2b3c4d5e', 'Bo Kite', kiteLap),
-    });
-    check('a lap in the micro room is accepted', kitePost.status === 201, `${kitePost.status} ${(await kitePost.clone().text()).slice(0, 120)}`);
-    const beforeRemoval = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('the room is on the board, with a time on it',
-      beforeRemoval.tracks.find((t) => t.id === 'trk-2b3c4d5e')?.times === 1);
-
-    const noToken = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/remove', {
-      method: 'POST',
-    });
-    check('a stranger cannot remove a track', noToken.status === 403);
-
-    /* The edit key is NOT a way in, and this is the check that says so. The
-     * browser that published it can change its layout and clear the times
-     * that way; it cannot delete other pilots' records outright. */
-    const withEditKey = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/remove', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editKey: roomKey }),
-    });
-    check('and neither can the browser that published it', withEditKey.status === 403);
-
-    /* An unauthorised caller learns nothing about which ids exist: the token
-     * is checked before the id is, so a real id and a made up one answer
-     * alike. */
-    const madeUpId = await fetch('http://127.0.0.1:3199/api/tracks/trk-00000000/remove', {
-      method: 'POST',
-    });
-    check('and an id that is not here answers the same way', madeUpId.status === 403);
-
-    const missing = await fetch('http://127.0.0.1:3199/api/tracks/trk-00000000/remove', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-    });
-    check('with the token, a track that is not here is a 404', missing.status === 404);
-
-    const removed = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/remove', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-    });
-    const removedBody = await removed.json();
-    check('the board\'s own token takes it off',
-      removed.status === 200 && removedBody.times === 1,
-      JSON.stringify(removedBody));
-    check('and says what went, rather than echoing the id back',
-      removedBody.name === 'Ladder Loop' && removedBody.author === 'Ada Rook',
-      JSON.stringify(removedBody));
-
-    const afterRemoval = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('the list no longer carries it',
-      !afterRemoval.tracks.some((t) => t.id === 'trk-2b3c4d5e'));
-    check('and the field track beside it is untouched',
-      afterRemoval.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
-    const removedOne = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e');
-    check('its detail is a 404', removedOne.status === 404);
-    const removedDoc = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/document');
-    check('and so is the document behind it', removedDoc.status === 404);
-
-    /* The id is free again, which is what makes this the way to replace a
-     * track somebody published from a browser nobody still has. */
-    const republished = await fetch('http://127.0.0.1:3199/api/tracks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ author: 'Ada Rook', document: lapRoom() }),
-    });
-    check('and the id is free to publish again', republished.status === 201);
-
-    /* ------------------------------------------------------------------ */
-    console.log('\nsigning in');
-
-    const wrongPassword = await fetch('http://127.0.0.1:3199/api/admin/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: ADMIN_EMAIL, password: 'not it' }),
-    });
-    const wrongBody = await wrongPassword.json();
-    check('a wrong password is refused', wrongPassword.status === 401);
-
-    const stranger = await fetch('http://127.0.0.1:3199/api/admin/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: 'nobody@example.com', password: ADMIN_PASSWORD }),
-    });
-    const strangerBody = await stranger.json();
-    check('an address that is not on the list is refused', stranger.status === 401);
-    /* The same sentence for both, so the route cannot be asked which
-     * addresses are worth attacking. */
-    check('and the two refusals say exactly the same thing',
-      wrongBody.error === strangerBody.error, `${wrongBody.error} / ${strangerBody.error}`);
-
-    const noSession = await fetch('http://127.0.0.1:3199/api/admin/session');
-    check('with no token, the session route says nobody', noSession.status === 401);
-
-    const signedIn = await fetch('http://127.0.0.1:3199/api/admin/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      /* Mixed case and a stray space, the way a person types their own
-       * address into a form. */
-      body: JSON.stringify({ email: `  ${ADMIN_EMAIL.toUpperCase()} `, password: ADMIN_PASSWORD }),
-    });
-    const session = await signedIn.json();
-    check('the right address and password sign in',
-      signedIn.status === 200 && typeof session.token === 'string' && session.token.length > 40,
-      JSON.stringify({ status: signedIn.status, error: session.error }));
-    check('and the address comes back normalised', session.email === ADMIN_EMAIL);
-    check('with a time it runs out', typeof session.expiresUtc === 'string' && session.expiresUtc.endsWith('Z'));
-
-    const who = await fetch('http://127.0.0.1:3199/api/admin/session', {
-      headers: { authorization: `Bearer ${session.token}` },
-    }).then((r) => r.json());
-    check('the session route reads the token back', who.email === ADMIN_EMAIL && who.kind === 'session');
-
-    const asToken = await fetch('http://127.0.0.1:3199/api/admin/session', {
-      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-    }).then((r) => r.json());
-    check('and answers for BOARD_ADMIN_TOKEN with no address',
-      asToken.kind === 'token' && asToken.email === '');
-
-    const tampered = await fetch('http://127.0.0.1:3199/api/admin/session', {
-      headers: { authorization: `Bearer ${session.token.slice(0, -3)}zzz` },
-    });
-    check('a token with the signature changed is nobody', tampered.status === 401);
-
-    /*
-     * The point of all of it: a signed in person can do the thing that used
-     * to need a string in an environment. The track republished above is
-     * the one that goes.
-     */
-    const bySession = await fetch('http://127.0.0.1:3199/api/tracks/trk-2b3c4d5e/remove', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${session.token}` },
-    });
-    check('a signed in admin takes a track off the board', bySession.status === 200);
-    const afterSession = await fetch('http://127.0.0.1:3199/api/tracks').then((r) => r.json());
-    check('and it is gone', !afterSession.tracks.some((t) => t.id === 'trk-2b3c4d5e'));
-
-    /* The bugs inbox opens to an admin without a second secret. This server
-     * runs with BUGS_TOKEN unset, so the useful half of that is the shape of
-     * the answer rather than the gate; the gate itself is checked in the
-     * unit half, where bugsAuthorized's two callers are one function. */
-    const inboxByAdmin = await fetch('http://127.0.0.1:3199/api/bugs', {
-      headers: { authorization: `Bearer ${session.token}` },
-    });
-    check('and reads the bugs inbox with the same token', inboxByAdmin.status === 200);
-
-    /* ---------------------------------------------------------------- */
-    /* Site statistics, over the wire                                     */
-    /* ---------------------------------------------------------------- */
-
-    console.log('\nsite statistics, over the wire');
-    const B = 'http://127.0.0.1:3199';
-    const post = (body, headers = {}) => fetch(`${B}/api/stats/events`, {
-      method: 'POST',
-      /* text/plain, because that is what a beacon sends and a beacon is
-       * what the pages use: it cannot set a header, and a simple request
-       * needs no preflight. If this route ever starts insisting on
-       * application/json, every event from every page stops arriving and
-       * nothing else would say so. */
-      headers: { 'content-type': 'text/plain', ...headers },
-      body: JSON.stringify(body),
-    });
-
-    const visit = await post({
-      v: 1, kind: 'visit', surface: 'sim', returning: false, source: 'rotorriot',
-    }, { 'x-fdfpv-country': 'AU' });
-    check('a visit posted as text/plain is taken', visit.status === 204);
-    check('and it answers with no body at all', (await visit.text()) === '');
-
-    await post({ v: 1, kind: 'visit', surface: 'board', returning: true, source: 'not-a-sponsor' },
-      { 'x-fdfpv-country': 'nonsense' });
-    await post({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' },
-      { 'x-fdfpv-country': 'NZ' });
-    await post({
-      v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', map: 'custom', laps: 4, flightS: 61, crashes: 1,
-    }, { 'x-fdfpv-country': 'AU' });
-
-    /* Global Privacy Control. The same 204 an accepted event gets, on
-     * purpose, and nothing counted. A different status would tell a script
-     * whether the signal was seen. */
-    const gpc = await post({ v: 1, kind: 'visit', surface: 'sim', returning: false }, { 'sec-gpc': '1' });
-    check('a browser that asked not to be counted gets the same answer', gpc.status === 204);
-
-    const badKind = await post({ v: 1, kind: 'pageview' });
-    check('an event this board does not count is refused', badKind.status === 400);
-    const badDelta = await post({ v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', laps: 900 });
-    check('and so is a claim bigger than a minute', badDelta.status === 400);
-    const notJson = await fetch(`${B}/api/stats/events`, { method: 'POST', body: 'not json at all' });
-    check('and so is something that is not JSON', notJson.status === 400);
-
-    const statsRes = await fetch(`${B}/api/stats`);
-    const stats = await statsRes.json();
-    check('the statistics read answers', statsRes.status === 200);
-    /* The one response besides a card animation that is not no-store. A
-     * hundred readers polling this should cost the database what one does. */
-    check('and is cacheable for a short while',
-      /max-age=\d+/.test(statsRes.headers.get('cache-control') || ''));
-    check('the visit is on the board', stats.today.visits === 2);
-    check('and the GPC one is not', stats.today.newVisitors === 1);
-    check('the returning one moved its own column', stats.today.returningVisitors === 1);
-    check('the session and its laps are counted',
-      stats.today.sessions === 1 && stats.today.laps === 4 && stats.today.flightS === 61);
-    check('the flying tab is counted as flying now', stats.live.flying === 1);
-    check('the window is thirty days', stats.days.length === 30);
-
-    const sourceRow = (key) => stats.sources.find((r) => r.key === key) || {};
-    check("a real sponsor keeps its own row", sourceRow('rotorriot').visits === 1);
-    check('and travels with the name the board prints', sourceRow('rotorriot').name === 'Rotor Riot');
-    check('a source this board never heard of folds into other', sourceRow('not-a-sponsor').visits === undefined
-      && sourceRow('other').visits === 1);
-    const countryRow = (key) => stats.countries.find((r) => r.key === key) || {};
-    check('the country from the edge is counted', countryRow('AU').visits === 1);
-    check('and a header that is not a country is unknown', countryRow('ZZ').visits === 1);
-
-    /*
-     * Cloudflare's own header is read when the Worker's is absent, which is
-     * a Worker from before it learned to set one. Posted as flushes with a
-     * lap in them, because a lap moves the country row and a visit has
-     * already been spent on this browser's day above. Read back after the
-     * cache has aged out, since the read above was built before these.
-     */
-    await post({
-      v: 1, kind: 'flush', tab: 'tab-cf-1', craft: '5inch', map: 'custom', laps: 1,
-    }, { 'cf-ipcountry': 'NZ' });
-    await post({
-      v: 1, kind: 'flush', tab: 'tab-cf-2', craft: '5inch', map: 'custom', laps: 1,
-    }, { 'cf-ipcountry': 'NZ', 'x-fdfpv-country': 'FR' });
-    await new Promise((r) => setTimeout(r, 20_100));
-    const later = await fetch(`${B}/api/stats`).then((r) => r.json());
-    const laterRow = (key) => later.countries.find((r) => r.key === key) || {};
-    check("Cloudflare's own country header is read when the Worker's is absent", laterRow('NZ').laps === 1);
-    check("and the Worker's header wins when both are present", laterRow('FR').laps === 1);
-
-    /* The four numbers off the board's own tables. Two tracks were
-     * published above and one was removed, so one is left. */
-    /* Checked against the live list rather than against a number written
-     * here: the count is whatever this suite has published and removed by
-     * now, and a hardcoded one would have to be edited every time a check
-     * above it published another track. What matters is that the two
-     * agree. Nothing mutates tracks between the read above and this one. */
-    const live = await fetch(`${B}/api/tracks`).then((r) => r.json());
-    const namedPilots = new Set(
-      live.tracks.flatMap((t) => (t.best ? [String(t.best.name).toLowerCase()] : [])),
-    );
-    check('the board facts count the tracks that are actually on the board',
-      stats.board.tracks === live.tracks.length);
-    /* Both boards of a map track: the listing counts the quads' and the
-     * planes' apart, and the facts count every time. */
-    check('and the times posted on them',
-      stats.board.times === live.tracks.reduce((sum, t) => sum + (t.times || 0) + (t.wing ? t.wing.times : 0), 0));
-    check('and at least the pilots holding a record', stats.board.pilots >= namedPilots.size);
-    check('and nobody has been back another day inside one test run',
-      stats.board.pilotsOnMoreThanOneDay === 0);
-
-    /* The flood gate. Its allowance is 600 in ten minutes, which is fifty
-     * pilots behind one address each flushing once a minute, and this spends
-     * the rest of it. Every one of these is a file write, so it is the slow
-     * part of this suite and it is worth exactly what it costs. */
-    let flooded = 0;
-    const ATTEMPTS = 660;
-    for (let i = 0; i < ATTEMPTS; i += 1) {
-      /* eslint-disable-next-line no-await-in-loop */
-      const r = await post({ v: 1, kind: 'flush', tab: `tab-flood-${i}`, craft: '5inch', flightS: 1 });
-      if (r.status === 429) {
-        flooded += 1;
-      }
-    }
-    check('an address that posts hundreds of events is shut off', flooded > 0);
-
-    /* And it closed AFTER a room's worth went through, not before: at least
-     * five hundred of these landed. A refused event never spends the
-     * allowance, which is why the junk posted above did not bring the gate
-     * forward. */
-    check('the gate closed after the allowance rather than before it', ATTEMPTS - flooded >= 500);
-
-    /* The one thing an admin gets that the public page does not: the list
-     * of sponsors, with the link each one is given. */
-    const panel = await fetch(`${B}/api/admin/session`, {
-      headers: { authorization: `Bearer ${session.token}` },
-    }).then((r) => r.json());
-    check('a signed in admin is handed the sponsor links',
-      Array.isArray(panel.sponsors) && panel.sponsors.length === 1);
-    check('and the link points at the simulator with the slug on it',
-      panel.sponsors[0].link === 'http://127.0.0.1:8000/?utm_source=rotorriot&utm_medium=sponsor');
-    const anon = await fetch(`${B}/api/stats`).then((r) => r.json());
-    check('the public read does not carry the list of sponsors',
-      anon.sponsors === undefined);
-
-    /* ---------------------------------------------------------------- */
-    /* A callsign claimed ahead of a time, and a key handed on           */
-    /* ---------------------------------------------------------------- */
-
-    console.log('\na callsign claimed ahead of a time, and a key handed on');
-    const enc = (text) => new TextEncoder().encode(text);
-    const cara = createIdentity(memoryStorage());
-    const dan = createIdentity(memoryStorage());
-    const eve = createIdentity(memoryStorage());
-    const claim = async (identity, name, signed = name) => {
-      const auth = await identity.signBytes(enc(`fdfpv-name/v1\n${signed}`));
-      return fetch(`${B}/api/pilots`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, ...auth }),
-      });
-    };
-    let said = await claim(cara, 'Maverick');
-    check('a pilot key claims a name before any time', said.status === 201);
-    said = await claim(cara, 'Maverick');
-    check('claiming it again is a no-op', said.status === 200);
-    said = await claim(eve, 'maverick');
-    check('another key cannot claim it, case and all', said.status === 403);
-    said = await claim(eve, 'Iceman', 'Viper');
-    check('a signature over another name claims nothing', said.status === 401);
-    const keysDoc = { ...lapDoc(), id: 'trk-5e6f7a8b', name: 'Pilot keys' };
-    const keysTrack = await fetch(`${B}/api/tracks`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ author: 'Maverick', document: keysDoc }),
-    });
-    check('a track for the next laps is published', keysTrack.status === 201, `${keysTrack.status}`);
-    const keysLap = honestLap(keysDoc);
-    const lapPost = (identity, name) => signedTime(identity, keysDoc.id, name, keysLap)
-      .then((body) => fetch(`${B}/api/tracks/${keysDoc.id}/times`, { method: 'POST', headers: { 'content-type': 'application/json' }, body }));
-    said = await lapPost(eve, 'Maverick');
-    check('a time under a claimed name from another key is refused', said.status === 403);
-    said = await lapPost(cara, 'Maverick');
-    check('the claiming key posts under it', said.status === 201, `${said.status}`);
-    const link = async (from, to, signers = [from, to]) => {
-      const fromKey = await from.publicKey();
-      const toKey = await to.publicKey();
-      const message = enc(`fdfpv-link/v1\n${fromKey}\n${toKey}`);
-      const a = await signers[0].signBytes(message);
-      const b = await signers[1].signBytes(message);
-      return fetch(`${B}/api/pilots/link`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ from: fromKey, fromSig: a.sig, to: toKey, toSig: b.sig }),
-      });
-    };
-    said = await link(cara, eve, [eve, eve]);
-    check('a link the old key did not sign moves nothing', said.status === 401);
-    said = await link(cara, eve, [cara, cara]);
-    check('nor one the new key did not sign', said.status === 401);
-    said = await link(cara, dan);
-    const moved = await said.json();
-    check('a link both keys signed moves the names and the times', said.status === 200 && moved.names === 1 && moved.times === 1, JSON.stringify(moved));
-    said = await lapPost(dan, 'Maverick');
-    check('the new key posts under the name', said.status === 200 || said.status === 201, `${said.status}`);
-    said = await lapPost(cara, 'Maverick');
-    check('and the old key no longer can', said.status === 403);
-  } finally {
-    child.kill('SIGTERM');
-    await rm(dir, { recursive: true, force: true });
-  }
-}
-
-
-/*
- * SCREENSHOTS ON A TICKET, over the wire, on a server with BUGS_TOKEN set,
- * because the question is who may read them and testHttp's server leaves
- * the inbox open the way a checkout does. Runs against the file store and,
- * when the suite has one, against Postgres after testHttp, whose counts
- * from zero it does not disturb: it looks its own tickets up by id.
- */
-async function testBugImages(databaseUrl = '') {
-  console.log(databaseUrl ? '\nbug screenshots, against Postgres' : '\nbug screenshots');
-  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-'));
-  const B = 'http://127.0.0.1:3198';
-  const child = spawn(process.execPath, [join(root, 'src', 'server.js')], {
-    cwd: root,
-    env: {
-      ...process.env,
-      PORT: '3198',
-      BOARD_FILE: join(dir, 'board.json'),
-      DATABASE_URL: databaseUrl,
-      BUGS_TOKEN: 'selftest-bugs-token',
-      BOARD_ADMINS: `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const report = (images, title = 'Pasted a screenshot here') => fetch(`${B}/api/bugs`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      kind: 'visual', title, what: 'The screenshot shows the thing twenty words cannot.', images,
-    }),
-  });
-  try {
-    await waitFor(child, 'FDFPV leaderboard');
-    const login = await fetch(`${B}/api/admin/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
-    }).then((r) => r.json());
-    const asAdmin = { authorization: `Bearer ${login.token}` };
-
-    const filed = await report([`data:image/png;base64,${b64(PNG_1PX)}`, b64(WEBP_HEAD)]);
-    const ticket = await filed.json();
-    check('a report carries its screenshots in', filed.status === 201 && ticket.images.length === 2,
-      `${filed.status} ${JSON.stringify(ticket).slice(0, 160)}`);
-    const one = await fetch(`${B}/api/bugs/${ticket.id}`, { headers: asAdmin }).then((r) => r.json());
-    check('the admin\'s ticket lists them',
-      one.images.map((i) => `${i.n}:${i.type}:${i.size}`).join() === `1:image/png:${PNG_1PX.length},2:image/webp:${WEBP_HEAD.length}`);
-    const img = await fetch(`${B}/api/bugs/${ticket.id}/images/1`, { headers: asAdmin });
-    const bytes = Buffer.from(await img.arrayBuffer());
-    check('the signed in admin gets the image back byte for byte',
-      img.status === 200 && img.headers.get('content-type') === 'image/png' && bytes.equals(PNG_1PX));
-    check('served with nosniff and never cached',
-      img.headers.get('x-content-type-options') === 'nosniff' && /no-store/.test(img.headers.get('cache-control') || ''));
-    const byToken = await fetch(`${B}/api/bugs/${ticket.id}/images/2`, {
-      headers: { authorization: 'Bearer selftest-bugs-token' },
-    });
-    check('BUGS_TOKEN reads it too, as it reads the ticket', byToken.status === 200 && byToken.headers.get('content-type') === 'image/webp');
-    const anonImage = await fetch(`${B}/api/bugs/${ticket.id}/images/1`);
-    check('an anonymous read of a screenshot is a 401', anonImage.status === 401);
-    const anonTicket = await fetch(`${B}/api/bugs/${ticket.id}`);
-    check('and of the ticket', anonTicket.status === 401);
-    const wrongToken = await fetch(`${B}/api/bugs/${ticket.id}/images/1`, { headers: { authorization: 'Bearer nope' } });
-    check('a wrong token is a 401', wrongToken.status === 401);
-    const none = await fetch(`${B}/api/bugs/${ticket.id}/images/3`, { headers: asAdmin });
-    check('an image the ticket does not have is a 404', none.status === 404);
-    const outside = await fetch(`${B}/api/bugs/${ticket.id}/images/9`, { headers: asAdmin });
-    check('an image number past four is a 400', outside.status === 400);
-    const kept = await fetch(`${B}/api/bugs/${ticket.id}`, {
-      method: 'POST',
-      headers: { ...asAdmin, 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'in_progress' }),
-    }).then((r) => r.json());
-    check('marking the ticket keeps its screenshots', kept.status === 'in_progress' && kept.images.length === 2);
-
-    const text = await report([b64(Buffer.from('<html><script>alert(1)</script></html>'))]);
-    check('a page sent as an image is refused', text.status === 400 && /PNG, JPEG or WebP/.test((await text.json()).error));
-    const big = await report([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]);
-    check('an image over the cap is refused', big.status === 400 && /megabyte/.test((await big.json()).error));
-    const five = await report(Array(5).fill(b64(PNG_1PX)));
-    check('a fifth image is refused', five.status === 400);
-    const huge = await report(Array(4).fill(`${b64(PNG_1PX)}${'A'.repeat(1_500_000)}`));
-    check('a body past what four capped images can be is a 413', huge.status === 413);
-    /* Past the drain ceiling the board stops reading and closes, so the
-     * client may see the 413 or a reset; either way the server lives on. */
-    const flood = await report([`${b64(PNG_1PX)}${'A'.repeat(24_000_000)}`]).then((r) => r.status, () => 'reset');
-    check('a body past the drain ceiling is refused without taking the board down',
-      flood === 413 || flood === 'reset', String(flood));
-    const listed = await fetch(`${B}/api/bugs`, { headers: asAdmin }).then((r) => r.json());
-    check('refused reports stored nothing', listed.bugs.filter((b) => b.title === 'Pasted a screenshot here').length === 1);
-    const plain = await report(undefined, 'A report with no images');
-    const plainBody = await plain.json();
-    check('a report without images still lands', plain.status === 201 && plainBody.images.length === 0);
-
-    const bugsJs = await fetch(`${B}/bugs.js`).then((r) => r.text());
-    check('the inbox fetches screenshots with the header, not a bare src',
-      bugsJs.includes('/images/${img.n}') && bugsJs.includes('createObjectURL'));
-  } finally {
-    child.kill('SIGTERM');
-    await rm(dir, { recursive: true, force: true });
-  }
-}
-
-/*
- * The links a visitor clicks must be right whether or not /api/config
- * answers. bindLinks used to run only after that request came back, so one
- * failure left every cross-origin href on the loopback address baked into
- * the HTML. app.js itself cannot be imported here, it touches `document` at
- * module load, which is why the resolution lives in public/origins.js.
- */
-function testOrigins() {
-  console.log('\norigins, without asking the server');
-
-  const at = (href) => {
-    const u = new URL(href);
-    /* HERE in app.js: this page's own directory. */
-    return [u, new URL('./', href)];
-  };
-
-  check('a checkout on 127.0.0.1 finds the simulator on 8000',
-    guessSimOrigin(...at('http://127.0.0.1:3180/')) === 'http://127.0.0.1:8000');
-  check('localhost by name, same answer',
-    guessSimOrigin(...at('http://localhost:3180/')) === 'http://localhost:8000');
-  check('a track hash does not change the answer',
-    guessSimOrigin(...at('http://127.0.0.1:3180/#course=trk-1a2b3c4d')) === 'http://127.0.0.1:8000');
-
-  check('the /board mount on the VM finds the simulator on GitHub Pages',
-    guessSimOrigin(...at('https://129.151.39.48/board/')) === 'https://fdflabs.github.io/fdfpv');
-  check('the bug page under the mount answers the same',
-    guessSimOrigin(...at('https://129.151.39.48/board/bugs')) === 'https://fdflabs.github.io/fdfpv');
-
-  /*
-   * The one case that cannot be derived, and must NOT be guessed: a board
-   * on its own host. Returning a loopback address here is the defect this
-   * whole file exists to close, so null is the right answer and app.js
-   * leaves those links alone until /api/config says otherwise.
-   */
-  check('a board on its own host declines to guess',
-    guessSimOrigin(...at('https://fdfpv-board.onrender.com/')) === null);
-  check('a public host at the root declines to guess',
-    guessSimOrigin(...at('https://129.151.39.48/')) === null);
-
-  check('a missing location is not a crash', guessSimOrigin(null, null) === null);
-
-  /*
-   * The front door, which is asked in every case rather than declining in
-   * the one that cannot be derived. A board somewhere this file has never
-   * heard of still belongs to the landing page named in origins.js, so the
-   * mark in the masthead has somewhere to go from anywhere.
-   */
-  check('a checkout on 127.0.0.1 finds the front door on 8080',
-    landingOrigin(...at('http://127.0.0.1:3180/')) === 'http://127.0.0.1:8080');
-  check('localhost by name, same answer',
-    landingOrigin(...at('http://localhost:3180/')) === 'http://localhost:8080');
-  check('the /board mount on the VM names the published front door, not the VM',
-    landingOrigin(...at('https://129.151.39.48/board/')) === 'https://fdflabs.github.io/fdfpv');
-  check('the bug page under the mount answers the same',
-    landingOrigin(...at('https://129.151.39.48/board/bugs')) === 'https://fdflabs.github.io/fdfpv');
-  check('a board on its own host names the front door rather than declining',
-    landingOrigin(...at('https://fdfpv-board.onrender.com/'))
-      === 'https://fdflabs.github.io/fdfpv');
-  check('a missing location still answers', landingOrigin(null, null) === 'https://fdflabs.github.io/fdfpv');
-
-  check('loopback set covers the hosts a checkout uses',
-    isLoopback('127.0.0.1') && isLoopback('localhost') && isLoopback('::1')
-      && !isLoopback('fdfpv.example'));
-}
-
-/*
- * The whitelist, the password check and the session token, without a server.
- *
- * The module reads BOARD_ADMINS once, at import, so it is imported here
- * rather than at the top of the file: first with the variable unset, to
- * check that the repository ships nobody, then with the selftest's own
- * address, for the password and session checks. The second import is a
- * different URL so the module cache does not hand back the first.
- */
-async function testAdmin() {
-  console.log('\nadmin');
-
-  delete process.env.BOARD_ADMINS;
-  const shipped = await import('./admin.js?shipped');
-  check('the board ships no admin address',
-    shipped.adminEmails().length === 0, shipped.adminEmails().join(', '));
-  check('so nobody signs in until BOARD_ADMINS names somebody',
-    shipped.checkPassword('anyone@example.com', 'anything at all') === null);
-
-  process.env.BOARD_ADMINS = `${ADMIN_EMAIL}:plain:${ADMIN_PASSWORD}`;
-  const {
-    adminEmails, checkPassword, mintSession, normaliseEmail, readSession,
-  } = await import('./admin.js?selftest');
-  check('BOARD_ADMINS is the whole list',
-    adminEmails().length === 1 && adminEmails()[0] === ADMIN_EMAIL, adminEmails().join(', '));
-
-  check('an address is lowercased and trimmed',
-    normaliseEmail('  Someone@Example.COM ') === 'someone@example.com');
-  check('and something that is not an address is nothing',
-    normaliseEmail('not an address') === '' && normaliseEmail('a@b') === ''
-      && normaliseEmail(null) === '' && normaliseEmail('x:y@example.com') === '');
-
-  check('a wrong password does not open the entry',
-    checkPassword(ADMIN_EMAIL, 'not it') === null);
-  check('an empty password does not open it either',
-    checkPassword(ADMIN_EMAIL, '') === null);
-  check('an address that is not on the list is refused whatever it brings',
-    checkPassword('stranger@example.com', ADMIN_PASSWORD) === null);
-  check('the right address and password open it',
-    checkPassword(ADMIN_EMAIL, ADMIN_PASSWORD) === ADMIN_EMAIL);
-
-  const token = mintSession(ADMIN_EMAIL);
-  const read = readSession(token);
-  check('a session token reads back as the address that minted it',
-    read && read.email === ADMIN_EMAIL);
-  check('and carries when it runs out',
-    read && typeof read.expiresUtc === 'string' && read.expiresUtc.endsWith('Z'));
-
-  check('a token with its signature changed is nobody',
-    readSession(`${token.slice(0, -2)}zz`) === null);
-  check('a token with its payload changed is nobody',
-    readSession(`v1.${Buffer.from(JSON.stringify({ e: ADMIN_EMAIL, x: Date.now() + 9e6 })).toString('base64url')}.${token.split('.')[2]}`) === null);
-  check('an expired token is nobody',
-    readSession(mintSession(ADMIN_EMAIL, { ms: -1000 })) === null);
-  /* The whitelist is checked on every read, not only at sign in, so an
-   * address taken out of BOARD_ADMINS is locked out at once rather than
-   * when its token happens to run out. */
-  check('a token for an address that is not on the list is nobody',
-    readSession(mintSession('gone@example.com')) === null);
-  check('junk is nobody',
-    readSession('') === null && readSession('v1.a.b') === null
-      && readSession(null) === null && readSession('v2.a.b') === null);
-}
-
-/*
- * The statistics wire format, the sponsor fold and the counters.
- *
- * What this suite is really checking is a PROMISE rather than a feature:
- * the page says nothing identifying is accepted or stored, and these are
- * the checks that would fail if that stopped being true. The ones about
- * closed vocabularies matter for the same reason from the other side: they
- * are what stops a stranger with curl growing a table on a public page.
- */
-async function testStats() {
-  console.log('\nsite statistics');
-
-  const ok = (body) => inspectStatsEvent(body, sourceKey);
-
-  /* The simulator's CURRENT catalog, from a checkout of it: the submodule
-   * under vendor/ is pinned far behind the game and does not have today's
-   * ids, so the real list has to be named. Unset says `skip`, as the admin
-   * password check does, rather than passing against a list this file typed. */
-  const catalogPath = process.env.FDFPV_AIRFRAMES;
-  const airframeIds = catalogPath ? (await import(catalogPath)).AIRFRAME_IDS : [];
-  if (!catalogPath) {
-    console.log('  skip  FDFPV_AIRFRAMES (path to the simulator\'s configs/airframes.js) is not set');
-  }
-
-  check('a visit is accepted', !ok({
-    v: 1, kind: 'visit', surface: 'sim', returning: false,
-  }).error);
-  check('a session is accepted', !ok({
-    v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad',
-  }).error);
-  check('a flush is accepted', !ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111', craft: 'whoop65', laps: 2, flightS: 44,
-  }).error);
-
-  check('a version this board does not read is refused', Boolean(ok({ v: 2, kind: 'visit' }).error));
-  check('an unknown kind is refused', Boolean(ok({ v: 1, kind: 'pageview' }).error));
-  check('a visit from an unknown page is refused', Boolean(ok({
-    v: 1, kind: 'visit', surface: 'somewhere', returning: false,
-  }).error));
-  check('a visit with no new-or-returning answer is refused', Boolean(ok({
-    v: 1, kind: 'visit', surface: 'sim',
-  }).error));
-  check('the two ids every older client sends are still counted as themselves', ['5inch', 'whoop65'].every((id) => ok({
-    v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad',
-  }).event.craft === id));
-  if (catalogPath) {
-    check('every airframe id of the simulator\'s catalog is counted as itself, in a session and in a flush', airframeIds.length >= 20 && airframeIds.every((id) => (
-      ok({ v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad' }).event.craft === id
-      && ok({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: id, flightS: 5 }).event.craft === id
-    )), airframeIds.filter((id) => !STATS_CRAFT.includes(id)).join());
-  }
-  check('an aircraft this board has never heard of folds to other, in a session and in a flush', ['tinywhoop', 'Sky Hunter!', '', 'x'.repeat(500), 7, null].every((raw) => (
-    ok({ v: 1, kind: 'session', craft: raw, map: 'custom', input: 'gamepad' }).event?.craft === 'other'
-    && ok({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: raw, flightS: 5 }).event?.craft === 'other'
-  )));
-  check('a session or flush naming no aircraft at all folds to other', ok({ v: 1, kind: 'session', map: 'custom' }).event?.craft === 'other'
-    && ok({ v: 1, kind: 'flush', tab: 'aaaa1111' }).event?.craft === 'other');
-  check('a long tab handle is refused', Boolean(ok({
-    v: 1, kind: 'flush', tab: 'x'.repeat(200), craft: '5inch',
-  }).error));
-  check('a tab handle with punctuation in it is refused', Boolean(ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111;DROP', craft: '5inch',
-  }).error));
-  check('more laps than a minute can hold is refused', Boolean(ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 31,
-  }).error));
-  check('more flight seconds than a minute can hold is refused', Boolean(ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', flightS: 91,
-  }).error));
-  check('a negative delta is refused', Boolean(ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: -3,
-  }).error));
-
-  /* A map or an input from a NEWER simulator folds rather than being
-   * refused, and that is the difference between the two kinds of
-   * vocabulary here: refusing a new map would mean an older board silently
-   * dropping every session once the simulator gained one. */
-  const newMap = ok({
-    v: 1, kind: 'session', craft: '5inch', map: 'bando', input: 'gamepad',
-  });
-  check('a map this board has not heard of folds to other', newMap.event.map === 'other');
-  const newInput = ok({
-    v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'eye-tracker',
-  });
-  check('an input this board has not heard of folds to other', newInput.event.input === 'other');
-
-  /* Nothing identifying survives the gate, because there is nowhere for it
-   * to go: the event that comes out has exactly the fields the store reads. */
-  const smuggled = ok({
-    v: 1,
-    kind: 'visit',
-    surface: 'sim',
-    returning: true,
-    ip: '203.0.113.7',
-    ua: 'Mozilla/5.0',
-    pilot: 'Ada Rook',
-    referrer: 'https://example.com/',
-  }).event;
-  check('nothing but the counted fields comes out of a visit',
-    Object.keys(smuggled).sort().join(',') === 'kind,returning,source,surface');
-  const flushed = ok({
-    v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 1, name: 'Ada Rook',
-  }).event;
-  check('nothing but the counted fields comes out of a flush',
-    Object.keys(flushed).sort().join(',') === 'craft,crashes,flightS,kind,laps,map,source,tab');
-
-  /* The sponsor fold. This process has no BOARD_SPONSORS set, so every
-   * named source is unknown to it, which is the case that matters: the
-   * table cannot be grown by inventing one. */
-  check('no source at all is direct', sourceKey(undefined) === 'direct');
-  check('an empty source is direct', sourceKey('') === 'direct');
-  check('a source this board never heard of is other', sourceKey('rotorriot') === 'other');
-  check('and so is a hundred of them', new Set(
-    Array.from({ length: 100 }, (_, i) => sourceKey(`sponsor-${i}`)),
-  ).size === 1);
-  check('a source is folded before it is stored',
-    ok({ v: 1, kind: 'visit', surface: 'sim', returning: false, source: 'made-up' }).event.source === 'other');
-
-  /* The country, which is two letters from the edge or nothing at all. */
-  check('a country code is taken as it comes', normaliseCountry('AU') === 'AU');
-  check('and lower case is the same country', normaliseCountry('au') === 'AU');
-  check('rubbish is unknown', normaliseCountry('not-a-country') === 'ZZ');
-  check('an absent header is unknown', normaliseCountry(undefined) === 'ZZ');
-  check("the edge's own 'no country' is unknown", normaliseCountry('XX') === 'ZZ');
-  check('a Tor exit is unknown', normaliseCountry('T1') === 'ZZ');
-  check('an address is never a country', normaliseCountry('203.0.113.7') === 'ZZ');
-
-  /* The day is the SERVER's UTC day. A browser cannot name it, and a host
-   * that moves region must not move the boundary. */
-  check('the day is the UTC day', statsDay(new Date('2026-09-21T23:59:59Z')) === '2026-09-21');
-  check('and one second later is the next one', statsDay(new Date('2026-09-22T00:00:01Z')) === '2026-09-22');
-
-  /* The counters themselves, against the file store. */
-  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-stats-'));
-  try {
-    process.env.BOARD_FILE = join(dir, 'board.json');
-    const store = await openStore();
-    const now = Date.parse('2026-09-21T12:00:00Z');
-    const day = '2026-09-21';
-    const before = '2026-09-20';
-    const put = (body, at = day, country = 'AU') => store.recordStats(ok(body).event, { day: at, country });
-
-    await put({ v: 1, kind: 'visit', surface: 'sim', returning: false });
-    await put({ v: 1, kind: 'visit', surface: 'board', returning: true });
-    await put({ v: 1, kind: 'visit', surface: 'sim', returning: true }, day, 'NZ');
-    await put({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' });
-    await put({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 3, flightS: 58, crashes: 1 });
-    await put({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 2, flightS: 41, crashes: 2 });
-    await put({ v: 1, kind: 'flush', tab: 'bbbb2222', craft: 'whoop65', laps: 4, flightS: 60 }, before, 'ZZ');
-
-    const read = await store.readStats({ days: 7, now });
-    check('a new browser moves the new column only',
-      read.today.newVisitors === 1 && read.today.returningVisitors === 2);
-    check('and both are counted as pilots', read.today.visits === 3);
-    check('two flushes add up rather than replacing',
-      read.today.laps === 5 && read.today.flightS === 99 && read.today.crashes === 3);
-    check('a session is counted once', read.today.sessions === 1);
-    check('yesterday stays on yesterday', read.days[read.days.length - 2].laps === 4);
-    check('the window is as many days as it was asked for', read.days.length === 7);
-    check('and the days are consecutive and end today',
-      read.days[0].day === '2026-09-15' && read.days[6].day === day);
-    check('a day nobody visited is a nought rather than a gap',
-      read.days[0].visits === 0 && read.days[0].laps === 0);
-    check('the window sums both days', read.window.laps === 9 && read.window.visits === 3);
-
-    const country = (key) => read.countries.find((r) => r.key === key) || {};
-    check('the country a visit came from is counted', country('AU').visits === 2);
-    check('and a second country is its own row', country('NZ').visits === 1);
-    check('laps are counted against the country that flew them', country('AU').laps === 5);
-    check('two named countries are two countries', read.window.countries === 2);
-    check('unknown is not one of them',
-      read.countries[read.countries.length - 1].key === 'ZZ');
-
-    check('the aircraft is counted from the session', (read.craft.find((r) => r.key === '5inch') || {}).sessions === 1);
-    check('and its laps from the flushes', (read.craft.find((r) => r.key === '5inch') || {}).laps === 5);
-    check('the input is counted', (read.inputs.find((r) => r.key === 'gamepad') || {}).sessions === 1);
-    check('the page a visit came from is counted',
-      (read.surfaces.find((r) => r.key === 'sim') || {}).visits === 2);
-
-    /* A heartbeat with nothing in it moves the day's flight seconds and
-     * touches no dimension at all. That is what keeps the dims table
-     * proportional to the flying rather than to the sitting. */
-    const dimsBefore = JSON.stringify(read.craft);
-    await put({ v: 1, kind: 'flush', tab: 'cccc3333', craft: '5inch', laps: 0, flightS: 30 });
-    const after = await store.readStats({ days: 7, now });
-    check('a heartbeat with no laps counts its seconds', after.today.flightS === 129);
-    check('and adds no dimension row', JSON.stringify(after.craft) === dimsBefore);
-
-    check('all time is every day there has ever been', after.allTime.laps === 9);
-    check('and it knows when counting started', after.firstDay === before);
-
-    /* The board's own tables, which are not counters and never were. */
-    await store.publish({ inspected: inspectDocument(sampleDoc()), author: 'Ada Rook', editKey: 'k' });
-    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'Ada Rook', lapMs: 29110 });
-    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'ada rook', lapMs: 28110 });
-    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'Bo', lapMs: 31000 });
-    const facts = await store.boardFacts();
-    check('the board counts its own tracks and times', facts.tracks === 1 && facts.times === 3);
-    check('a pilot who capitalises differently is one pilot', facts.pilots === 2);
-    check('and nobody has been back another day yet', facts.pilotsOnMoreThanOneDay === 0);
+    return await run(await openStore(), dir);
   } finally {
     delete process.env.BOARD_FILE;
     await rm(dir, { recursive: true, force: true });
   }
 }
 
-testOrigins();
-await testAdmin();
-await testValidate();
-await testStore();
-await testStats();
-await testHttp();
-await testBugImages();
-if (process.env.BOARD_SELFTEST_DATABASE_URL) {
-  await testHttp(process.env.BOARD_SELFTEST_DATABASE_URL);
-  await testBugImages(process.env.BOARD_SELFTEST_DATABASE_URL);
-} else {
-  console.log('\nhttp, against Postgres\n  skip  BOARD_SELFTEST_DATABASE_URL is not set');
+async function republishRules(store) {
+  const original = inspectDocument(field());
+  const first = await store.publish({ inspected: original, author: 'Ada Rook', editKey: '' });
+  check('a first publish hands back an edit key', Boolean(first.editKey) && first.updated === false);
+  const clash = await store.publish({ inspected: original, author: 'Ada Rook', editKey: '' });
+  check('publishing the same id without the key is a 409 conflict', clash.status === 409 && clash.conflict === true);
+  const again = await store.publish({ inspected: original, author: 'Ada Rook', editKey: first.editKey });
+  check('with the key it is an update, and no new key is handed out', again.updated === true && !again.editKey);
+
+  await store.addTime({ trackId: original.id, name: 'Ada Rook', lapMs: 42000 });
+  const retitled = await store.publish({ inspected: inspectDocument(field('trk-1a2b3c4d', { name: 'Renamed Loop' })), author: 'Ada Rook', editKey: first.editKey });
+  check('a new title keeps the times', retitled.timesCleared === false);
+  const afterTitle = await store.getTrack(original.id);
+  check('and the sheet shows the new title over the old time',
+    afterTitle.name === 'Renamed Loop' && afterTitle.times.length === 1 && afterTitle.times[0].lapMs === 42000);
+
+  await store.addTime({ trackId: original.id, name: 'Bo', lapMs: 51000 });
+  const reauthored = await store.publish({ inspected: inspectDocument(field('trk-1a2b3c4d', { name: 'Renamed Loop' })), author: 'Ada Two', editKey: first.editKey });
+  check('a new author name keeps the times', reauthored.timesCleared === false);
+  const afterAuthor = await store.getTrack(original.id);
+  check('and moves the author\'s own times to the new name, leaving other pilots\'',
+    afterAuthor.author === 'Ada Two' && afterAuthor.times[0].name === 'Ada Two' && afterAuthor.times[1].name === 'Bo');
+
+  const relaid = await store.publish({ inspected: inspectDocument(field('trk-1a2b3c4d', { elements: [gate('el-1', 20, 8)] })), author: 'Ada Rook', editKey: first.editKey });
+  check('moving a gate clears the times, which were flown on another layout', relaid.timesCleared === true);
+  check('and the sheet has none left', (await store.getTrack(original.id)).times.length === 0);
+  return first.editKey;
 }
-console.log(failed ? `\n${failed} failed` : '\nall passed');
-process.exit(failed ? 1 : 0);
+
+async function timesAndGhosts(store) {
+  const id = 'trk-1a2b3c4d';
+  check('the fastest lap on the board is rank 1', (await store.addTime({ trackId: id, name: 'Ada Rook', lapMs: 33400 })).rank === 1);
+  check('a slower one is rank 2', (await store.addTime({ trackId: id, name: 'Bo', lapMs: 40000 })).rank === 2);
+  await Promise.all([
+    store.addTime({ trackId: id, name: 'Cy', lapMs: 45000 }),
+    store.addTime({ trackId: id, name: 'Di', lapMs: 46000 }),
+  ]);
+  check('two posts at once both land', (await store.getTrack(id)).times.length === 4);
+
+  const blob = ghostBlob(47000);
+  const ghosted = await store.addTime({ trackId: id, name: 'Ev', lapMs: 47000, ghost: blob });
+  check('a time is given a public id', /^tm-[0-9a-f]{8}$/.test(String(ghosted.id)));
+  const sheet = await store.getTrack(id);
+  const ev = sheet.times.find((t) => t.name === 'Ev');
+  check('the sheet says the time has a ghost without carrying it', ev?.hasGhost === true && !('ghost' in ev));
+  check('and the times posted without one say so', sheet.times.filter((t) => t.name !== 'Ev').every((t) => t.hasGhost === false));
+  const back = await store.getGhost(id, ghosted.id);
+  check('the ghost comes back whole, with its lap', back?.ghost === blob && back.lapMs === 47000);
+  check('a time id nobody posted has no ghost', (await store.getGhost(id, 'tm-00000000')) === null);
+
+  const withThree = await store.addTime({ trackId: id, name: 'Fi', lapMs: 48000, threeMs: 146000 });
+  check('a three lap total posted comes back', withThree.threeMs === 146000, withThree.threeMs);
+  const fi = (await store.getTrack(id)).times.find((t) => t.name === 'Fi');
+  check('and is in the sheet', fi?.threeMs === 146000, fi?.threeMs);
+  const ada = (await store.getTrack(id)).times.find((t) => t.name === 'Ada Rook');
+  check('a time posted without one lists null, never undefined', ada?.threeMs === null, String(ada?.threeMs));
+
+  /* A row as the board wrote it before ghosts: no id, no ghost key. */
+  store.data.times[id].push({ name: 'Old Row', lapMs: 60000, postedUtc: '2026-01-01T00:00:00.000Z' });
+  const old = (await store.getTrack(id)).times.find((t) => t.name === 'Old Row');
+  check('a time from before ghosts lists with a null id and no ghost', old?.id === null && old.hasGhost === false);
+  const list = await store.listTracks();
+  check('the listing names the author and the record', list[0].author === 'Ada Rook' && list[0].best.lapMs === 33400);
+  /* A stale stored plan with a waypoint drawn as a gate: the listing must
+   * draw from the document instead. */
+  store.data.tracks[id].plan = { width: 60, depth: 40, marks: [{ type: 'waypoint', x: 1, y: 1, yaw: 0 }] };
+  const redrawn = (await store.listTracks())[0].plan;
+  check('the listing\'s plan is drawn from the document, not the stored plan',
+    redrawn.marks.every((m) => m.type !== 'waypoint') && redrawn.path.length === 1 && redrawn.path[0].x === 20);
+  check('and the document is still there', (await store.getDocument(id)).document.id === id);
+}
+
+async function ticketsInTheStore(store) {
+  const filed = await store.addBug(inspectBugCreate({
+    kind: 'feel', title: 'Yaw feels late on the field', what: 'A right yaw stick on the field map takes a beat before the quad turns.', reporter: 'Ada Rook', context: { map: 'field', screen: 'flight' },
+  }));
+  check('a filed ticket gets an id and is open', /^bug-[0-9a-f]{8}$/.test(String(filed.id)) && filed.status === 'open');
+  const open = await store.listBugs({ status: 'open' });
+  check('the open list names it', open.length === 1 && open[0].id === filed.id && open[0].title === filed.title);
+  const full = await store.getBug(filed.id);
+  check('the whole ticket keeps what happened and the context', full.what.includes('yaw stick') && full.context.map === 'field');
+  const fixed = await store.updateBug(filed.id, { status: 'fixed', resolution: 'Checked rates. Not a sim bug.' });
+  check('an update marks it fixed, with the resolution', fixed.status === 'fixed' && fixed.resolution.includes('rates'));
+  check('and it leaves the open list', (await store.listBugs({ status: 'open' })).length === 0);
+  check('updating a ticket that is not there is a 404', (await store.updateBug('bug-00000000', { status: 'open' })).status === 404);
+
+  const kinds = inspectBugImages([`data:image/png;base64,${b64(PNG_1PX)}`, b64(JPEG_HEAD), `data:image/webp;base64,${b64(WEBP_HEAD)}`]);
+  check('PNG, JPEG and WebP screenshots are known by their magic bytes',
+    !kinds.error && kinds.images.map((i) => i.type).join() === 'image/png,image/jpeg,image/webp');
+  const mislabelled = inspectBugImages([`data:image/png;base64,${b64(JPEG_HEAD)}`]);
+  check('the type kept is the bytes\', not the label\'s', !mislabelled.error && mislabelled.images[0].type === 'image/jpeg');
+  check('markup sent as an image is refused',
+    /not a PNG, JPEG or WebP/.test(inspectBugImages([b64(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))]).error || ''));
+  check('an image over a mebibyte is refused',
+    /larger than a megabyte/.test(inspectBugImages([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]).error || ''));
+  check('a fifth image is refused', /at most four/.test(inspectBugImages(Array(5).fill(b64(PNG_1PX))).error || ''));
+  check('images that are not a list are refused', Boolean(inspectBugImages('nope').error));
+  check('a report with no images carries an empty list',
+    inspectBugCreate({ kind: 'other', title: 'No pictures here', what: 'Twenty characters or more of words.' }).images.length === 0);
+
+  const shot = await store.addBug(inspectBugCreate({
+    kind: 'visual', title: 'Screenshot attached here', what: 'The picture shows it better than twenty words do.', images: [b64(PNG_1PX), b64(JPEG_HEAD)],
+  }));
+  check('a ticket lists its images by number, type and size', shot.images.length === 2 && shot.images[0].n === 1
+    && shot.images[0].type === 'image/png' && shot.images[0].size === PNG_1PX.length && shot.images[1].type === 'image/jpeg');
+  const image = await store.getBugImage(shot.id, 1);
+  check('the file store hands a screenshot back byte for byte', image?.type === 'image/png' && image.bytes.equals(PNG_1PX));
+  check('an image number the ticket does not have is null', (await store.getBugImage(shot.id, 3)) === null);
+  check('an update keeps the ticket\'s images', (await store.updateBug(shot.id, { status: 'in_progress' })).images.length === 2);
+  check('a ticket filed without images reads as having none', (await store.getBug(filed.id)).images.length === 0);
+}
+
+async function storeUnit() {
+  section('store');
+  await withFileStore(async (store) => {
+    await republishRules(store);
+    await timesAndGhosts(store);
+    await ticketsInTheStore(store);
+  });
+  /* A board.json from before tickets existed is old, not corrupt. */
+  const dir = await mkdtemp(join(tmpdir(), 'fdfpv-board-legacy-'));
+  try {
+    await writeFile(join(dir, 'board.json'), JSON.stringify({ tracks: {}, times: {} }), 'utf8');
+    process.env.BOARD_FILE = join(dir, 'board.json');
+    const legacy = await openStore();
+    const tickets = await legacy.listBugs();
+    check('a board.json from before tickets lists no tickets rather than failing', Array.isArray(tickets) && tickets.length === 0);
+    const tracks = await legacy.listTracks();
+    check('and still lists its tracks', Array.isArray(tracks) && tracks.length === 0);
+  } finally {
+    delete process.env.BOARD_FILE;
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/* ================================================================== */
+/* Site statistics: the wire format and the counters                    */
+/* ================================================================== */
+
+/*
+ * What these checks guard is a promise more than a feature: the page says
+ * nothing identifying is taken or kept, and these fail if that stops being
+ * true. The closed vocabularies are the other side of it: they are what
+ * stops a stranger with curl growing a table on a public page.
+ */
+function statsWireFormat() {
+  const take = (body) => inspectStatsEvent(body, sourceKey);
+  check('a visit is taken', !take({ v: 1, kind: 'visit', surface: 'sim', returning: false }).error);
+  check('a session is taken', !take({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' }).error);
+  check('a flush is taken', !take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: 'whoop65', laps: 2, flightS: 44 }).error);
+  check('a format version this board cannot read is refused', Boolean(take({ v: 2, kind: 'visit' }).error));
+  check('a kind of event it does not count is refused', Boolean(take({ v: 1, kind: 'pageview' }).error));
+  check('a visit from a page it does not know is refused', Boolean(take({ v: 1, kind: 'visit', surface: 'somewhere', returning: false }).error));
+  check('a visit that does not say new or returning is refused', Boolean(take({ v: 1, kind: 'visit', surface: 'sim' }).error));
+  check('the two ids older clients send are still counted as themselves', ['5inch', 'whoop65'].every((id) => take({
+    v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad',
+  }).event.craft === id));
+  return take;
+}
+
+async function statsAirframes(take) {
+  /* The simulator's current catalogue, from a checkout of it: the pinned
+   * submodule lags the game, so the real list has to be named. */
+  const catalogue = process.env.FDFPV_AIRFRAMES;
+  if (!catalogue) {
+    skip('FDFPV_AIRFRAMES (path to the simulator\'s configs/airframes.js) is not set');
+    return;
+  }
+  const ids = (await import(catalogue)).AIRFRAME_IDS;
+  check('every airframe in the simulator\'s catalogue is counted as itself, in a session and a flush', ids.length >= 20 && ids.every((id) => (
+    take({ v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad' }).event.craft === id
+    && take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: id, flightS: 5 }).event.craft === id
+  )), ids.filter((id) => !STATS_CRAFT.includes(id)).join());
+}
+
+function statsFolds(take) {
+  /* An unknown aircraft folds rather than refusing: the simulator adds
+   * airframes without asking, and a refusal would drop the session. */
+  check('an aircraft never heard of folds to other, in a session and a flush', ['tinywhoop', 'Sky Hunter!', '', 'x'.repeat(500), 7, null].every((raw) => (
+    take({ v: 1, kind: 'session', craft: raw, map: 'custom', input: 'gamepad' }).event?.craft === 'other'
+    && take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: raw, flightS: 5 }).event?.craft === 'other'
+  )));
+  check('naming no aircraft at all is other too',
+    take({ v: 1, kind: 'session', map: 'custom' }).event?.craft === 'other' && take({ v: 1, kind: 'flush', tab: 'aaaa1111' }).event?.craft === 'other');
+  check('a long tab handle is refused', Boolean(take({ v: 1, kind: 'flush', tab: 'x'.repeat(200), craft: '5inch' }).error));
+  check('a tab handle with punctuation is refused', Boolean(take({ v: 1, kind: 'flush', tab: 'aaaa1111;DROP', craft: '5inch' }).error));
+  check('more laps than a minute holds is refused', Boolean(take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 31 }).error));
+  check('more flight seconds than a minute holds is refused', Boolean(take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', flightS: 91 }).error));
+  check('a negative count is refused', Boolean(take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: -3 }).error));
+  /* A map or input from a newer simulator folds: refusing would have an
+   * older board drop every session once the simulator gained one. */
+  check('a map never heard of folds to other', take({ v: 1, kind: 'session', craft: '5inch', map: 'bando', input: 'gamepad' }).event.map === 'other');
+  check('an input never heard of folds to other', take({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'eye-tracker' }).event.input === 'other');
+
+  /* Nothing identifying gets through, because the event that comes out has
+   * exactly the fields the store reads and nowhere else to put anything. */
+  const visit = take({
+    v: 1, kind: 'visit', surface: 'sim', returning: true, ip: '203.0.113.7', ua: 'Mozilla/5.0', pilot: 'Ada Rook', referrer: 'https://example.com/',
+  }).event;
+  check('a visit comes out with the counted fields and nothing else', Object.keys(visit).sort().join() === 'kind,returning,source,surface');
+  const flush = take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 1, name: 'Ada Rook' }).event;
+  check('so does a flush', Object.keys(flush).sort().join() === 'craft,crashes,flightS,kind,laps,map,source,tab');
+
+  /* This process has no BOARD_SPONSORS, so every named source is unknown,
+   * which is the case that matters. */
+  check('no source is direct', sourceKey(undefined) === 'direct');
+  check('an empty source is direct', sourceKey('') === 'direct');
+  check('a source this board never heard of is other', sourceKey('rotorriot') === 'other');
+  check('and a hundred of them are still one row', new Set(Array.from({ length: 100 }, (_, i) => sourceKey(`sponsor-${i}`))).size === 1);
+  check('the source is folded before anything is stored', take({ v: 1, kind: 'visit', surface: 'sim', returning: false, source: 'made-up' }).event.source === 'other');
+
+  const countries = [
+    ['a country code is taken as it comes', 'AU', 'AU'],
+    ['lower case is the same country', 'au', 'AU'],
+    ['rubbish is unknown', 'not-a-country', 'ZZ'],
+    ['no header is unknown', undefined, 'ZZ'],
+    ['the edge\'s own "no country" is unknown', 'XX', 'ZZ'],
+    ['a Tor exit is unknown', 'T1', 'ZZ'],
+    ['an address is never a country', '203.0.113.7', 'ZZ'],
+  ];
+  for (const [name, raw, want] of countries) {
+    check(name, normaliseCountry(raw) === want);
+  }
+  /* The server's UTC day: a browser cannot name it, and moving a host to
+   * another region must not move the boundary. */
+  check('the day is the UTC day', statsDay(new Date('2026-09-21T23:59:59Z')) === '2026-09-21');
+  check('and a second after midnight is the next one', statsDay(new Date('2026-09-22T00:00:01Z')) === '2026-09-22');
+}
+
+async function statsCounters(take) {
+  await withFileStore(async (store) => {
+    const now = Date.parse('2026-09-21T12:00:00Z');
+    const today = '2026-09-21';
+    const yesterday = '2026-09-20';
+    const count = (body, day = today, country = 'AU') => store.recordStats(take(body).event, { day, country });
+    await count({ v: 1, kind: 'visit', surface: 'sim', returning: false });
+    await count({ v: 1, kind: 'visit', surface: 'board', returning: true });
+    await count({ v: 1, kind: 'visit', surface: 'sim', returning: true }, today, 'NZ');
+    await count({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' });
+    await count({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 3, flightS: 58, crashes: 1 });
+    await count({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: '5inch', laps: 2, flightS: 41, crashes: 2 });
+    await count({ v: 1, kind: 'flush', tab: 'bbbb2222', craft: 'whoop65', laps: 4, flightS: 60 }, yesterday, 'ZZ');
+
+    const week = await store.readStats({ days: 7, now });
+    check('a new browser moves only the new column', week.today.newVisitors === 1 && week.today.returningVisitors === 2);
+    check('and every visit is counted', week.today.visits === 3);
+    check('two flushes add up rather than replace', week.today.laps === 5 && week.today.flightS === 99 && week.today.crashes === 3);
+    check('a session is counted once', week.today.sessions === 1);
+    check('yesterday\'s laps stay on yesterday', week.days[week.days.length - 2].laps === 4);
+    check('the window is as many days as asked for', week.days.length === 7);
+    check('the days run consecutively and end today', week.days[0].day === '2026-09-15' && week.days[6].day === today);
+    check('a day nobody visited is a row of noughts, not a gap', week.days[0].visits === 0 && week.days[0].laps === 0);
+    check('the window sums both days', week.window.laps === 9 && week.window.visits === 3);
+
+    const country = (key) => week.countries.find((r) => r.key === key) || {};
+    check('a visit is counted against its country', country('AU').visits === 2);
+    check('a second country gets a row of its own', country('NZ').visits === 1);
+    check('laps are counted against the country that flew them', country('AU').laps === 5);
+    check('two named countries count as two', week.window.countries === 2);
+    check('and unknown is not one of them, and sits at the foot', week.countries[week.countries.length - 1].key === 'ZZ');
+    const craft = week.craft.find((r) => r.key === '5inch') || {};
+    check('the aircraft is counted from its session', craft.sessions === 1);
+    check('and its laps from the flushes', craft.laps === 5);
+    check('the input is counted', (week.inputs.find((r) => r.key === 'gamepad') || {}).sessions === 1);
+    check('the page a visit came from is counted', (week.surfaces.find((r) => r.key === 'sim') || {}).visits === 2);
+
+    /* An empty heartbeat moves the day's flight seconds and no dimension,
+     * which keeps that table in proportion to flying, not idling. */
+    const craftRows = JSON.stringify(week.craft);
+    await count({ v: 1, kind: 'flush', tab: 'cccc3333', craft: '5inch', laps: 0, flightS: 30 });
+    const after = await store.readStats({ days: 7, now });
+    check('a heartbeat with no laps adds its seconds', after.today.flightS === 129);
+    check('and no dimension row', JSON.stringify(after.craft) === craftRows);
+    check('all time is every day there has been', after.allTime.laps === 9);
+    check('and knows when counting started', after.firstDay === yesterday);
+
+    /* The board's own tables, which are not counters and never were. */
+    await store.publish({ inspected: inspectDocument(field()), author: 'Ada Rook', editKey: 'k' });
+    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'Ada Rook', lapMs: 29110 });
+    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'ada rook', lapMs: 28110 });
+    await store.addTime({ trackId: 'trk-1a2b3c4d', name: 'Bo', lapMs: 31000 });
+    const facts = await store.boardFacts();
+    check('the board counts its own tracks and times', facts.tracks === 1 && facts.times === 3);
+    check('a pilot capitalised two ways is one pilot', facts.pilots === 2);
+    check('and nobody has come back on another day yet', facts.pilotsOnMoreThanOneDay === 0);
+  });
+}
+
+async function statsUnit() {
+  section('site statistics');
+  const take = statsWireFormat();
+  await statsAirframes(take);
+  statsFolds(take);
+  await statsCounters(take);
+}
+
+/* ================================================================== */
+/* Over HTTP: tracks, times, signatures                                 */
+/* ================================================================== */
+
+/*
+ * The HTTP half shares one server and runs in order: later checks read
+ * what earlier ones wrote (the statistics facts count the tracks the
+ * suite published and removed). `s` carries what they hand on.
+ */
+async function timesOverHttp(board, s) {
+  const health = await board.json('/api/health');
+  check('the board answers its health check, naming its store', health.ok === true && health.store === s.kind);
+  const version = await board.json('/api/version');
+  check('a checkout with no REVISION names no commits', version.commit === null && version.fdfpv === null, JSON.stringify(version));
+
+  const created = await board.post('/api/tracks', { author: 'Ada Rook', document: lapField() });
+  const createdBody = await created.json();
+  check('a track publishes over HTTP', created.status === 201 && createdBody.id === 'trk-1a2b3c4d');
+  s.fieldKey = createdBody.editKey;
+  s.adaLap = flown(lapField());
+  const T = '/api/tracks/trk-1a2b3c4d/times';
+  const posted = await board.post(T, await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', s.adaLap));
+  const postedBody = await posted.json();
+  check('a signed, honest lap goes on the board at rank 1', posted.status === 201 && postedBody.rank === 1, `${posted.status} ${JSON.stringify(postedBody).slice(0, 120)}`);
+  check('a time with no ghost is refused', (await board.post(T, { name: 'Ada Rook', lapMs: s.adaLap.lapMs })).status === 400);
+  const unsigned = await board.post(T, { name: 'Ada Rook', lapMs: Math.round(s.adaLap.lapMs), ghost: s.adaLap.ghost });
+  check('a time with no signature is refused', unsigned.status === 400, `${unsigned.status}`);
+  /* 100 ms is inside the ghost's own slack, so only the signature can
+   * notice the lap was changed after it was signed. */
+  const forged = JSON.parse(await signedTime(adaKey, 'trk-1a2b3c4d', 'Ada Rook', s.adaLap));
+  forged.lapMs -= 100;
+  const forgedPost = await board.post(T, forged);
+  check('a signed post whose lap was changed afterwards is refused', forgedPost.status === 401, `${forgedPost.status}`);
+  const squat = await board.post(T, await signedTime(boKey, 'trk-1a2b3c4d', 'ada rook', s.adaLap));
+  const squatBody = await squat.json();
+  check('another key posting under a claimed name is refused, whatever its case',
+    squat.status === 403 && /belongs to another pilot/.test(squatBody.error), `${squat.status} ${squatBody.error}`);
+
+  const retitled = await board.post('/api/tracks', { author: 'Ada Rook', document: { ...lapField(), name: 'HTTP Rename' }, editKey: s.fieldKey });
+  const retitledBody = await retitled.json();
+  check('a new title republishes and keeps the times', retitled.status === 200 && retitledBody.updated === true && retitledBody.timesCleared !== true);
+  const sheet = await board.json('/api/tracks/trk-1a2b3c4d');
+  check('the sheet shows the new title over the time', sheet.name === 'HTTP Rename' && sheet.times[0].lapMs === Math.round(s.adaLap.lapMs));
+  const reauthored = await board.post('/api/tracks', { author: 'Ada Two', document: { ...lapField(), name: 'HTTP Rename' }, editKey: s.fieldKey });
+  const reauthoredBody = await reauthored.json();
+  check('a new author name republishes and keeps the times', reauthored.status === 200 && reauthoredBody.updated === true && reauthoredBody.timesCleared !== true);
+  const afterAuthor = await board.json('/api/tracks/trk-1a2b3c4d');
+  check('and the author\'s own time follows the new name', afterAuthor.author === 'Ada Two' && afterAuthor.times[0].name === 'Ada Two');
+
+  s.boLap = flown(lapField(), { speed: 15 });
+  const boPost = await board.post(T, await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', s.boLap));
+  const boBody = await boPost.json();
+  check('a time posted with its ghost gets a public id', boPost.status === 201 && /^tm-[0-9a-f]{8}$/.test(String(boBody.id)));
+  const listed = (await board.json('/api/tracks/trk-1a2b3c4d')).times.find((t) => t.name === 'Bo');
+  check('the sheet says there is a ghost without carrying it', listed?.hasGhost === true && listed.ghost === undefined);
+  const ghost = await board.get(`/api/tracks/trk-1a2b3c4d/times/${boBody.id}/ghost`);
+  const ghostBody = await ghost.json();
+  check('the ghost is fetched whole', ghost.status === 200 && ghostBody.ghost === s.boLap.ghost && ghostBody.lapMs === Math.round(s.boLap.lapMs));
+  /* Hovering past the line and claiming the whole recording as the lap. */
+  const hover = flown(lapField(), { hoverAfterMs: 1500 });
+  const padded = await board.post(T, await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: hover.ghost, lapMs: hover.durationMs }));
+  const paddedBody = await padded.json();
+  check('a ghost that hovers past the line cannot claim the longer time', padded.status === 422 && /does not hold up/.test(paddedBody.error), `${padded.status} ${paddedBody.error}`);
+  const oddGhost = await board.get('/api/tracks/trk-1a2b3c4d/times/constructor/ghost');
+  check('a ghost address that is not a time id is a 400 or 404, never a 500', oddGhost.status === 400 || oddGhost.status === 404);
+  check('a malformed ghost is refused, not stored', (await board.post(T, { name: 'Bo', lapMs: 31500, ghost: 'AAAA', key: 'x', sig: 'y' })).status === 400);
+  check('a ghost posted beside another lap time is refused', (await board.post(T, await signedTime(boKey, 'trk-1a2b3c4d', 'Bo', { ghost: s.boLap.ghost, lapMs: 90000 }))).status === 400);
+  const nowhere = await board.post('/api/tracks/trk-0000dead/times', await signedTime(boKey, 'trk-0000dead', 'Bo', s.boLap));
+  check('a time for a track that is not on the board is a 404', nowhere.status === 404, `${nowhere.status}`);
+
+  /* A wing course through the wing class's five metre gates, checked by
+   * the simulator's vendored lap check. */
+  const wingPub = await board.post('/api/tracks', { author: 'Ada Rook', document: airfield() });
+  const wingPubBody = await wingPub.json();
+  check('a wing course publishes over HTTP', wingPub.status === 201 && wingPubBody.id === 'trk-3c4d5e6f', `${wingPub.status}`);
+  const wingRow = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-3c4d5e6f');
+  check('and the listing calls it a wing course', wingRow?.trackClass === 'wing', wingRow?.trackClass);
+  const cruise = flown(airfield(), { speed: 20 });
+  const wingPost = await board.post('/api/tracks/trk-3c4d5e6f/times', await signedTime(adaKey, 'trk-3c4d5e6f', 'Ada Rook', cruise));
+  const wingPostBody = await wingPost.json();
+  check('a signed wing lap at cruise goes on at rank 1', wingPost.status === 201 && wingPostBody.rank === 1, `${wingPost.status} ${JSON.stringify(wingPostBody).slice(0, 120)}`);
+  const missedGate = flown(airfield(), { speed: 20, skip: 2 });
+  const wingSkip = await board.post('/api/tracks/trk-3c4d5e6f/times', await signedTime(boKey, 'trk-3c4d5e6f', 'Bo', { ghost: missedGate.ghost, lapMs: missedGate.durationMs }));
+  const wingSkipBody = await wingSkip.json();
+  check('a wing lap that missed a gate is refused', wingSkip.status === 422 && /does not hold up/.test(wingSkipBody.error), `${wingSkip.status} ${wingSkipBody.error}`);
+}
+
+async function worldTracksOverHttp(board, s) {
+  section('map tracks');
+  s.ring = mapTrackDocument({ id: 'trk-4d5e6f70', name: 'Ring over the drop' });
+  const pub = await board.post('/api/tracks', { author: 'Ada Rook', document: s.ring });
+  const pubBody = await pub.json();
+  check('a swiss2 world track publishes over HTTP', pub.status === 201 && pubBody.id === 'trk-4d5e6f70' && Boolean(pubBody.editKey), `${pub.status} ${JSON.stringify(pubBody).slice(0, 120)}`);
+  const listing = await board.json('/api/tracks');
+  const row = listing.tracks.find((t) => t.id === 'trk-4d5e6f70');
+  check('the listing names its world, its class and its gates', row?.map === 'swiss2' && row.trackClass === 'full' && row.gates === 3,
+    row && JSON.stringify({ map: row.map, trackClass: row.trackClass, gates: row.gates }));
+  check('while a field track in the same listing names no world', listing.tracks.find((t) => t.id === 'trk-1a2b3c4d').map === null);
+  const served = await board.json('/api/tracks/trk-4d5e6f70/document');
+  const doc = served.document || served;
+  check('its document comes back whole', doc.schemaVersion === 4 && doc.map === 'swiss2' && sortedJson(doc.elements) === sortedJson(s.ring.elements));
+  const lap = flown(s.ring);
+  const T = '/api/tracks/trk-4d5e6f70/times';
+  const posted = await board.post(T, await signedTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', lap));
+  const postedBody = await posted.json();
+  check('a signed lap of the ring is checked and kept', posted.status === 201 && postedBody.rank === 1, `${posted.status} ${JSON.stringify(postedBody).slice(0, 160)}`);
+  const ghost = await board.json(`/api/tracks/trk-4d5e6f70/times/${postedBody.id}/ghost`);
+  check('and its ghost is there to chase', ghost.ghost === lap.ghost && ghost.lapMs === Math.round(lap.lapMs));
+  const cut = flown(s.ring, { skip: 1 });
+  const cutPost = await board.post(T, await signedTime(boKey, 'trk-4d5e6f70', 'Bo', { ghost: cut.ghost, lapMs: cut.durationMs }));
+  const cutBody = await cutPost.json();
+  check('a lap of the ring that missed a gate is refused', cutPost.status === 422 && /does not hold up/.test(cutBody.error), `${cutPost.status} ${cutBody.error}`);
+  const fieldLap = await board.post(T, await signedTime(boKey, 'trk-4d5e6f70', 'Bo', s.boLap));
+  check('and so is a field lap posted to it', fieldLap.status === 422 || fieldLap.status === 400, `${fieldLap.status}`);
+  const ringSheet = await board.json('/api/tracks/trk-4d5e6f70');
+  check('the ring holds its own time and nobody else\'s', ringSheet.times.length === 1 && ringSheet.times[0].name === 'Ada Rook');
+  const fieldSheet = await board.json('/api/tracks/trk-1a2b3c4d');
+  check('and the field track kept only its own', fieldSheet.times.every((t) => t.name !== 'Ada Rook' || t.lapMs !== Math.round(lap.lapMs)));
+  const renamed = await board.post('/api/tracks', { author: 'Ada Rook', document: { ...s.ring, name: 'Ring, renamed' }, editKey: pubBody.editKey });
+  const renamedBody = await renamed.json();
+  check('renaming the ring keeps its time', renamed.status === 200 && renamedBody.timesCleared !== true, `${renamed.status} ${JSON.stringify(renamedBody).slice(0, 120)}`);
+  const moved = await board.post('/api/tracks', { author: 'Ada Rook', document: { ...s.ring, map: 'alps' }, editKey: pubBody.editKey });
+  const movedBody = await moved.json();
+  check('moving the ring to another world clears its times', moved.status === 200 && movedBody.timesCleared === true, `${moved.status} ${JSON.stringify(movedBody).slice(0, 120)}`);
+  const movedRow = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-4d5e6f70');
+  check('and the listing follows it there', movedRow.map === 'alps' && movedRow.times === 0, JSON.stringify({ map: movedRow.map, times: movedRow.times }));
+  const town = await board.post('/api/tracks', { author: 'Ada Rook', document: mapTrackDocument({ id: 'trk-5e6f7081', map: 'city' }) });
+  check('a world track in the town is refused over HTTP', town.status === 400, `${town.status}`);
+}
+
+/* Plane sized gates (the two wide gates and the air race pylon pair) take
+ * every fixed wing, and a plane's lap names its aircraft and files on a
+ * board of its own beside the quads'. */
+async function planesOverHttp(board, s) {
+  section('planes on a map track');
+  const wide = mapTrackDocument({ id: 'trk-6f708192', name: 'Wide ring', radius: 70, types: ['wideGate5', 'pylonPair', 'wideGate3'] });
+  check('a ring of plane sized gates publishes', (await board.post('/api/tracks', { author: 'Ada Rook', document: wide })).status === 201);
+  const row = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-6f708192');
+  check('the listing names every fixed wing as fitting it',
+    Array.isArray(row.planes) && ['sky1800', 'bramor2300', 'timber1500f'].every((p) => row.planes.includes(p)), JSON.stringify(row.planes));
+  check('with an empty plane board beside the quads\'', row.wing?.times === 0 && row.wing.best === null, JSON.stringify(row.wing));
+  const fieldRow = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-1a2b3c4d');
+  check('a field track has no plane board and fits no plane', fieldRow.planes.length === 0 && fieldRow.wing === null, JSON.stringify({ planes: fieldRow.planes, wing: fieldRow.wing }));
+  const slow = flown(wide, { speed: 18 });
+  const fast = flown(wide, { speed: 24 });
+  const T = '/api/tracks/trk-6f708192/times';
+  const sky = await board.post(T, await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', slow, 'sky1800'));
+  const skyBody = await sky.json();
+  check('a Skyhunter\'s lap is checked and kept, first on the plane board',
+    sky.status === 201 && skyBody.rank === 1 && skyBody.times === 1 && skyBody.craft === 'sky1800', `${sky.status} ${JSON.stringify(skyBody).slice(0, 160)}`);
+  const quad = await board.post(T, await signedTime(boKey, 'trk-6f708192', 'Bo', fast));
+  const quadBody = await quad.json();
+  check('a quad through the same gates is first on its own board, not ranked with the plane',
+    quad.status === 201 && quadBody.rank === 1 && quadBody.times === 1 && quadBody.craft === null, `${quad.status} ${JSON.stringify(quadBody).slice(0, 160)}`);
+  const floats = await board.post(T, await signedPlaneTime(boKey, 'trk-6f708192', 'Bo', fast, 'timber1500f'));
+  const floatsBody = await floats.json();
+  check('the faster Timber on floats takes first on the plane board', floats.status === 201 && floatsBody.rank === 1 && floatsBody.times === 2, `${floats.status} ${JSON.stringify(floatsBody).slice(0, 160)}`);
+  const sheet = await board.json('/api/tracks/trk-6f708192');
+  check('the sheet carries every time with the aircraft that flew it', sheet.times.length === 3
+    && sheet.times.filter((t) => t.craft).map((t) => t.craft).join() === 'timber1500f,sky1800'
+    && sheet.times.filter((t) => !t.craft).length === 1, JSON.stringify(sheet.times.map((t) => [t.name, t.lapMs, t.craft])));
+  check('the quads\' record is the quad\'s and the planes\' the plane\'s',
+    sheet.best?.name === 'Bo' && sheet.times.find((t) => !t.craft).lapMs === sheet.best.lapMs
+    && sheet.wing.times === 2 && sheet.wing.best.lapMs === floatsBody.lapMs, JSON.stringify({ best: sheet.best, wing: sheet.wing }));
+  const listed = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-6f708192');
+  check('and the listing counts the two boards apart', listed.times === 1 && listed.wing.times === 2, JSON.stringify({ times: listed.times, wing: listed.wing }));
+  check('a plane\'s ghost is there to chase', (await board.json(`/api/tracks/trk-6f708192/times/${floatsBody.id}/ghost`)).ghost === fast.ghost);
+  const regilded = await board.post(T, await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', slow, { craft: 'bramor2300' }));
+  check('a quad\'s signed lap given a plane afterwards is refused: the aircraft is under the signature', regilded.status === 401, `${regilded.status}`);
+  const quadNamed = await board.post(T, await signedPlaneTime(adaKey, 'trk-6f708192', 'Ada Rook', slow, '5inch'));
+  const quadNamedBody = await quadNamed.json();
+  check('a lap naming a quad as its aircraft is refused by the lap check', quadNamed.status === 422 && /not a fixed wing/.test(quadNamedBody.error), `${quadNamed.status} ${quadNamedBody.error}`);
+  const badCraft = await board.post(T, JSON.stringify({ ...JSON.parse(await signedTime(adaKey, 'trk-6f708192', 'Ada Rook', slow)), craft: 'Sky Hunter!' }));
+  check('an aircraft that is not an airframe id is refused before anything else', badCraft.status === 400, `${badCraft.status}`);
+  const tight = await board.post('/api/tracks/trk-4d5e6f70/times', await signedPlaneTime(adaKey, 'trk-4d5e6f70', 'Ada Rook', flown(s.ring), 'sky1800'));
+  const tightBody = await tight.json();
+  check('a Skyhunter through five inch gates is refused: it does not fit', tight.status === 422 && /does not fit/.test(tightBody.error), `${tight.status} ${tightBody.error}`);
+  const onField = await board.post('/api/tracks/trk-1a2b3c4d/times', await signedPlaneTime(boKey, 'trk-1a2b3c4d', 'Bo', s.boLap, 'sky1800'));
+  const onFieldBody = await onField.json();
+  check('and a plane\'s lap on a field track is refused', onField.status === 422 && /field track/.test(onFieldBody.error), `${onField.status} ${onFieldBody.error}`);
+}
+
+/* Pilots on one track see each other: a WebSocket room per track,
+ * relaying fixed size pose frames with the sender's id in front. */
+async function liveRooms(board) {
+  section('live rooms');
+  const nextMessage = (ws, ms = 3000) => new Promise((done, fail) => {
+    const timer = setTimeout(() => fail(new Error('no message')), ms);
+    ws.addEventListener('message', (ev) => { clearTimeout(timer); done(ev.data); }, { once: true });
+  });
+  const opened = (ws, ms = 3000) => new Promise((done) => {
+    const timer = setTimeout(done, ms);
+    ws.addEventListener('open', () => { clearTimeout(timer); done(); }, { once: true });
+    ws.addEventListener('error', () => { clearTimeout(timer); done(); }, { once: true });
+  });
+  const join = (query) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${board.port}/api/live/${query}`);
+    ws.binaryType = 'arraybuffer';
+    return ws;
+  };
+  const ada = join('trk-1a2b3c4d?name=Ada%20Rook');
+  await opened(ada);
+  const adaWelcome = JSON.parse(await nextMessage(ada));
+  check('a pilot joining a room is welcomed with an id, alone', adaWelcome.type === 'welcome' && adaWelcome.id > 0 && adaWelcome.peers.length === 0, JSON.stringify(adaWelcome));
+  const bo = join('trk-1a2b3c4d?name=Bo');
+  const adaHearsJoin = nextMessage(ada);
+  await opened(bo);
+  const boWelcome = JSON.parse(await nextMessage(bo));
+  check('the second pilot is welcomed with the first in the roster', boWelcome.type === 'welcome' && boWelcome.peers.length === 1 && boWelcome.peers[0].name === 'Ada Rook', JSON.stringify(boWelcome));
+  const joined = JSON.parse(await adaHearsJoin);
+  check('and the first pilot is told who joined', joined.type === 'join' && joined.id === boWelcome.id && joined.name === 'Bo', JSON.stringify(joined));
+  const frame = new Uint8Array(24);
+  new DataView(frame.buffer).setUint32(0, 4242, true);
+  frame[4] = 7;
+  const boHears = nextMessage(bo);
+  ada.send(frame);
+  const relayed = new Uint8Array(await boHears);
+  const view = new DataView(relayed.buffer);
+  check('a pose frame reaches the other pilot with the sender\'s id in front',
+    relayed.length === 26 && view.getUint16(0, true) === adaWelcome.id && view.getUint32(2, true) === 4242 && relayed[6] === 7, `${relayed.length}`);
+  let echoed = false;
+  ada.addEventListener('message', () => { echoed = true; }, { once: true });
+  ada.send(new Uint8Array(10));
+  await sleep(150);
+  check('a frame of the wrong size goes nowhere, not even back to its sender', echoed === false);
+  const adaHearsLeave = nextMessage(ada);
+  bo.close();
+  const left = JSON.parse(await adaHearsLeave);
+  check('a pilot leaving is announced', left.type === 'leave' && left.id === boWelcome.id, JSON.stringify(left));
+  ada.close();
+  const ghostRoom = new WebSocket(`ws://127.0.0.1:${board.port}/api/live/trk-0000dead`);
+  const refused = await new Promise((done) => {
+    ghostRoom.addEventListener('error', () => done(true), { once: true });
+    ghostRoom.addEventListener('open', () => done(false), { once: true });
+    setTimeout(() => done(false), 3000);
+  });
+  check('a room for a track that is not on the board is refused', refused === true);
+}
+
+/* ================================================================== */
+/* The page as served                                                  */
+/* ================================================================== */
+
+/*
+ * The checks on what the static page, its scripts and the inbox say. They
+ * read source text, so they belong with whoever rewrites the page; they
+ * live in this one function so that work can change them in one place.
+ */
+async function pageChecks(board) {
+  const html = await (await board.get('/')).text();
+  check('the page is served, and loads its script', html.includes('Tracks and Statistics') && html.includes('app.js'));
+  /* The tabs are markup, so a pasted #stats link works on a board whose
+   * list failed to load and a reader with no JavaScript sees both. */
+  check('both tabs are in the markup', html.includes('id="tab-tracks"') && html.includes('id="tab-stats"'));
+  check('and so is the statistics section', html.includes('id="view-stats"'));
+  /* The promise, where a visitor reads it. */
+  check('the page says it sets no cookie', html.includes('No cookie is set'));
+  /* Relative: the board is served at its own root here and under /board/
+   * on the VM, where a root absolute path would ask the landing page. */
+  check('the page loads its script by a relative path', html.includes('src="./app.js"'));
+  check('and has no root absolute reference at all', !html.includes('src="/') && !html.includes('href="/'));
+  check('and loads no webfont', !html.includes('fonts.googleapis.com'));
+  const app = await (await board.get('/app.js')).text();
+  /* app.js imports origins.js, and a module import that 404s takes the
+   * whole page down. */
+  const origins = await board.get('/origins.js');
+  const originsText = await origins.text();
+  check('origins.js is served', origins.status === 200);
+  check('as JavaScript', String(origins.headers.get('content-type') || '').includes('javascript'));
+  check('app.js imports it by a relative path', app.includes("from './origins.js'"));
+  check('and it exports what app.js imports',
+    originsText.includes('export function guessSimOrigin') && originsText.includes('export function landingOrigin'));
+  /* Both marks lead home and both carry the id bindHome binds; renaming one
+   * leaves a link to a checkout's port on a public board. */
+  check('both marks are bound to the front door',
+    html.includes('id="brand-home"') && html.includes('id="spine-home"') && app.includes("['brand-home', 'spine-home']"));
+  const homeLinks = html.match(/<a\b[^>]*id="(?:brand|spine)-home"[^>]*>/g) || [];
+  check('and the way home stays in this tab', homeLinks.length === 2 && homeLinks.every((a) => !a.includes('target=')));
+  const cardSource = app.slice(app.indexOf('function cardFor('));
+  const attached = cardSource.indexOf('card.append(body)');
+  const painted = cardSource.indexOf('paintPodium(');
+  check('a card is in the page before its times are painted onto it', attached !== -1 && painted !== -1 && attached < painted);
+  /* One simulator tab: every link to it names the tab, and nothing asks
+   * for noopener, which would quietly turn the name into _blank and open a
+   * new simulator (a physics loop and a WebGL context) on every click. The
+   * counts are the point: a new link that forgets the name is the bug. */
+  const simLinks = html.match(/<a\b[^>]*href="http:\/\/127\.0\.0\.1:8000[^"]*"[^>]*>/g) || [];
+  check('all seven fallback links to the simulator name its tab', simLinks.length === 7 && simLinks.every((a) => a.includes('target="fdfpv-sim"')));
+  check('and the six links app.js builds name it too',
+    app.includes("const SIM_WINDOW = 'fdfpv-sim'") && (app.match(/\.target = SIM_WINDOW/g) || []).length === 6);
+  check('nothing app.js builds opens a bare new tab or asks for noopener', !app.includes("'_blank'") && !app.includes("noopener'"));
+
+  const inbox = await (await board.get('/bugs.html')).text();
+  check('the inbox page is served, with its script', inbox.includes('Bugs and feedback') && inbox.includes('bugs.js'));
+  check('and can filter by kind', inbox.includes('id="kind"') && inbox.includes('Feedback, flight feel'));
+  check('and loads its script by a relative path', inbox.includes('src="bugs.js"'));
+  check('and has no root absolute reference', !inbox.includes('src="/') && !inbox.includes('href="/'));
+  const bugsJs = await (await board.get('/bugs.js')).text();
+  check('neither script fetches from the site root',
+    [app, bugsJs].every((code) => !code.includes("fetch('/") && !code.includes('fetch(`/')));
+  const short = await board.get('/bugs');
+  check('/bugs serves the inbox', short.status === 200 && (await short.text()).includes('Bugs and feedback'));
+  /* Screenshots go to the admin's browser behind a bearer header, which a
+   * bare <img src> cannot carry. */
+  check('the inbox fetches screenshots with the header and shows them from a blob',
+    bugsJs.includes('/images/${img.n}') && bugsJs.includes('createObjectURL'));
+}
+
+async function staticAndTickets(board, s) {
+  const config = await board.json('/api/config');
+  check('config names the simulator', config.simOrigin === 'http://127.0.0.1:8000');
+  const sneak = await board.get('/%2e%2e/package.json');
+  check('an encoded parent path cannot read the package', sneak.status !== 200 && !(await sneak.text()).includes('fdfpvboard'));
+  const percent = await board.get('/%');
+  check('a lone percent sign is a 400 or 404, never a 500', percent.status === 400 || percent.status === 404);
+
+  const filed = await board.post('/api/bugs', {
+    kind: 'visual', title: 'City trees flicker at dusk', what: 'Near the shrine the treeline pops in and out every few frames.', expected: 'Trees stay put.', steps: 'Load city. Fly to the shrine. Look at the treeline.', reporter: 'Ada Rook', context: { map: 'city', screen: 'paused', graphics: 'high' },
+  });
+  const ticket = await filed.json();
+  check('a report files over HTTP, open, with a ticket id', filed.status === 201 && /^bug-[0-9a-f]{8}$/.test(ticket.id) && ticket.status === 'open');
+  check('a title that is too short is refused', (await board.post('/api/bugs', { kind: 'other', title: 'Nope', what: 'Too short.' })).status === 400);
+  const open = await board.json('/api/bugs?status=open');
+  check('the open list carries it, with its map', open.bugs.some((b) => b.id === ticket.id && b.map === 'city'));
+  const whole = await board.json(`/api/bugs/${ticket.id}`);
+  check('the whole ticket keeps its context', whole.context.map === 'city' && whole.what.includes('shrine'));
+  const marked = await board.post(`/api/bugs/${ticket.id}`, { status: 'in_progress' });
+  const markedBody = await marked.json();
+  check('an agent can mark a ticket in progress', marked.status === 200 && markedBody.status === 'in_progress');
+  const feel = await board.post('/api/bugs', {
+    kind: 'feel', title: 'Flight feel: about right', what: 'The quad felt about right this run. Locked in, no complaints.', reporter: 'Ada Rook', context: { map: 'field', tune: 'crapshack' },
+  });
+  const feelTicket = await feel.json();
+  check('flight feel feedback lands as a ticket of its own kind', feel.status === 201 && feelTicket.kind === 'feel');
+  const feelOnly = await board.json('/api/bugs?kind=feel');
+  check('and the feedback filter lists only feel reports',
+    feelOnly.bugs.length === 1 && feelOnly.bugs[0].id === feelTicket.id && feelOnly.bugs.every((b) => b.kind === 'feel'));
+  const proto = await board.get('/api/bugs/constructor');
+  check('a ticket address that is not a ticket id is a 400 or 404, never a 500', proto.status === 400 || proto.status === 404);
+  const adaTrack = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-1a2b3c4d');
+  check('filing reports dropped no track or time', adaTrack?.best.lapMs === Math.round(s.adaLap.lapMs));
+}
+
+/* Tags travel beside the author, not inside the document: they are the
+ * author's intent, not layout. */
+async function tagsOverHttp(board) {
+  const untagged = await board.json('/api/tracks');
+  check('a track published without tags lists an empty list, never undefined', Array.isArray(untagged.tracks[0].tags) && untagged.tracks[0].tags.length === 0);
+  const tagged = await board.post('/api/tracks', { author: 'Ada Rook', document: lapField('trk-7a7a7a7a'), tags: ['experiment', 'race', 'race'] });
+  const taggedBody = await tagged.json();
+  check('a track publishes with tags', tagged.status === 201);
+  const row = (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-7a7a7a7a');
+  check('and they come back once each, in the board\'s order', row?.tags.join() === 'race,experiment');
+  /* Refused rather than dropped, so an author learns a tag did not stick. */
+  check('a tag off the list is refused', (await board.post('/api/tracks', { author: 'Ada Rook', document: field('trk-8b8b8b8b'), tags: ['racing'] })).status === 400);
+  check('and a track cannot wear six', (await board.post('/api/tracks', {
+    author: 'Ada Rook', document: field('trk-9c9c9c9c'), tags: ['race', 'skills', 'experiment', 'freestyle', 'beginner', 'technical'],
+  })).status === 400);
+  await board.post('/api/tracks/trk-7a7a7a7a/times', await signedTime(boKey, 'trk-7a7a7a7a', 'Bo Finch', flown(lapField('trk-7a7a7a7a'))));
+  const retag = await board.post('/api/tracks', { author: 'Ada Rook', document: lapField('trk-7a7a7a7a'), editKey: taggedBody.editKey, tags: ['skills'] });
+  const retagBody = await retag.json();
+  const retagged = await board.json('/api/tracks/trk-7a7a7a7a');
+  check('retagging keeps the times', retag.status === 200 && retagBody.timesCleared === false && retagged.times.length === 1 && retagged.tags.join() === 'skills');
+  /* An empty list clears them; an omitted one means a builder that does
+   * not know about tags, and leaves them be. */
+  const clear = await board.post('/api/tracks', { author: 'Ada Rook', document: lapField('trk-7a7a7a7a'), editKey: taggedBody.editKey, tags: [] });
+  check('and an empty list takes them off again', clear.status === 200 && (await board.json('/api/tracks/trk-7a7a7a7a')).tags.length === 0);
+}
+
+async function runsOverHttp(board) {
+  const run = (over = {}) => ({
+    name: 'Ada Rook', map: 'alps', style: 'expert', score: 24800, durationMs: 120000, tricks: 31, unique: 14, bestCombo: 9100, bestTrick: 1450, crashes: 2, signature: 'Trippy Spin x2', ...over,
+  });
+  const empty = await board.json('/api/runs');
+  check('the freestyle board starts empty and still answers, with the tags',
+    Array.isArray(empty.runs) && empty.runs.length === 0 && Array.isArray(empty.tags) && empty.tags.length > 0);
+  const first = await board.post('/api/runs', run());
+  const firstBody = await first.json();
+  check('a freestyle run posts at rank 1', first.status === 201 && firstBody.rank === 1 && firstBody.improved === true);
+  check('a better run by another pilot takes the top', (await (await board.post('/api/runs', run({ name: 'Bo Finch', score: 31200 }))).json()).rank === 1);
+  const ordered = await board.json('/api/runs');
+  check('and the board reads highest first', ordered.runs.length === 2 && ordered.runs[0].name === 'Bo Finch' && ordered.runs[1].name === 'Ada Rook');
+  /* One row per pilot per map. A worse run is whole and plausible: its
+   * best chain and best trick come down with its score. */
+  const worse = await board.post('/api/runs', run({ score: 100, bestCombo: 90, bestTrick: 50 }));
+  const worseBody = await worse.json();
+  check('a worse run by the same pilot does not take their place',
+    worse.status === 200 && worseBody.improved === false && worseBody.score === 24800 && (await board.json('/api/runs')).runs.length === 2);
+  const better = await board.post('/api/runs', run({ name: 'ADA ROOK', score: 40000 }));
+  const afterBetter = await board.json('/api/runs');
+  check('a better one replaces it, and capitals do not make a second pilot',
+    better.status === 201 && afterBetter.runs.length === 2 && afterBetter.runs[0].name === 'ADA ROOK' && afterBetter.runs[0].score === 40000);
+  /* Claims the board can bound without recomputing the score. */
+  const implausible = [
+    run({ score: 1e12 }), run({ tricks: 0 }), run({ unique: 99, tricks: 4 }), run({ bestTrick: 999999 }), run({ bestCombo: 999999 }),
+    run({ map: 'bando' }), run({ style: 'godmode' }), run({ durationMs: 0 }), run({ name: '!!' }),
+  ];
+  const statuses = [];
+  for (const body of implausible) {
+    statuses.push((await board.post('/api/runs', body)).status);
+  }
+  check('all nine implausible runs are refused with a 400', statuses.every((st) => st === 400), statuses.join());
+  check('JSON that is not an object is a 400, not a 500', (await board.post('/api/runs', '7')).status === 400);
+  check('a map in the query this board keeps no scores for is a 400', (await board.get('/api/runs?map=nowhere')).status === 400);
+  const tracks = await board.json('/api/tracks');
+  check('and none of it touched the tracks', tracks.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
+  check('the track list carries the tag vocabulary', Array.isArray(tracks.tags) && tracks.tags.some((t) => t.id === 'skills'));
+}
+
+async function animationsOverHttp(board, s) {
+  section('the card animation');
+  const pub = await board.post('/api/tracks', { author: 'Ada Rook', document: room('trk-2b3c4d5e', { flyable: true }) });
+  const pubBody = await pub.json();
+  check('a room publishes, with its edit key', pub.status === 201 && Boolean(pubBody.editKey));
+  s.roomKey = pubBody.editKey;
+  const G = '/api/tracks/trk-2b3c4d5e/gif';
+  check('a track with no animation is a 404, not an empty image', (await board.get(G)).status === 404);
+  const up = await board.post(G, { editKey: s.roomKey, gif: b64(GIF_64) });
+  const upBody = await up.json();
+  check('the browser that published a room uploads its animation', up.status === 200 && upBody.bytes === GIF_64.length, JSON.stringify(upBody));
+  const served = await board.get(G);
+  const servedBytes = Buffer.from(await served.arrayBuffer());
+  check('and it comes back as a GIF, byte for byte',
+    served.status === 200 && served.headers.get('content-type') === 'image/gif' && servedBytes.equals(GIF_64));
+  /* The card's src carries gifUtc, so a hard cache is safe here. */
+  check('cached for a long time, unlike anything else here', /max-age=\d\d\d/.test(served.headers.get('cache-control') || ''), served.headers.get('cache-control'));
+  const listing = await board.json('/api/tracks');
+  const roomRow = listing.tracks.find((t) => t.id === 'trk-2b3c4d5e');
+  check('the listing says there is one and does not carry it',
+    roomRow.hasGif === true && Boolean(roomRow.gifUtc) && !JSON.stringify(roomRow).includes(b64(GIF_64)));
+  check('and says a field track has none', listing.tracks.find((t) => t.id === 'trk-1a2b3c4d').hasGif === false);
+  /* The rule, not a default: a field's plan says it all for free. */
+  check('a field track is refused an animation', (await board.post('/api/tracks/trk-1a2b3c4d/gif', { editKey: 'whatever', gif: b64(GIF_64) })).status === 400);
+  check('another browser cannot replace it', (await board.post(G, { editKey: 'not-the-key', gif: b64(GIF_64) })).status === 403);
+  check('a file that is not a GIF is refused', (await board.post(G, { editKey: s.roomKey, gif: b64(Buffer.from('not a gif at all')) })).status === 400);
+  const pixel = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.from([1, 0, 1, 0]), Buffer.from([0x3b])]);
+  check('a one pixel GIF is refused', (await board.post(G, { editKey: s.roomKey, gif: b64(pixel) })).status === 400);
+  check('the admin token uploads without an edit key',
+    (await board.post(G, { gif: b64(GIF_64) }, { authorization: `Bearer ${SCRIPT_TOKEN}` })).status === 200);
+  /* It is a picture of a layout: a rename keeps it, a relayout drops it. */
+  const renamed = { ...room('trk-2b3c4d5e', { flyable: true }), name: 'The same room, renamed' };
+  check('a rename republishes the room', (await board.post('/api/tracks', { author: 'Ada Rook', document: renamed, editKey: s.roomKey })).status === 200);
+  check('and keeps the animation', (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-2b3c4d5e').hasGif === true);
+  const shifted = room('trk-2b3c4d5e', { flyable: true });
+  shifted.elements[1].position = { x: 1, y: 1.2, z: 0 };
+  const relaid = await board.post('/api/tracks', { author: 'Ada Rook', document: shifted, editKey: s.roomKey });
+  const relaidBody = await relaid.json();
+  check('moving a gate republishes and clears the times', relaid.status === 200 && relaidBody.timesCleared === true, JSON.stringify(relaidBody));
+  check('and drops the animation, a picture of the old layout', (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-2b3c4d5e').hasGif === false);
+  check('so the image is a 404 again', (await board.get(G)).status === 404);
+}
+
+async function removalOverHttp(board, s) {
+  section('taking a track off the board');
+  /* A time on it first: the point of the route is that times go with the
+   * track, and the point of the gate is that its publisher alone may not
+   * throw other pilots' times away. The lap is flown through the room as
+   * it stands now, gate moved and all. */
+  const current = await board.json('/api/tracks/trk-2b3c4d5e/document');
+  const lap = flown(current.document, { speed: 6 });
+  const kite = await board.post('/api/tracks/trk-2b3c4d5e/times', await signedTime(boKey, 'trk-2b3c4d5e', 'Bo Kite', lap));
+  check('a lap of the room is taken', kite.status === 201, `${kite.status} ${(await kite.clone().text()).slice(0, 120)}`);
+  check('the room is on the board with one time on it', (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-2b3c4d5e')?.times === 1);
+  const R = '/api/tracks/trk-2b3c4d5e/remove';
+  check('a stranger cannot remove a track', (await fetch(`${board.base}${R}`, { method: 'POST' })).status === 403);
+  check('nor can the browser that published it, with its edit key', (await board.post(R, { editKey: s.roomKey })).status === 403);
+  /* Authority is checked before the id, so ids cannot be probed. */
+  check('and a made up id answers a stranger the same way', (await fetch(`${board.base}/api/tracks/trk-00000000/remove`, { method: 'POST' })).status === 403);
+  const asScript = { authorization: `Bearer ${SCRIPT_TOKEN}` };
+  check('with the token, a track that is not here is a 404', (await board.post('/api/tracks/trk-00000000/remove', '', asScript)).status === 404);
+  const removed = await board.post(R, '', asScript);
+  const removedBody = await removed.json();
+  check('the board\'s token takes it off, with its time', removed.status === 200 && removedBody.times === 1, JSON.stringify(removedBody));
+  check('and says what went rather than echoing the id', removedBody.name === 'Ladder Loop' && removedBody.author === 'Ada Rook', JSON.stringify(removedBody));
+  const after = await board.json('/api/tracks');
+  check('the listing no longer carries it', !after.tracks.some((t) => t.id === 'trk-2b3c4d5e'));
+  check('and the field track beside it is untouched', after.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
+  check('its sheet is a 404', (await board.get('/api/tracks/trk-2b3c4d5e')).status === 404);
+  check('and so is its document', (await board.get('/api/tracks/trk-2b3c4d5e/document')).status === 404);
+  /* The id is free: the way to replace a track published from a browser
+   * nobody still has. */
+  check('and the id can be published again', (await board.post('/api/tracks', { author: 'Ada Rook', document: room('trk-2b3c4d5e', { flyable: true }) })).status === 201);
+}
+
+async function signingIn(board, s) {
+  section('signing in');
+  const login = (email, password) => board.post('/api/admin/login', { email, password });
+  const wrong = await login(KEEPER, 'not it');
+  const wrongBody = await wrong.json();
+  check('a wrong password is refused', wrong.status === 401);
+  const stranger = await login('nobody@example.com', KEEPER_PASSWORD);
+  const strangerBody = await stranger.json();
+  check('an address off the list is refused', stranger.status === 401);
+  /* One sentence for both, so the route cannot be asked who is an admin. */
+  check('and the two refusals are word for word the same', wrongBody.error === strangerBody.error, `${wrongBody.error} / ${strangerBody.error}`);
+  check('with no token the session route says nobody', (await board.get('/api/admin/session')).status === 401);
+  /* Mixed case and stray spaces, as people type their own address. */
+  const ok = await login(`  ${KEEPER.toUpperCase()} `, KEEPER_PASSWORD);
+  const session = await ok.json();
+  check('the address and its password sign in', ok.status === 200 && typeof session.token === 'string' && session.token.length > 40, JSON.stringify({ status: ok.status, error: session.error }));
+  check('and the address comes back normalised', session.email === KEEPER);
+  check('with the time it runs out, in UTC', typeof session.expiresUtc === 'string' && session.expiresUtc.endsWith('Z'));
+  s.session = { authorization: `Bearer ${session.token}` };
+  const who = await board.json('/api/admin/session', s.session);
+  check('the session route reads the token back as a person', who.email === KEEPER && who.kind === 'session');
+  const script = await board.json('/api/admin/session', { authorization: `Bearer ${SCRIPT_TOKEN}` });
+  check('and answers for BOARD_ADMIN_TOKEN with no address', script.kind === 'token' && script.email === '');
+  check('a token with its signature changed is nobody', (await board.get('/api/admin/session', { authorization: `Bearer ${session.token.slice(0, -3)}zzz` })).status === 401);
+  check('a signed in admin takes a track off the board', (await board.post('/api/tracks/trk-2b3c4d5e/remove', '', s.session)).status === 200);
+  check('and it is gone', !(await board.json('/api/tracks')).tracks.some((t) => t.id === 'trk-2b3c4d5e'));
+  check('and the same token reads the bugs inbox', (await board.get('/api/bugs', s.session)).status === 200);
+}
+
+async function statisticsOverHttp(board, s) {
+  section('site statistics, over the wire');
+  /* text/plain, because the pages send beacons and a beacon cannot set a
+   * content type; if this route ever insists on JSON, every event from
+   * every page stops arriving and nothing else would say so. */
+  const send = (body, headers = {}) => fetch(`${board.base}/api/stats/events`, {
+    method: 'POST', headers: { 'content-type': 'text/plain', ...headers }, body: JSON.stringify(body),
+  });
+  const visit = await send({ v: 1, kind: 'visit', surface: 'sim', returning: false, source: 'rotorriot' }, { 'x-fdfpv-country': 'AU' });
+  check('a visit sent as text/plain is taken', visit.status === 204);
+  check('with no body in the answer', (await visit.text()) === '');
+  await send({ v: 1, kind: 'visit', surface: 'board', returning: true, source: 'not-a-sponsor' }, { 'x-fdfpv-country': 'nonsense' });
+  await send({ v: 1, kind: 'session', craft: '5inch', map: 'custom', input: 'gamepad' }, { 'x-fdfpv-country': 'NZ' });
+  await send({ v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', map: 'custom', laps: 4, flightS: 61, crashes: 1 }, { 'x-fdfpv-country': 'AU' });
+  /* Global Privacy Control gets the accepted answer and counts nothing:
+   * another status would tell a script the signal was seen. */
+  check('a browser that asked not to be counted gets the same answer', (await send({ v: 1, kind: 'visit', surface: 'sim', returning: false }, { 'sec-gpc': '1' })).status === 204);
+  check('a kind of event the board does not count is refused', (await send({ v: 1, kind: 'pageview' })).status === 400);
+  check('and so is more than a minute of laps', (await send({ v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', laps: 900 })).status === 400);
+  check('and so is text that is not JSON', (await fetch(`${board.base}/api/stats/events`, { method: 'POST', body: 'not json at all' })).status === 400);
+
+  const read = await board.get('/api/stats');
+  const stats = await read.json();
+  check('the statistics read answers', read.status === 200);
+  check('and may be cached for a short while', /max-age=\d+/.test(read.headers.get('cache-control') || ''));
+  check('both visits are counted', stats.today.visits === 2);
+  check('and the private one is not', stats.today.newVisitors === 1);
+  check('the returning visit moved its own column', stats.today.returningVisitors === 1);
+  check('the session and its flying are counted', stats.today.sessions === 1 && stats.today.laps === 4 && stats.today.flightS === 61);
+  check('the flying tab counts as flying now', stats.live.flying === 1);
+  check('the window is thirty days', stats.days.length === 30);
+  const source = (key) => stats.sources.find((r) => r.key === key) || {};
+  check('a real sponsor keeps a row of its own', source('rotorriot').visits === 1);
+  check('carrying the name the board prints', source('rotorriot').name === 'Rotor Riot');
+  check('a source never heard of folds into other', source('not-a-sponsor').visits === undefined && source('other').visits === 1);
+  const country = (rows, key) => rows.find((r) => r.key === key) || {};
+  check('the country from the edge is counted', country(stats.countries, 'AU').visits === 1);
+  check('and a header that is not a country is unknown', country(stats.countries, 'ZZ').visits === 1);
+
+  /* Cloudflare's own header stands in when the Worker's is missing (a
+   * Worker from before it set one). Flushes with a lap, since a lap moves
+   * the country row; read after the twenty second cache has aged out. */
+  await send({ v: 1, kind: 'flush', tab: 'tab-cf-1', craft: '5inch', map: 'custom', laps: 1 }, { 'cf-ipcountry': 'NZ' });
+  await send({ v: 1, kind: 'flush', tab: 'tab-cf-2', craft: '5inch', map: 'custom', laps: 1 }, { 'cf-ipcountry': 'NZ', 'x-fdfpv-country': 'FR' });
+  await sleep(20_100);
+  const later = await board.json('/api/stats');
+  check('Cloudflare\'s header is read when the Worker\'s is absent', country(later.countries, 'NZ').laps === 1);
+  check('and the Worker\'s wins when both are there', country(later.countries, 'FR').laps === 1);
+
+  /* The four facts off the board's own tables, held to the listing rather
+   * than to a number written here. */
+  const live = await board.json('/api/tracks');
+  const recordHolders = new Set(live.tracks.flatMap((t) => (t.best ? [String(t.best.name).toLowerCase()] : [])));
+  check('the facts count the tracks actually on the board', stats.board.tracks === live.tracks.length);
+  check('and every time on them, on both boards', stats.board.times === live.tracks.reduce((sum, t) => sum + (t.times || 0) + (t.wing ? t.wing.times : 0), 0));
+  check('and at least every pilot holding a record', stats.board.pilots >= recordHolders.size);
+  check('and nobody back on another day within one run of this suite', stats.board.pilotsOnMoreThanOneDay === 0);
+
+  /* The flood gate: 600 accepted events per address per window, fifty
+   * pilots on one connection; this spends the rest and then some. */
+  const ATTEMPTS = 660;
+  let shut = 0;
+  for (let i = 0; i < ATTEMPTS; i += 1) {
+    if ((await send({ v: 1, kind: 'flush', tab: `tab-flood-${i}`, craft: '5inch', flightS: 1 })).status === 429) {
+      shut += 1;
+    }
+  }
+  check('an address posting hundreds of events is shut off', shut > 0);
+  /* After a room's worth, not before: refused events never spent any of
+   * it, which is why the junk above did not bring the gate forward. */
+  check('and only after the allowance went through', ATTEMPTS - shut >= 500);
+
+  const panel = await board.json('/api/admin/session', s.session);
+  check('a signed in admin is handed the sponsor links', Array.isArray(panel.sponsors) && panel.sponsors.length === 1);
+  check('pointing at the simulator with the slug on', panel.sponsors[0].link === 'http://127.0.0.1:8000/?utm_source=rotorriot&utm_medium=sponsor');
+  check('while the public read carries no sponsor list', (await board.json('/api/stats')).sponsors === undefined);
+}
+
+/* A callsign claimed before any time, and every name and time of a key
+ * handed to another (the simulator's optional sign in). */
+async function callsigns(board) {
+  section('a callsign claimed ahead of a time, and a key handed on');
+  const cara = createIdentity(memoryStorage());
+  const dan = createIdentity(memoryStorage());
+  const eve = createIdentity(memoryStorage());
+  const claim = async (identity, name, signedName = name) => board.post('/api/pilots', { name, ...(await identity.signBytes(utf8(`fdfpv-name/v1\n${signedName}`))) });
+  check('a pilot key claims a name before any time', (await claim(cara, 'Maverick')).status === 201);
+  check('claiming it again changes nothing', (await claim(cara, 'Maverick')).status === 200);
+  check('another key cannot claim it, whatever its case', (await claim(eve, 'maverick')).status === 403);
+  check('a signature over another name claims nothing', (await claim(eve, 'Iceman', 'Viper')).status === 401);
+  const track = { ...lapField(), id: 'trk-5e6f7a8b', name: 'Pilot keys' };
+  check('a track for the next laps publishes', (await board.post('/api/tracks', { author: 'Maverick', document: track })).status === 201);
+  const lap = flown(track);
+  const lapAs = async (identity, name) => board.post(`/api/tracks/${track.id}/times`, await signedTime(identity, track.id, name, lap));
+  check('a time under a claimed name from another key is refused', (await lapAs(eve, 'Maverick')).status === 403);
+  check('the claiming key posts under it', (await lapAs(cara, 'Maverick')).status === 201);
+  const link = async (from, to, signers = [from, to]) => {
+    const fromKey = await from.publicKey();
+    const toKey = await to.publicKey();
+    const message = utf8(`fdfpv-link/v1\n${fromKey}\n${toKey}`);
+    return board.post('/api/pilots/link', {
+      from: fromKey, fromSig: (await signers[0].signBytes(message)).sig, to: toKey, toSig: (await signers[1].signBytes(message)).sig,
+    });
+  };
+  check('a link the old key did not sign moves nothing', (await link(cara, eve, [eve, eve])).status === 401);
+  check('nor one the new key did not sign', (await link(cara, eve, [cara, cara])).status === 401);
+  const moved = await link(cara, dan);
+  const movedBody = await moved.json();
+  check('a link both keys signed moves the name and the time', moved.status === 200 && movedBody.names === 1 && movedBody.times === 1, JSON.stringify(movedBody));
+  const asNew = await lapAs(dan, 'Maverick');
+  check('the new key posts under the name', asNew.status === 200 || asNew.status === 201, `${asNew.status}`);
+  check('and the old key no longer can', (await lapAs(cara, 'Maverick')).status === 403);
+}
+
+async function httpSuite(databaseUrl = '') {
+  section(databaseUrl ? 'http, against Postgres' : 'http');
+  const board = await bootBoard({
+    DATABASE_URL: databaseUrl,
+    SIM_ORIGIN: 'http://127.0.0.1:8000',
+    BOARD_ADMIN_TOKEN: SCRIPT_TOKEN,
+    BOARD_ADMINS: `${KEEPER}:plain:${KEEPER_PASSWORD}`,
+    /* One sponsor, so the fold keeps a real slug and folds an invented
+     * one; and a trusted proxy, so the country headers are believed. */
+    BOARD_SPONSORS: 'rotorriot:Rotor Riot',
+    BOARD_TRUST_PROXY: '1',
+  });
+  const state = { kind: databaseUrl ? 'postgres' : 'file' };
+  try {
+    await timesOverHttp(board, state);
+    await worldTracksOverHttp(board, state);
+    await planesOverHttp(board, state);
+    await liveRooms(board);
+    await pageChecks(board);
+    await staticAndTickets(board, state);
+    await tagsOverHttp(board);
+    await runsOverHttp(board);
+    await animationsOverHttp(board, state);
+    await removalOverHttp(board, state);
+    await signingIn(board, state);
+    await statisticsOverHttp(board, state);
+    await callsigns(board);
+  } finally {
+    await board.stop();
+  }
+}
+
+/* Screenshots on tickets, on a board with BUGS_TOKEN set and an admin. */
+async function screenshotsSuite(databaseUrl = '') {
+  section(databaseUrl ? 'bug screenshots, against Postgres' : 'bug screenshots');
+  const board = await bootBoard({ DATABASE_URL: databaseUrl, BUGS_TOKEN: BUGS_SECRET, BOARD_ADMINS: `${KEEPER}:plain:${KEEPER_PASSWORD}` });
+  const report = (images, title = 'Pasted a screenshot here') => board.post('/api/bugs', {
+    kind: 'visual', title, what: 'The screenshot shows the thing twenty words cannot.', images,
+  });
+  try {
+    const login = await (await board.post('/api/admin/login', { email: KEEPER, password: KEEPER_PASSWORD })).json();
+    const admin = { authorization: `Bearer ${login.token}` };
+    const filed = await report([`data:image/png;base64,${b64(PNG_1PX)}`, b64(WEBP_HEAD)]);
+    const ticket = await filed.json();
+    check('a report carries its screenshots in', filed.status === 201 && ticket.images.length === 2, `${filed.status} ${JSON.stringify(ticket).slice(0, 160)}`);
+    const whole = await board.json(`/api/bugs/${ticket.id}`, admin);
+    check('the admin\'s ticket lists them by number, type and size',
+      whole.images.map((i) => `${i.n}:${i.type}:${i.size}`).join() === `1:image/png:${PNG_1PX.length},2:image/webp:${WEBP_HEAD.length}`);
+    const image = await board.get(`/api/bugs/${ticket.id}/images/1`, admin);
+    const bytes = Buffer.from(await image.arrayBuffer());
+    check('a signed in admin gets the image back byte for byte', image.status === 200 && image.headers.get('content-type') === 'image/png' && bytes.equals(PNG_1PX));
+    check('served with nosniff and never cached',
+      image.headers.get('x-content-type-options') === 'nosniff' && /no-store/.test(image.headers.get('cache-control') || ''));
+    const byToken = await board.get(`/api/bugs/${ticket.id}/images/2`, { authorization: `Bearer ${BUGS_SECRET}` });
+    check('BUGS_TOKEN reads it too, as it reads the ticket', byToken.status === 200 && byToken.headers.get('content-type') === 'image/webp');
+    check('nobody else reads a screenshot', (await board.get(`/api/bugs/${ticket.id}/images/1`)).status === 401);
+    check('or the ticket', (await board.get(`/api/bugs/${ticket.id}`)).status === 401);
+    check('a wrong token reads nothing', (await board.get(`/api/bugs/${ticket.id}/images/1`, { authorization: 'Bearer nope' })).status === 401);
+    check('an image the ticket does not have is a 404', (await board.get(`/api/bugs/${ticket.id}/images/3`, admin)).status === 404);
+    check('an image number past four is a 400', (await board.get(`/api/bugs/${ticket.id}/images/9`, admin)).status === 400);
+    const kept = await (await board.post(`/api/bugs/${ticket.id}`, { status: 'in_progress' }, admin)).json();
+    check('marking the ticket keeps its screenshots', kept.status === 'in_progress' && kept.images.length === 2);
+    const page = await report([b64(Buffer.from('<html><script>alert(1)</script></html>'))]);
+    check('a web page sent as an image is refused', page.status === 400 && /PNG, JPEG or WebP/.test((await page.json()).error));
+    const big = await report([b64(Buffer.concat([PNG_1PX, Buffer.alloc(MAX_BUG_IMAGE_BYTES)]))]);
+    check('an image over the cap is refused', big.status === 400 && /megabyte/.test((await big.json()).error));
+    check('a fifth image is refused', (await report(Array(5).fill(b64(PNG_1PX)))).status === 400);
+    check('a body bigger than four capped images can be is a 413', (await report(Array(4).fill(`${b64(PNG_1PX)}${'A'.repeat(1_500_000)}`))).status === 413);
+    /* Past the drain ceiling the board stops reading and closes: the
+     * client sees the 413 or a reset, and the board lives on. */
+    const flood = await report([`${b64(PNG_1PX)}${'A'.repeat(24_000_000)}`]).then((r) => r.status, () => 'reset');
+    check('a body past the drain ceiling is refused without taking the board down', flood === 413 || flood === 'reset', String(flood));
+    const listed = await board.json('/api/bugs', admin);
+    check('refused reports stored nothing', listed.bugs.filter((b) => b.title === 'Pasted a screenshot here').length === 1);
+    const plain = await report(undefined, 'A report with no images');
+    check('a report without images still lands', plain.status === 201 && (await plain.json()).images.length === 0);
+  } finally {
+    await board.stop();
+  }
+}
+
+/* ================================================================== */
+
+originsUnit();
+await adminUnit();
+validateUnit();
+await storeUnit();
+await statsUnit();
+await httpSuite();
+await screenshotsSuite();
+if (process.env.BOARD_SELFTEST_DATABASE_URL) {
+  await httpSuite(process.env.BOARD_SELFTEST_DATABASE_URL);
+  await screenshotsSuite(process.env.BOARD_SELFTEST_DATABASE_URL);
+} else {
+  section('http, against Postgres');
+  skip('BOARD_SELFTEST_DATABASE_URL is not set');
+}
+console.log(failures ? `\n${failures} failed` : '\nall passed');
+process.exit(failures ? 1 : 0);

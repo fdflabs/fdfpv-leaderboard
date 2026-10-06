@@ -12,6 +12,27 @@ The three repositories are one product. `fdflabs/fdfpv` holds the simulator and 
 
 **Licence is GPLv3.** Every file gets a header. Do not add a dependency with an incompatible licence.
 
+**The GPLv3 header names this project, never the upstream.** A new file, or a file rewritten so that none of WebFPVSimulator-LeaderBoard's code is left in it, carries the simulator's header, the one in its `CLAUDE.md`, in the file's own comment syntax:
+
+```
+This file is part of the Paraguayan Drone Combat Simulator.
+
+The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
+
+The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY, without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
+```
+
+A file that still holds upstream code keeps its existing header ("WebFPVLeaderboard", "the WebFPVSimulator leaderboard") untouched until that code is rewritten: GPLv3 sections 4 and 5 require those notices to travel with the code. Never copy upstream code into a new file; write it fresh. `~/Desktop/fdfpv-loop/upstream/board-share.sh` measures what is left. The README and NOTICE credit stays until it says none is.
+
 **One runtime dependency, `pg`, and it is the only one.** The page has none at all: no framework, no bundler, no build step. Adding one needs an argument first.
 
 **The page's styles are inline in the HTML.** Same reason as the simulator's: the styling must not depend on a server's MIME table.
@@ -22,7 +43,7 @@ The three repositories are one product. `fdflabs/fdfpv` holds the simulator and 
 
 There is one credential: an admin signs in at `/api/admin/login` and the page sends the token it gets back as a bearer header, by hand, on the admin routes. That does not break the invariant, because a browser never sends it on anybody else's behalf, so another origin's script gets exactly what curl gets. A cookie would break it, and `access-control-allow-credentials` must never be set. If either is ever wanted, this header has to name one origin instead.
 
-**The admin whitelist is a list of addresses, not a rule about them.** `src/admin.js` is the copy of record. No domain wildcard. The built-in entry's password ships as an scrypt hash, which keeps the word out of a public history and does not make it secret, so a host sets `BOARD_ADMINS` instead. Sessions are signed rather than stored: no table, no sweep, and changing a password invalidates every token it minted.
+**The admin whitelist is a list of addresses, not a rule about them.** `src/admin.js` is the copy of record. No domain wildcard. No entry ships: the list is `BOARD_ADMINS` and nothing else, because a published hash of a password keeps the word out of the history without making it secret. `scripts/admin-hash.js` mints a record. Sessions are signed rather than stored: no table, no sweep, and changing a password invalidates every token it minted.
 
 **Site statistics are counters, never events.** The board stores a total per UTC day in `stats_days` and a total per day per dimension in `stats_dims`, and that is the finest grain there is: there is no row that describes one visitor, one visit or one lap. No identifier is accepted from a client and none is stored. The country is two letters from the edge, believed only behind `BOARD_TRUST_PROXY`, and nothing here ever looks an address up. New or returning is decided by the browser from a date it keeps for itself and sent as a boolean. Every dimension is a closed list, in `src/validate.js` or in `src/sponsors.js`, which is what stops a stranger with curl growing a table on a public page. The per tab handle that answers "how many are flying now" lives in memory for three minutes and reaches no store. If this ever needs to hold something finer, it needs an argument first and the sentence on the page has to change with it.
 
@@ -38,7 +59,7 @@ There is one credential: an admin signs in at `/api/admin/login` and the page se
 ## Working rules
 
 - `npm test` runs `src/selftest.js` and is cheap. Run it for anything touching the store, the API surface or validation.
-- The password behind the shipped admin hash is deliberately not in this repository, so `npm test` cannot check the two against each other. Set `BOARD_SELFTEST_PASSWORD` to check it on a machine where knowing it is fine; the suite says `skip` rather than passing quietly when it is unset.
+- `npm run admin:golden` pins the whitelist parser, the session token format and `scripts/admin-hash.js`. A change to how a token is signed signs every admin out, so a golden failure there is a contract change, not a test to regenerate.
 - **Always ask, before the turn ends, whether to run a verification pass and at what scale.** Somebody looking at the
   real page against the real database learns in one minute what no self test can see, so whether to spend that minute is
   their call and not an assumption. Ask on every turn that changed code, including the turns where `npm test` already
