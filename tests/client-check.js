@@ -202,8 +202,17 @@ function scenes(trackIds) {
   return [...base, ...spanish];
 }
 
+/*
+ * The page paints a plan when its canvas first has a size and again 140 ms
+ * after a resize. A card painted while the layout was still moving keeps a
+ * plate a pixel off until the next resize, and whether that happens
+ * depends on timing, so every read starts with a resize and waits out the
+ * repaint. Both trees get the same treatment.
+ */
 async function settle(tab) {
   await tab.until('document.fonts.status === "loaded" && !document.querySelector(".skeleton")');
+  await tab.evaluate('window.dispatchEvent(new Event("resize")); true');
+  await tab.sleep(300);
   let last = '';
   let same = 0;
   for (let i = 0; i < 60 && same < 3; i += 1) {
