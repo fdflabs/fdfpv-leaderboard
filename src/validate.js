@@ -1350,8 +1350,8 @@ export function inspectRun(body) {
  * answer "how many are flying now", and is never written to the store.
  *
  * EVERY DIMENSION IS A CLOSED LIST. A source folds to a sponsor slug or to
- * `other`, a country to two capitals or to `ZZ`, and craft, map, input and
- * surface are refused outright if they are not on the lists below. That is
+ * `other`, a country to two capitals or to `ZZ`, map, input and craft to
+ * `other`, and a surface not on the list below is refused outright. That is
  * what stops a stranger with curl growing the dims table: the number of
  * rows it can ever hold is the product of these lists and the days.
  *
@@ -1370,10 +1370,26 @@ export const STATS_KINDS = ['visit', 'session', 'flush'];
  * a rule about. See DEPLOY.md in the simulator's repository. */
 export const STATS_SURFACES = ['sim', 'builder', 'board', 'landing'];
 
-/* The aircraft, spelled as the simulator's own settings spell it, so the
- * page can print "Five inch" and "65 mm whoop" from a key that is not a
- * translation of anything. */
-export const STATS_CRAFT = ['5inch', 'whoop65'];
+/* The aircraft, spelled as the simulator's own settings spell it (the ids
+ * in configs/airframes.js there, which is the copy of record), so the page
+ * can print "Skyhunter" from a key that is not a translation of anything.
+ * `5inch` and `whoop65` are no longer in that catalog (both were retired on
+ * 2026-10-03) but stay here: every client shipped before this list grew
+ * folded every aircraft onto those two, and the rows already stored under
+ * them are history the page still prints.
+ *
+ * AN ID NOT ON THE LIST FOLDS TO `other`, it is not refused, for the reason
+ * maps and inputs fold: the simulator adds an airframe without asking this
+ * board, and refusing the event would drop the session AND the minute of
+ * "flying now" a flush carries, which is exactly what the old two-word list
+ * made the simulator work around. The table stays closed because the fold
+ * happens before anything is written. */
+export const STATS_CRAFT = [
+  '5inch', 'whoop65',
+  '7inch', '10inch', 'interceptor', 'sky1800', 'cub1400', 'radian2000', 'bramor2300', 'slowstick1180',
+  'timber1500', 'timber1500f', 'cub1400f', 'bombshell1118', 'kadet1981', 'uglystik1567', 'tigermoth1803',
+  'p51d1450', 'f16878', 'zagi1219', 'nrj1490', 'striker2500',
+];
 
 /* The maps the shell can be standing in. `custom` is the track, built or
  * fetched; `city` is freestyle. Anything else folds, rather than being
@@ -1481,14 +1497,10 @@ export function inspectStatsEvent(body, sourceKey) {
     return { event: { kind, surface, returning: body.returning, source } };
   }
   if (kind === 'session') {
-    const craft = String(body.craft ?? '');
-    if (!STATS_CRAFT.includes(craft)) {
-      return { error: 'That is not an aircraft this board counts.' };
-    }
     return {
       event: {
         kind,
-        craft,
+        craft: foldedTo(body.craft, STATS_CRAFT),
         map: foldedTo(body.map, STATS_MAPS),
         input: foldedTo(body.input, STATS_INPUTS),
         source,
@@ -1500,10 +1512,6 @@ export function inspectStatsEvent(body, sourceKey) {
   if (!STATS_TAB_RE.test(tab)) {
     return { error: 'That is not a usable tab handle.' };
   }
-  const craft = String(body.craft ?? '');
-  if (!STATS_CRAFT.includes(craft)) {
-    return { error: 'That is not an aircraft this board counts.' };
-  }
   const laps = delta(body.laps, FLUSH_LAPS_MAX);
   const flightS = delta(body.flightS, FLUSH_FLIGHT_S_MAX);
   const crashes = delta(body.crashes, FLUSH_CRASHES_MAX);
@@ -1514,7 +1522,7 @@ export function inspectStatsEvent(body, sourceKey) {
     event: {
       kind,
       tab,
-      craft,
+      craft: foldedTo(body.craft, STATS_CRAFT),
       map: foldedTo(body.map, STATS_MAPS),
       laps,
       flightS,

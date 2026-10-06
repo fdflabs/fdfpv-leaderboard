@@ -694,7 +694,33 @@ function countryName(code) {
   }
 }
 
-const CRAFT_NAMES = { '5inch': str('app.five_inch'), whoop65: '65 mm whoop', wing1000: str('app.fixed_wing') };
+/* Names as the simulator's configs/airframes.js prints them. An id missing
+ * here prints as itself, which is the right failure for an airframe added
+ * after this page shipped. */
+const CRAFT_NAMES = {
+  '5inch': str('app.five_inch'), whoop65: '65 mm whoop', wing1000: str('app.fixed_wing'),
+  '7inch': str('stats.craft_7inch'),
+  '10inch': str('stats.craft_10inch'),
+  'interceptor': str('stats.craft_interceptor'),
+  'sky1800': str('stats.craft_sky1800'),
+  'cub1400': str('stats.craft_cub1400'),
+  'radian2000': str('stats.craft_radian2000'),
+  'bramor2300': str('stats.craft_bramor2300'),
+  'slowstick1180': str('stats.craft_slowstick1180'),
+  'timber1500': str('stats.craft_timber1500'),
+  'timber1500f': str('stats.craft_timber1500f'),
+  'cub1400f': str('stats.craft_cub1400f'),
+  'bombshell1118': str('stats.craft_bombshell1118'),
+  'kadet1981': str('stats.craft_kadet1981'),
+  'uglystik1567': str('stats.craft_uglystik1567'),
+  'tigermoth1803': str('stats.craft_tigermoth1803'),
+  'p51d1450': str('stats.craft_p51d1450'),
+  'f16878': str('stats.craft_f16878'),
+  'zagi1219': str('stats.craft_zagi1219'),
+  'nrj1490': str('stats.craft_nrj1490'),
+  'striker2500': str('stats.craft_striker2500'),
+  'other': str('stats.craft_other'),
+};
 const MAP_NAMES = { custom: 'Track', city: str('stats.freestyle_city'), other: 'Other' };
 const INPUT_NAMES = {
   gamepad: str('stats.radio_or_controller'), keyboard: 'Keyboard', touch: 'Touch', other: 'Other',
