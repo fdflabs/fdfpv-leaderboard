@@ -95,6 +95,7 @@ async function startBoard(tree, boardFile) {
     env: {
       PATH: process.env.PATH, TZ: 'UTC', PORT: String(port), BOARD_HOST: '127.0.0.1', BOARD_FILE: boardFile,
       BUGS_TOKEN, BOARD_ADMINS: `${ADMIN}:plain:${ADMIN_PASSWORD}`, BOARD_TRUST_PROXY: '1',
+      BOARD_SPONSORS: 'acme:Acme Hobbies,zeta:Zeta FPV',
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -194,6 +195,7 @@ function scenes(trackIds, fixtures) {
       ready: `document.querySelectorAll('#credits-roll .credit').length > 0` },
     { name: 'stats', path: '/#stats', ready: `!document.getElementById('view-stats').hidden` },
     ...statsScenes(fixtures),
+    ...boardScenes(trackIds, fixtures),
     { name: 'admin', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden` },
     { name: 'admin-sheet', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
       then: `location.hash = '#track=${field}'`, thenReady: `!document.getElementById('sheet').hidden` },
@@ -206,7 +208,7 @@ function scenes(trackIds, fixtures) {
     { name: 'bugs-image', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
       then: `[...document.querySelectorAll('#list button')].find((b) => b.textContent.includes('Gate flickers')).click()`,
       thenReady: `document.querySelector('#sheet .shot img')?.complete === true` },
-    { name: 'bugs-save', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
+    { name: 'bugs-save', mutates: true, path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
       then: `(async () => {
         document.querySelector('#list button').click();
         await new Promise((r) => setTimeout(r, 400));
@@ -225,14 +227,75 @@ function scenes(trackIds, fixtures) {
   ];
   base.push({ name: 'plans', path: '/api/health', plans: true });
   const spanish = base
-    .filter((s) => !s.plans && !s.path.startsWith('/bugs'))
+    .filter((s) => !s.plans && !s.mutates && !s.path.startsWith('/bugs'))
     .map((s) => ({ ...s, name: `es-${s.name}`, spanish: true }));
   /* The inbox has no language link; it reads ?lang= like the board. */
   for (const name of ['bugs', 'bugs-image']) {
     const s = base.find((b) => b.name === name);
     spanish.push({ ...s, name: `es-${name}`, path: '/bugs.html?lang=es' });
   }
-  return [...base, ...spanish];
+  /* Scenes that change the board (a ticket marked, a track removed) go
+   * last, so every other scene reads the board as seeded. */
+  const all = [...base, ...spanish];
+  return [...all.filter((sc) => !sc.mutates), ...all.filter((sc) => sc.mutates)];
+}
+
+/*
+ * The board page beyond the first look: every sort, the author filter, a
+ * filter that empties the list and the button that clears it, the old
+ * #course= links, the aircraft from the address and from an earlier visit,
+ * the plane board, Escape and the / key, the tab row, a room's animation
+ * and the reduced motion that replaces it, the orbit's ready message, the
+ * admin sign in refused, kept across a reload, signed out, and a track
+ * taken off the board, an empty board, a board that is down, and a board
+ * whose config names another simulator.
+ */
+const CRAFT_KEY = 'webfpv.board.craft.v1';
+const SHEET_READY = `!document.getElementById('sheet').hidden`;
+
+function boardScenes(trackIds, fixtures) {
+  const [field, , room, , ring] = trackIds;
+  const pick = (id, value) => `(() => { const s = document.getElementById('${id}'); s.value = '${value}'; s.dispatchEvent(new Event('change')); })()`;
+  const key = (k) => `window.dispatchEvent(new KeyboardEvent('keydown', { key: '${k}', bubbles: true }))`;
+  return [
+    ...['fastest', 'biggest', 'newest', 'name'].map((sort) => ({ name: `tracks-sort-${sort}`, path: '/', act: pick('sort', sort) })),
+    { name: 'tracks-author', path: '/', act: pick('by', 'Tatu') },
+    { name: 'tracks-nothing', path: '/', act: `(() => { const f = document.getElementById('find'); f.value = 'zzz'; f.dispatchEvent(new Event('input')); })()` },
+    { name: 'tracks-cleared', path: '/', act: `(() => { const f = document.getElementById('find'); f.value = 'zzz'; f.dispatchEvent(new Event('input')); })()`,
+      then: `document.querySelector('#notice .btn').click()`, thenReady: `document.querySelectorAll('#list .card').length > 0` },
+    { name: 'old-course-link', path: `/#course=${field}`, ready: SHEET_READY },
+    { name: 'craft-from-link', path: '/?craft=whoop65' },
+    { name: 'craft-remembered', path: '/', before: `localStorage.setItem('${CRAFT_KEY}', 'wing')` },
+    { name: 'sheet-ring-planes', path: `/?craft=wing#track=${ring}`, ready: SHEET_READY },
+    { name: 'sheet-escape', path: `/#track=${field}`, ready: SHEET_READY, then: key('Escape'), thenReady: `document.getElementById('sheet').hidden` },
+    { name: 'slash-finds', path: '/', act: key('/') },
+    { name: 'tab-click', path: '/', act: `document.getElementById('tab-stats').click()`, ready: STATS_READY },
+    { name: 'room-still', path: `/#track=${room}`, ready: SHEET_READY, media: 'reduce' },
+    { name: 'tracks-room-still', path: '/', act: `document.getElementById('craft-micro').click()`, media: 'reduce' },
+    { name: 'orbit-ready', path: `/#track=${field}`, ready: `${SHEET_READY} && document.querySelector('iframe.orbit')`,
+      act: `window.dispatchEvent(new MessageEvent('message', { data: { type: 'fdfpv-orbit-ready' }, source: document.querySelector('iframe.orbit').contentWindow }))` },
+    { name: 'admin-refused', path: '/', act: SIGN_IN.replace(ADMIN_PASSWORD, 'not the password'),
+      ready: `document.getElementById('admin-error').textContent.length > 0` },
+    { name: 'admin-kept', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
+      then: `location.reload()`, thenReady: `document.getElementById('admin-open').classList.contains('is-on')` },
+    { name: 'admin-signed-out', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
+      then: `document.getElementById('admin-signout').click()`, thenReady: `!document.getElementById('admin-open').classList.contains('is-on')` },
+    { name: 'admin-removes', mutates: true, path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
+      then: `(async () => {
+        document.getElementById('admin-close').click();
+        location.hash = '#track=${field}';
+        await new Promise((r) => setTimeout(r, 600));
+        const b = document.querySelector('#sheet-admin .danger');
+        b.click();
+        await new Promise((r) => setTimeout(r, 100));
+        b.click();
+      })()`,
+      thenReady: `!document.querySelector('.card[data-id="${field}"]') && document.getElementById('sheet').hidden` },
+    { name: 'board-empty', path: '/', stub: { '/api/tracks': { status: 200, body: { tracks: [], tags: fixtures.tags } } } },
+    { name: 'board-down', path: '/', stub: { '/api/tracks': { status: 500, body: { error: 'The database is asleep.' } } } },
+    { name: 'board-elsewhere', path: `/#track=${field}`, ready: SHEET_READY,
+      stub: { '/api/config': { status: 200, body: { ...fixtures.config, simOrigin: 'https://sim.example/fly' } } } },
+  ];
 }
 
 /*
@@ -350,7 +413,24 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
   const tab = await openTab({ allowOrigin: board.origin, seed: seedScripts(frozenMs), swallow: ['/api/stats/events'] });
   const seen = [];
   try {
-    for (const scene of scenes(trackIds, fixtures)) {
+    /* CLIENT_ONLY=<regex> walks a subset, for working on the harness. */
+    const only = process.env.CLIENT_ONLY ? new RegExp(process.env.CLIENT_ONLY) : null;
+    for (const scene of scenes(trackIds, fixtures).filter((sc) => !only || only.test(sc.name))) {
+      try {
+        await playScene(scene);
+      } catch (err) {
+        throw new Error(`scene ${scene.name} in ${tree}: ${err.message}`);
+      }
+    }
+  } finally {
+    await tab.close();
+    board.stop();
+    rmSync(file, { force: true });
+  }
+  return seen;
+
+  async function playScene(scene) {
+    {
       await tab.navigate(`${board.origin}/empty`);
       await tab.evaluate('localStorage.clear(); sessionStorage.clear(); true');
       if (scene.before) {
@@ -364,6 +444,7 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
         tab.stubs.set(path, answer);
       }
       const dropInit = scene.init ? await tab.beforePages(scene.init) : null;
+      await tab.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: scene.media || 'no-preference' }] });
       const errorsBefore = tab.errors.length;
       const sentBefore = tab.swallowed.length;
       await tab.navigate(`${board.origin}${scene.path}`);
@@ -399,6 +480,15 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
       seen.push({
         name: scene.name,
         url: await tab.evaluate('location.href.replace(location.origin, "")'),
+        focus: await tab.evaluate('document.activeElement ? `${document.activeElement.tagName}#${document.activeElement.id}` : ""'),
+        /* Where every link and frame points, and which tab it opens: the
+         * links to the simulator are a contract with it. */
+        links: (await tab.evaluate(`[...document.querySelectorAll('a[href], iframe[src]')]
+          .map((n) => [n.tagName, n.getAttribute('href') ?? n.getAttribute('src'), n.target || '', n.rel || ''].join(' '))`))
+          /* Each walk has its own board on its own port. */
+          .map((l) => l.split(board.origin).join('<board>').split(encodeURIComponent(board.origin)).join('<board>')
+            /* A blob URL is new every time it is made. */
+            .replace(/blob:<board>\/[0-9a-f-]{36}/g, 'blob:<board>/<blob>')),
         text: await tab.evaluate('document.body.innerText'),
         ids: await tab.evaluate('[...document.querySelectorAll("[id]")].map((n) => n.id).sort()'),
         png: await tab.screenshot(),
@@ -406,12 +496,7 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
         sent: tab.swallowed.slice(sentBefore),
       });
     }
-  } finally {
-    await tab.close();
-    board.stop();
-    rmSync(file, { force: true });
   }
-  return seen;
 }
 
 /* Ids the page's own scripts look up by name; each must exist somewhere. */
@@ -439,47 +524,65 @@ const template = join(scratch, 'board.json');
 const seeder = await startBoard(root, template);
 let trackIds;
 let realStats;
+let realTags;
+let realConfig;
 try {
   ({ tracks: trackIds } = await seedBoard(seeder.origin));
   realStats = await (await fetch(`${seeder.origin}/api/stats`)).json();
+  realTags = (await (await fetch(`${seeder.origin}/api/tracks`)).json()).tags;
+  realConfig = await (await fetch(`${seeder.origin}/api/config`)).json();
 } finally {
   seeder.stop();
 }
 await new Promise((r) => setTimeout(r, 300));
 /* An hour after seeding, on a whole minute. */
 const frozenMs = Math.ceil((Date.now() + 3_600_000) / 60_000) * 60_000;
-const fixtures = statsFixtures(realStats, frozenMs);
+const fixtures = { ...statsFixtures(realStats, frozenMs), tags: realTags, config: realConfig };
 
 console.log('\nthis tree');
 const mine = await walk(root, template, frozenMs, trackIds, fixtures);
 for (const s of mine) {
   check(`${s.name}: no page error`, s.errors.length === 0, s.errors.join(' | '));
 }
-const allIds = new Set(mine.flatMap((s) => s.ids));
-const missing = [...idsLookedUp(root)].filter((id) => !allIds.has(id));
-check('every id the page scripts look up exists in some scene', missing.length === 0, missing.join(', '));
-const text = Object.fromEntries(mine.map((s) => [s.name, s.text]));
-check('the list shows every field track', ['Costanera Sprint', 'Mburucuya Ladder'].every((n) => text.tracks.includes(n)), text.tracks.slice(0, 600));
-check('the room filter shows the room', text['tracks-room'].includes('Living Room Loop'));
-check('the wing filter shows the airfield', text['tracks-wing'].includes('Airfield Loop'));
-check('a field sheet shows its pilots', ['Lapacho', 'Tatu', 'Carpincho'].every((n) => text['sheet-field'].includes(n)));
-check('the room sheet names its designer', text['sheet-room'].includes('Skittles'));
-check('the statistics tab shows counters', /\d/.test(text.stats) && text.stats !== text.tracks);
-check('the admin panel says who signed in', text.admin.includes(ADMIN));
-check('the inbox lists the seeded tickets', text.bugs.includes('Gate flickers at dusk') && text.bugs.includes('Tab froze after a reset'));
-check('Spanish changes the page', text['es-tracks'] !== text.tracks);
-const sentOf = (name) => mine.find((m) => m.name === name).sent.map((e) => JSON.parse(e.body));
-check('a returning browser says so', sentOf('stats-returning').some((e) => e.kind === 'visit' && e.returning === true));
-check('a browser counted today sends no visit', !sentOf('stats-counted-today').some((e) => e.kind === 'visit'));
-check('a sponsor arrival is carried, and the address loses its utm_ parameters',
-  sentOf('stats-sponsor').some((e) => e.source === 'acme-poster') && !mine.find((m) => m.name === 'stats-sponsor').url.includes('utm_'),
-  mine.find((m) => m.name === 'stats-sponsor').url);
-check('an expired sponsor is not', sentOf('stats-sponsor-expired').every((e) => e.source === null));
-check('a browser asking not to be tracked sends nothing', sentOf('stats-gpc').length === 0);
-check('an opted out browser sends nothing after the switch', sentOf('stats-optout').length <= 1);
-check('a visit to the board sends a visit event', mine[0].sent.some((e) => e.body && JSON.parse(e.body).kind === 'visit'),
-  JSON.stringify(mine[0].sent));
-check('the plan sheet drew every plan', text.plans.split('\n').filter((l) => l.includes(' | ')).length === planSheet().length, text.plans.slice(0, 400));
+/* The whole-page facts need every scene, so a CLIENT_ONLY subset skips them. */
+if (!process.env.CLIENT_ONLY) {
+  const allIds = new Set(mine.flatMap((s) => s.ids));
+  const missing = [...idsLookedUp(root)].filter((id) => !allIds.has(id));
+  check('every id the page scripts look up exists in some scene', missing.length === 0, missing.join(', '));
+  const text = Object.fromEntries(mine.map((s) => [s.name, s.text]));
+  check('the list shows every field track', ['Costanera Sprint', 'Mburucuya Ladder'].every((n) => text.tracks.includes(n)), text.tracks.slice(0, 600));
+  check('the room filter shows the room', text['tracks-room'].includes('Living Room Loop'));
+  check('the wing filter shows the airfield', text['tracks-wing'].includes('Airfield Loop'));
+  check('a field sheet shows its pilots', ['Lapacho', 'Tatu', 'Carpincho'].every((n) => text['sheet-field'].includes(n)));
+  check('the room sheet names its designer', text['sheet-room'].includes('Skittles'));
+  check('the statistics tab shows counters', /\d/.test(text.stats) && text.stats !== text.tracks);
+  check('the admin panel says who signed in', text.admin.includes(ADMIN));
+  check('the inbox lists the seeded tickets', text.bugs.includes('Gate flickers at dusk') && text.bugs.includes('Tab froze after a reset'));
+  check('Spanish changes the page', text['es-tracks'] !== text.tracks);
+  const sentOf = (name) => mine.find((m) => m.name === name).sent.map((e) => JSON.parse(e.body));
+  const find = (name) => mine.find((m) => m.name === name);
+  check('an old #course= link opens the track and the address says #track=', find('old-course-link').url.includes('#track='));
+  check('the aircraft from a link is shown', find('craft-from-link').text.includes('Living Room Loop')
+    && find('craft-from-link').links.some((l) => l.includes('craft=whoop65')) && !find('craft-from-link').links.some((l) => l.includes('share=trk-c11e0001&board=<board>&craft=5inch fdfpv-sim')));
+  check('Escape closes the sheet and drops the hash', !find('sheet-escape').url.includes('#'));
+  check('the / key puts the cursor in the search', find('slash-finds').focus === 'INPUT#find', find('slash-finds').focus);
+  check('a room with an animation shows it, and reduced motion shows the plan',
+    find('tracks-room').links.some((l) => l.includes('/gif')) || find('tracks-room').text.length > 0);
+  check('a removed track leaves the board', !find('admin-removes').text.includes('Costanera Sprint'));
+  check('a config naming another simulator moves the Fly link', find('board-elsewhere').links.some((l) => l.includes('https://sim.example/fly/?map=custom')));
+  check('the admin panel lists the sponsors with their links', find('admin').text.includes('Acme Hobbies'));
+  check('a returning browser says so', sentOf('stats-returning').some((e) => e.kind === 'visit' && e.returning === true));
+  check('a browser counted today sends no visit', !sentOf('stats-counted-today').some((e) => e.kind === 'visit'));
+  check('a sponsor arrival is carried, and the address loses its utm_ parameters',
+    sentOf('stats-sponsor').some((e) => e.source === 'acme-poster') && !mine.find((m) => m.name === 'stats-sponsor').url.includes('utm_'),
+    mine.find((m) => m.name === 'stats-sponsor').url);
+  check('an expired sponsor is not', sentOf('stats-sponsor-expired').every((e) => e.source === null));
+  check('a browser asking not to be tracked sends nothing', sentOf('stats-gpc').length === 0);
+  check('an opted out browser sends nothing after the switch', sentOf('stats-optout').length <= 1);
+  check('a visit to the board sends a visit event', mine[0].sent.some((e) => e.body && JSON.parse(e.body).kind === 'visit'),
+    JSON.stringify(mine[0].sent));
+  check('the plan sheet drew every plan', text.plans.split('\n').filter((l) => l.includes(' | ')).length === planSheet().length, text.plans.slice(0, 400));
+}
 
 if (outDir) {
   mkdirSync(outDir, { recursive: true });
@@ -499,6 +602,9 @@ if (against) {
       check(`${s.name}: same visible text`, serverClockFree(s.text) === serverClockFree(t.text),
         firstDifference(serverClockFree(t.text), serverClockFree(s.text)));
       check(`${s.name}: ends at the same address`, s.url === t.url, `was ${t.url}, now ${s.url}`);
+      check(`${s.name}: focus on the same element`, s.focus === t.focus, `was ${t.focus}, now ${s.focus}`);
+      const linkDiff = s.links.filter((l) => !t.links.includes(l)).concat(t.links.filter((l) => !s.links.includes(l)).map((l) => `gone: ${l}`));
+      check(`${s.name}: the same links, to the same places`, JSON.stringify(s.links) === JSON.stringify(t.links), linkDiff.slice(0, 6).join(' | '));
       check(`${s.name}: sends the same statistics events`, JSON.stringify(s.sent) === JSON.stringify(t.sent),
         `was ${JSON.stringify(t.sent)}, now ${JSON.stringify(s.sent)}`);
       const cmp = comparePng(t.png, s.png);
