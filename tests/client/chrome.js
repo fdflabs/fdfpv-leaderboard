@@ -49,6 +49,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * source run before any page script on every navigation (the frozen clock).
  * A request whose path is in `swallow` is answered 204 here and never
  * reaches the board; its method, path and body are kept in `swallowed`.
+ * A path in `stubs` is answered with the JSON set there.
  */
 export async function openTab({ allowOrigin, seed = [], width = 1280, height = 900, swallow = [] }) {
   const binary = chromePath();
@@ -113,6 +114,9 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
   /* Page errors are evidence; a blocked request is the harness working. */
   const errors = [];
   const swallowed = [];
+  /* Path to { status, body }: answered here with that JSON instead of by
+   * the board, for a scene that needs an answer the board cannot give. */
+  const stubs = new Map();
   handlers.push(async (msg) => {
     if (msg.sessionId !== session) {
       return;
@@ -125,6 +129,15 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
     } else if (msg.method === 'Fetch.requestPaused') {
       const { requestId, request } = msg.params;
       const path = request.url.startsWith(allowOrigin) ? new URL(request.url).pathname : null;
+      if (path && stubs.has(path)) {
+        const { status, body } = stubs.get(path);
+        await send('Fetch.fulfillRequest', {
+          requestId, responseCode: status,
+          responseHeaders: [{ name: 'content-type', value: 'application/json; charset=utf-8' }],
+          body: Buffer.from(JSON.stringify(body)).toString('base64'),
+        }).catch(() => {});
+        return;
+      }
       if (path && swallow.includes(path)) {
         swallowed.push({ method: request.method, path, body: request.postData ?? null });
         await send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: [] }).catch(() => {});
@@ -191,5 +204,12 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
     await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
 
-  return { send, evaluate, until, navigate, screenshot, close, errors, swallowed, sleep };
+  /* Script run before page scripts on the next navigations, until the
+   * returned function is called. */
+  async function beforePages(source) {
+    const { identifier } = await send('Page.addScriptToEvaluateOnNewDocument', { source });
+    return () => send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
+  }
+
+  return { send, evaluate, until, navigate, screenshot, close, errors, swallowed, stubs, beforePages, sleep };
 }

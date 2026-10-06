@@ -174,7 +174,7 @@ const BUGS = `(() => {
   document.getElementById('reload').click();
 })()`;
 
-function scenes(trackIds) {
+function scenes(trackIds, fixtures) {
   const [field, furniture, room, wing, ring] = trackIds;
   const base = [
     { name: 'tracks', path: '/' },
@@ -193,6 +193,7 @@ function scenes(trackIds) {
     { name: 'credits', path: '/', act: `document.getElementById('credits-sheet').hidden = false`,
       ready: `document.querySelectorAll('#credits-roll .credit').length > 0` },
     { name: 'stats', path: '/#stats', ready: `!document.getElementById('view-stats').hidden` },
+    ...statsScenes(fixtures),
     { name: 'admin', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden` },
     { name: 'admin-sheet', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
       then: `location.hash = '#track=${field}'`, thenReady: `!document.getElementById('sheet').hidden` },
@@ -235,6 +236,89 @@ function scenes(trackIds) {
 }
 
 /*
+ * The statistics tab beyond the board's own numbers: the table and a
+ * focused bar, the opt out switch, what a visit sends for a returning
+ * browser, an already counted one, a sponsor arrival (and the address bar
+ * cleaned of it), an expired sponsor, a browser asking not to be tracked,
+ * and three answers the seeded board cannot give: nothing counted yet, a
+ * board that is down, and a busy month with a long tail of countries.
+ */
+const STATS_KEY = 'webfpv.stats.v1';
+const TODAY = 'new Date().toISOString().slice(0, 10)';
+const STATS_READY = `!document.getElementById('view-stats').hidden && document.getElementById('stats-fresh').textContent.length > 0`;
+
+function statsScenes(fixtures) {
+  const keep = (state) => `localStorage.setItem('${STATS_KEY}', JSON.stringify(${state}))`;
+  return [
+    { name: 'stats-table', path: '/#stats', ready: STATS_READY,
+      act: `(() => { const d = document.querySelector('#stats-trend details'); d.open = true; d.dispatchEvent(new Event('toggle')); })()` },
+    { name: 'stats-tip', path: '/#stats', ready: STATS_READY,
+      act: `[...document.querySelectorAll('#stats-trend svg')[0].querySelectorAll('.bar-hit')].at(-1).focus()` },
+    { name: 'stats-optout', path: '/#stats', ready: STATS_READY,
+      act: `document.getElementById('stats-count-me').click()`,
+      then: `location.reload()`, thenReady: STATS_READY },
+    { name: 'stats-returning', path: '/', before: keep(`{ firstDay: '2026-01-01' }`) },
+    { name: 'stats-counted-today', path: '/', before: keep(`{ firstDay: '2026-01-01', lastVisitDay: ${TODAY} }`) },
+    { name: 'stats-sponsor', path: '/?utm_source=Acme-Poster&utm_campaign=spring&keep=1#stats', ready: STATS_READY },
+    { name: 'stats-sponsor-held', path: '/', before: keep(`{ source: { slug: 'acme', day: ${TODAY} } }`) },
+    { name: 'stats-sponsor-expired', path: '/', before: keep(`{ source: { slug: 'acme', day: '2025-01-01' } }`) },
+    { name: 'stats-gpc', path: '/#stats', ready: STATS_READY,
+      init: `Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true })` },
+    { name: 'stats-empty', path: '/#stats', ready: STATS_READY, stub: { '/api/stats': { status: 200, body: fixtures.empty } } },
+    { name: 'stats-down', path: '/#stats', ready: STATS_READY, stub: { '/api/stats': { status: 503, body: { error: 'The board is resting.' } } } },
+    { name: 'stats-busy', path: '/#stats', ready: STATS_READY, stub: { '/api/stats': { status: 200, body: fixtures.busy } } },
+  ];
+}
+
+/* The three stand-in answers, built from the seeded board's real one so
+ * they keep its shape. */
+function statsFixtures(real, frozenMs) {
+  const generatedUtc = new Date(frozenMs - 40_000).toISOString();
+  const zeroDay = (row) => ({ ...row, visits: 0, newVisitors: 0, returningVisitors: 0, sessions: 0, laps: 0, flightS: 0 });
+  const empty = {
+    ...real,
+    generatedUtc,
+    firstDay: null,
+    today: zeroDay(real.today),
+    days: real.days.map(zeroDay),
+    window: { ...real.window, visits: 0, sessions: 0, laps: 0, flightS: 0 },
+    countries: [], sources: [], craft: [], inputs: [], maps: [],
+    allTime: { laps: 0, sessions: 0, visits: 0, flightS: 0, countries: 0 },
+    board: { tracks: 0, times: 0, pilots: 0, pilotsOnMoreThanOneDay: 0 },
+    live: { flying: 0 },
+  };
+  const codes = ['PY', 'AR', 'BR', 'UY', 'CL', 'BO', 'PE', 'CO', 'MX', 'US', 'ES', 'DE', 'AU', 'NZ', 'JP', 'ZZ'];
+  const row = (key, i) => ({ key, visits: 400 - i * 23, sessions: 900 - i * 51, laps: 3000 - i * 170 });
+  const busy = {
+    ...real,
+    generatedUtc,
+    days: real.days.map((d, i) => ({
+      ...d, visits: (i * 37) % 260, newVisitors: (i * 29) % 200, returningVisitors: (i * 11) % 60,
+      sessions: (i * 53) % 400, laps: i === 17 ? 12_400 : (i * 97) % 3000, flightS: [30, 600, 7200, 50_000][i % 4],
+    })),
+    today: { ...real.today, visits: 1234, newVisitors: 1000, returningVisitors: 234, sessions: 2345, laps: 15_000, flightS: 40_000 },
+    window: { ...real.window, visits: 21_000, sessions: 34_000, laps: 1_250_000, flightS: 9_000_000 },
+    countries: codes.map(row),
+    sources: [
+      { key: 'direct', name: 'Direct', visits: 900, sessions: 1500, laps: 9000 },
+      { key: 'other', name: 'Other', visits: 30, sessions: 40, laps: 90 },
+      { key: 'acme', name: 'Acme Hobbies', visits: 120, sessions: 300, laps: 2100 },
+      { key: 'zeta', name: 'Zeta FPV', visits: 120, sessions: 310, laps: 2000 },
+    ],
+    craft: [
+      { key: 'sky1800', visits: 1, sessions: 500, laps: 1 }, { key: '5inch', visits: 1, sessions: 300, laps: 1 },
+      { key: 'mystery9', visits: 1, sessions: 50, laps: 1 }, { key: 'other', visits: 1, sessions: 10, laps: 1 },
+    ],
+    inputs: [{ key: 'gamepad', visits: 1, sessions: 600, laps: 1 }, { key: 'touch', visits: 1, sessions: 40, laps: 1 }],
+    maps: [{ key: 'custom', visits: 1, sessions: 700, laps: 1 }, { key: 'other', visits: 1, sessions: 3, laps: 1 }],
+    allTime: { laps: 2_345_678, sessions: 120_000, visits: 45_000, flightS: 30_000_000, countries: 41 },
+    board: { tracks: 88, times: 1200, pilots: 340, pilotsOnMoreThanOneDay: 120 },
+    live: { flying: 7 },
+  };
+  return { empty, busy };
+}
+
+/*
  * The page paints a plan when its canvas first has a size and again 140 ms
  * after a resize. A card painted while the layout was still moving keeps a
  * plate a pixel off until the next resize, and whether that happens
@@ -255,7 +339,7 @@ async function settle(tab) {
   }
 }
 
-async function walk(tree, template, frozenMs, trackIds) {
+async function walk(tree, template, frozenMs, trackIds, fixtures) {
   const file = join(tmpdir(), `client-board-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
   copyFileSync(template, file);
   const board = await startBoard(tree, file);
@@ -266,7 +350,7 @@ async function walk(tree, template, frozenMs, trackIds) {
   const tab = await openTab({ allowOrigin: board.origin, seed: seedScripts(frozenMs), swallow: ['/api/stats/events'] });
   const seen = [];
   try {
-    for (const scene of scenes(trackIds)) {
+    for (const scene of scenes(trackIds, fixtures)) {
       await tab.navigate(`${board.origin}/empty`);
       await tab.evaluate('localStorage.clear(); sessionStorage.clear(); true');
       if (scene.before) {
@@ -275,6 +359,11 @@ async function walk(tree, template, frozenMs, trackIds) {
       /* Room for the previous scene's unload beacon to land before this
        * scene starts counting what it sends. */
       await tab.sleep(400);
+      tab.stubs.clear();
+      for (const [path, answer] of Object.entries(scene.stub || {})) {
+        tab.stubs.set(path, answer);
+      }
+      const dropInit = scene.init ? await tab.beforePages(scene.init) : null;
       const errorsBefore = tab.errors.length;
       const sentBefore = tab.swallowed.length;
       await tab.navigate(`${board.origin}${scene.path}`);
@@ -301,8 +390,15 @@ async function walk(tree, template, frozenMs, trackIds) {
         await tab.until(scene.thenReady);
         await settle(tab);
       }
+      await dropInit?.();
+      /* The two readings of the server's real clock (see serverClockFree)
+       * are masked on the page itself too, so the screenshots agree. */
+      await tab.evaluate(`for (const n of document.querySelectorAll('#admin-until, #stats-fresh')) {
+        n.textContent = n.textContent.replace(/(tomorrow at |mañana a las )?\\b\\d{1,2}:\\d{2}( [AP]M)?\\b/g, '<clock>').replace(/\\b\\d+ min\\b/g, '<n> min');
+      } true`);
       seen.push({
         name: scene.name,
+        url: await tab.evaluate('location.href.replace(location.origin, "")'),
         text: await tab.evaluate('document.body.innerText'),
         ids: await tab.evaluate('[...document.querySelectorAll("[id]")].map((n) => n.id).sort()'),
         png: await tab.screenshot(),
@@ -342,17 +438,20 @@ const scratch = mkdtempSync(join(tmpdir(), 'client-check-'));
 const template = join(scratch, 'board.json');
 const seeder = await startBoard(root, template);
 let trackIds;
+let realStats;
 try {
   ({ tracks: trackIds } = await seedBoard(seeder.origin));
+  realStats = await (await fetch(`${seeder.origin}/api/stats`)).json();
 } finally {
   seeder.stop();
 }
 await new Promise((r) => setTimeout(r, 300));
 /* An hour after seeding, on a whole minute. */
 const frozenMs = Math.ceil((Date.now() + 3_600_000) / 60_000) * 60_000;
+const fixtures = statsFixtures(realStats, frozenMs);
 
 console.log('\nthis tree');
-const mine = await walk(root, template, frozenMs, trackIds);
+const mine = await walk(root, template, frozenMs, trackIds, fixtures);
 for (const s of mine) {
   check(`${s.name}: no page error`, s.errors.length === 0, s.errors.join(' | '));
 }
@@ -369,6 +468,15 @@ check('the statistics tab shows counters', /\d/.test(text.stats) && text.stats !
 check('the admin panel says who signed in', text.admin.includes(ADMIN));
 check('the inbox lists the seeded tickets', text.bugs.includes('Gate flickers at dusk') && text.bugs.includes('Tab froze after a reset'));
 check('Spanish changes the page', text['es-tracks'] !== text.tracks);
+const sentOf = (name) => mine.find((m) => m.name === name).sent.map((e) => JSON.parse(e.body));
+check('a returning browser says so', sentOf('stats-returning').some((e) => e.kind === 'visit' && e.returning === true));
+check('a browser counted today sends no visit', !sentOf('stats-counted-today').some((e) => e.kind === 'visit'));
+check('a sponsor arrival is carried, and the address loses its utm_ parameters',
+  sentOf('stats-sponsor').some((e) => e.source === 'acme-poster') && !mine.find((m) => m.name === 'stats-sponsor').url.includes('utm_'),
+  mine.find((m) => m.name === 'stats-sponsor').url);
+check('an expired sponsor is not', sentOf('stats-sponsor-expired').every((e) => e.source === null));
+check('a browser asking not to be tracked sends nothing', sentOf('stats-gpc').length === 0);
+check('an opted out browser sends nothing after the switch', sentOf('stats-optout').length <= 1);
 check('a visit to the board sends a visit event', mine[0].sent.some((e) => e.body && JSON.parse(e.body).kind === 'visit'),
   JSON.stringify(mine[0].sent));
 check('the plan sheet drew every plan', text.plans.split('\n').filter((l) => l.includes(' | ')).length === planSheet().length, text.plans.slice(0, 400));
@@ -385,11 +493,12 @@ if (against) {
   console.log(`\nagainst ${against}`);
   const baseTree = buildBaseline(against);
   try {
-    const theirs = await walk(baseTree, template, frozenMs, trackIds);
+    const theirs = await walk(baseTree, template, frozenMs, trackIds, fixtures);
     for (const [i, s] of mine.entries()) {
       const t = theirs[i];
       check(`${s.name}: same visible text`, serverClockFree(s.text) === serverClockFree(t.text),
         firstDifference(serverClockFree(t.text), serverClockFree(s.text)));
+      check(`${s.name}: ends at the same address`, s.url === t.url, `was ${t.url}, now ${s.url}`);
       check(`${s.name}: sends the same statistics events`, JSON.stringify(s.sent) === JSON.stringify(t.sent),
         `was ${JSON.stringify(t.sent)}, now ${JSON.stringify(s.sent)}`);
       const cmp = comparePng(t.png, s.png);
