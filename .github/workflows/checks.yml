@@ -41,4 +41,6 @@ jobs:
       - run: npm run lint:nouns
       - run: npm run lint:copy
       - run: npm run strings:selftest
+      - run: npm run client:golden
+      - run: npm run client:check
       - run: npm run wing:e2e
