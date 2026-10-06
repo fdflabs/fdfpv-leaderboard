@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 import {
   inspectBugCreate, inspectBugPatch, inspectDocument, inspectGhost, layoutHash, normaliseLapMs, normaliseName, MAP_IDS,
   creditOf, normaliseThreeMs, planFromDocument, trackClassOf, TRACK_CLASSES,
-  inspectStatsEvent, normaliseCountry, statsDay, MAP_ELEMENT_TYPES, RUN_MAPS,
+  inspectStatsEvent, STATS_CRAFT, normaliseCountry, statsDay, MAP_ELEMENT_TYPES, RUN_MAPS,
   inspectBugImages, MAX_BUG_IMAGE_BYTES,
 } from './validate.js';
 import { sourceKey } from './sponsors.js';
@@ -2379,6 +2379,16 @@ async function testStats() {
 
   const ok = (body) => inspectStatsEvent(body, sourceKey);
 
+  /* The simulator's CURRENT catalog, from a checkout of it: the submodule
+   * under vendor/ is pinned far behind the game and does not have today's
+   * ids, so the real list has to be named. Unset says `skip`, as the admin
+   * password check does, rather than passing against a list this file typed. */
+  const catalogPath = process.env.FDFPV_AIRFRAMES;
+  const airframeIds = catalogPath ? (await import(catalogPath)).AIRFRAME_IDS : [];
+  if (!catalogPath) {
+    console.log('  skip  FDFPV_AIRFRAMES (path to the simulator\'s configs/airframes.js) is not set');
+  }
+
   check('a visit is accepted', !ok({
     v: 1, kind: 'visit', surface: 'sim', returning: false,
   }).error);
@@ -2397,9 +2407,21 @@ async function testStats() {
   check('a visit with no new-or-returning answer is refused', Boolean(ok({
     v: 1, kind: 'visit', surface: 'sim',
   }).error));
-  check('an aircraft this board does not count is refused', Boolean(ok({
-    v: 1, kind: 'session', craft: 'tinywhoop', map: 'custom', input: 'gamepad',
-  }).error));
+  check('the two ids every older client sends are still counted as themselves', ['5inch', 'whoop65'].every((id) => ok({
+    v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad',
+  }).event.craft === id));
+  if (catalogPath) {
+    check('every airframe id of the simulator\'s catalog is counted as itself, in a session and in a flush', airframeIds.length >= 20 && airframeIds.every((id) => (
+      ok({ v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad' }).event.craft === id
+      && ok({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: id, flightS: 5 }).event.craft === id
+    )), airframeIds.filter((id) => !STATS_CRAFT.includes(id)).join());
+  }
+  check('an aircraft this board has never heard of folds to other, in a session and in a flush', ['tinywhoop', 'Sky Hunter!', '', 'x'.repeat(500), 7, null].every((raw) => (
+    ok({ v: 1, kind: 'session', craft: raw, map: 'custom', input: 'gamepad' }).event?.craft === 'other'
+    && ok({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: raw, flightS: 5 }).event?.craft === 'other'
+  )));
+  check('a session or flush naming no aircraft at all folds to other', ok({ v: 1, kind: 'session', map: 'custom' }).event?.craft === 'other'
+    && ok({ v: 1, kind: 'flush', tab: 'aaaa1111' }).event?.craft === 'other');
   check('a long tab handle is refused', Boolean(ok({
     v: 1, kind: 'flush', tab: 'x'.repeat(200), craft: '5inch',
   }).error));
