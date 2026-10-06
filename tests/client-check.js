@@ -218,13 +218,21 @@ async function walk(tree, template, frozenMs, trackIds) {
   const file = join(tmpdir(), `client-board-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
   copyFileSync(template, file);
   const board = await startBoard(tree, file);
-  const tab = await openTab({ allowOrigin: board.origin, seed: seedScripts(frozenMs) });
+  /* The page's own statistics events are caught rather than counted: a
+   * beacon sent as one scene unloads lands before or after the next scene
+   * reads the counters depending on timing. What the page sends is kept
+   * and compared instead, which pins the wire format too. */
+  const tab = await openTab({ allowOrigin: board.origin, seed: seedScripts(frozenMs), swallow: ['/api/stats/events'] });
   const seen = [];
   try {
     for (const scene of scenes(trackIds)) {
       await tab.navigate(`${board.origin}/empty`);
       await tab.evaluate('localStorage.clear(); sessionStorage.clear(); true');
+      /* Room for the previous scene's unload beacon to land before this
+       * scene starts counting what it sends. */
+      await tab.sleep(400);
       const errorsBefore = tab.errors.length;
+      const sentBefore = tab.swallowed.length;
       await tab.navigate(`${board.origin}${scene.path}`);
       await settle(tab);
       if (scene.plans) {
@@ -255,6 +263,7 @@ async function walk(tree, template, frozenMs, trackIds) {
         ids: await tab.evaluate('[...document.querySelectorAll("[id]")].map((n) => n.id).sort()'),
         png: await tab.screenshot(),
         errors: tab.errors.slice(errorsBefore),
+        sent: tab.swallowed.slice(sentBefore),
       });
     }
   } finally {
@@ -316,6 +325,8 @@ check('the statistics tab shows counters', /\d/.test(text.stats) && text.stats !
 check('the admin panel says who signed in', text.admin.includes(ADMIN));
 check('the inbox lists the seeded tickets', text.bugs.includes('Gate flickers at dusk') && text.bugs.includes('Tab froze after a reset'));
 check('Spanish changes the page', text['es-tracks'] !== text.tracks);
+check('a visit to the board sends a visit event', mine[0].sent.some((e) => e.body && JSON.parse(e.body).kind === 'visit'),
+  JSON.stringify(mine[0].sent));
 check('the plan sheet drew every plan', text.plans.split('\n').filter((l) => l.includes(' | ')).length === planSheet().length, text.plans.slice(0, 400));
 
 if (outDir) {
@@ -335,6 +346,8 @@ if (against) {
       const t = theirs[i];
       check(`${s.name}: same visible text`, serverClockFree(s.text) === serverClockFree(t.text),
         firstDifference(serverClockFree(t.text), serverClockFree(s.text)));
+      check(`${s.name}: sends the same statistics events`, JSON.stringify(s.sent) === JSON.stringify(t.sent),
+        `was ${JSON.stringify(t.sent)}, now ${JSON.stringify(s.sent)}`);
       const cmp = comparePng(t.png, s.png);
       check(`${s.name}: same screenshot (${cmp.sameSize ? `${(cmp.share * 100).toFixed(3)}% of pixels differ` : `sizes ${cmp.sizes.join(' vs ')}`})`,
         cmp.sameSize && cmp.share <= PIXEL_SHARE);

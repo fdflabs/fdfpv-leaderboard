@@ -47,8 +47,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /*
  * `allowOrigin` is the only origin requests may reach. `seed` is script
  * source run before any page script on every navigation (the frozen clock).
+ * A request whose path is in `swallow` is answered 204 here and never
+ * reaches the board; its method, path and body are kept in `swallowed`.
  */
-export async function openTab({ allowOrigin, seed = [], width = 1280, height = 900 }) {
+export async function openTab({ allowOrigin, seed = [], width = 1280, height = 900, swallow = [] }) {
   const binary = chromePath();
   if (!binary) {
     throw new Error('no Chrome found; set BOARD_CHROME');
@@ -110,6 +112,7 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
 
   /* Page errors are evidence; a blocked request is the harness working. */
   const errors = [];
+  const swallowed = [];
   handlers.push(async (msg) => {
     if (msg.sessionId !== session) {
       return;
@@ -121,7 +124,13 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
       errors.push(`console.error: ${msg.params.args.map((a) => a.value ?? a.description).join(' ')}`);
     } else if (msg.method === 'Fetch.requestPaused') {
       const { requestId, request } = msg.params;
-      const mine = request.url.startsWith(allowOrigin);
+      const path = request.url.startsWith(allowOrigin) ? new URL(request.url).pathname : null;
+      if (path && swallow.includes(path)) {
+        swallowed.push({ method: request.method, path, body: request.postData ?? null });
+        await send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: [] }).catch(() => {});
+        return;
+      }
+      const mine = path !== null;
       await send(mine ? 'Fetch.continueRequest' : 'Fetch.failRequest',
         mine ? { requestId } : { requestId, errorReason: 'BlockedByClient' }).catch(() => {});
     }
@@ -173,5 +182,5 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
     await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
 
-  return { send, evaluate, until, navigate, screenshot, close, errors, sleep };
+  return { send, evaluate, until, navigate, screenshot, close, errors, swallowed, sleep };
 }
