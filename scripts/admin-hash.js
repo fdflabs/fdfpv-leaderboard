@@ -1,99 +1,106 @@
 /*
- * admin-hash.js: mint one line of BOARD_ADMINS.
- *
- * An admin of the board is an address and a password, and the board stores
- * the password as an scrypt hash. This prints the line that says so, which
- * is then pasted into BOARD_ADMINS on the host.
+ * admin-hash.js: print one BOARD_ADMINS record for an address.
  *
  *   node scripts/admin-hash.js someone@example.com
- *
- * It asks for the password twice and does not echo it, so the word itself
- * never reaches a shell history, a process list or a scrollback. Piping
- * works too, for a script:
- *
  *   printf '%s' "$PASSWORD" | node scripts/admin-hash.js someone@example.com
  *
- * BOARD_ADMINS takes several of these, separated by commas or newlines, and
- * REPLACES the built-in list rather than adding to it. See src/admin.js.
+ * At a terminal it asks for the password twice without echoing it, so the
+ * word never lands in a shell history, a process list or scrollback; piped,
+ * it reads one password and asks nothing. The record it prints is the
+ * scrypt hash src/admin.js verifies, at the cost src/admin.js hashes a
+ * `plain:` record at. BOARD_ADMINS takes several, separated by commas or
+ * newlines, and replaces the built-in list (which is empty).
  *
- * This file is part of WebFPVLeaderboard.
+ * This file is part of the Paraguayan Drone Combat Simulator.
  *
- * WebFPVLeaderboard is free software: you can redistribute it and/or modify
+ * The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at
  * your option) any later version.
  *
- * WebFPVLeaderboard is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY, without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with WebFPVLeaderboard. If not, see <https://www.gnu.org/licenses/>.
+ * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-
 import { randomBytes, scryptSync } from 'node:crypto';
-import { createInterface } from 'node:readline';
-import { normaliseEmail, PASSWORD_MIN, PASSWORD_MAX } from '../src/admin.js';
+import { normaliseEmail, PASSWORD_MAX, PASSWORD_MIN, SCRYPT_COST } from '../src/admin.js';
 
-const N = 16384;
-const r = 8;
-const p = 1;
+function fail(code, ...lines) {
+  for (const line of lines) {
+    console.error(line);
+  }
+  process.exit(code);
+}
+
+/*
+ * One line typed with echo off. The terminal goes into raw mode so each
+ * key arrives here instead of being printed, which also means Enter,
+ * Backspace and Ctrl-C have to be handled by hand.
+ */
+function typedSecretly(prompt) {
+  return new Promise((resolve) => {
+    const { stdin, stdout } = process;
+    let typed = '';
+    stdout.write(prompt);
+    stdin.setRawMode(true);
+    stdin.setEncoding('utf8');
+    const onKey = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\u0003') {
+          stdin.setRawMode(false);
+          stdout.write('\n');
+          process.exit(130);
+        }
+        if (ch === '\r' || ch === '\n') {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.off('data', onKey);
+          stdout.write('\n');
+          resolve(typed);
+          return;
+        }
+        typed = ch === '\u007f' || ch === '\b' ? typed.slice(0, -1) : typed + ch;
+      }
+    };
+    stdin.on('data', onKey);
+    stdin.resume();
+  });
+}
+
+/* Everything piped in, less one trailing line end that `echo` adds. */
+async function piped() {
+  let text = '';
+  for await (const chunk of process.stdin.setEncoding('utf8')) {
+    text += chunk;
+  }
+  return text.replace(/\r?\n$/, '');
+}
 
 const email = normaliseEmail(process.argv[2]);
 if (!email) {
-  console.error('Usage: node scripts/admin-hash.js someone@example.com');
-  console.error('The address is the one they will type into the board\'s Admin panel.');
-  process.exit(2);
-}
-
-/* Typed, with the terminal's echo off. readline's own `output` is what
- * writes the characters back, so muting the write is what hides them. */
-function askHidden(prompt) {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    let muted = false;
-    const write = rl.output.write.bind(rl.output);
-    rl.output.write = (chunk, ...rest) => (muted ? true : write(chunk, ...rest));
-    rl.question(prompt, (answer) => {
-      rl.output.write = write;
-      rl.close();
-      process.stdout.write('\n');
-      resolve(answer);
-    });
-    muted = true;
-  });
-}
-
-/* Piped, one password and no prompt. */
-function readPiped() {
-  return new Promise((resolve) => {
-    let text = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
-      text += chunk;
-    });
-    process.stdin.on('end', () => resolve(text.replace(/\r?\n$/, '')));
-  });
+  fail(2,
+    'Usage: node scripts/admin-hash.js someone@example.com',
+    'The address is the one they will type into the board\'s Admin panel.');
 }
 
 let password;
 if (process.stdin.isTTY) {
-  password = await askHidden('Password: ');
-  const again = await askHidden('Again: ');
-  if (password !== again) {
-    console.error('Those did not match. Nothing written.');
-    process.exit(1);
+  password = await typedSecretly('Password: ');
+  if (await typedSecretly('Again: ') !== password) {
+    fail(1, 'Those did not match. Nothing written.');
   }
 } else {
-  password = await readPiped();
+  password = await piped();
 }
-
 if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
-  console.error(`A password here is ${PASSWORD_MIN} to ${PASSWORD_MAX} characters. Nothing written.`);
-  process.exit(1);
+  fail(1, `A password here is ${PASSWORD_MIN} to ${PASSWORD_MAX} characters. Nothing written.`);
 }
 
+const { N, r, p } = SCRYPT_COST;
 const salt = randomBytes(16);
 const hash = scryptSync(password, salt, 32, { N, r, p });
-console.log(`${email}:scrypt:${N}:${r}:${p}:${salt.toString('hex')}:${hash.toString('hex')}`);
+console.log([email, 'scrypt', N, r, p, salt.toString('hex'), hash.toString('hex')].join(':'));

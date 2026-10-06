@@ -1,0 +1,5777 @@
+{
+ "full": [
+  [
+   "health",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "health trailing slash",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "version",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "fdfpv": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+   }
+  ],
+  [
+   "config",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "http://board.local:1234",
+     "simOrigin": "https://sim.example"
+    }
+   }
+  ],
+  [
+   "config forwarded",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "https://board.example",
+     "simOrigin": "https://sim.example"
+    }
+   }
+  ],
+  [
+   "config odd host",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "http://127.0.0.1:<port>",
+     "simOrigin": "https://sim.example"
+    }
+   }
+  ],
+  [
+   "options",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "https://sim.example",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "origin reflected",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "https://elsewhere.example",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "unknown route",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Nothing at that address."
+    }
+   }
+  ],
+  [
+   "wrong method",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Nothing at that address."
+    }
+   }
+  ],
+  [
+   "publish",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Ada Rook",
+     "editKey": "<key-1>",
+     "id": "trk-1a2b3c4d",
+     "name": "Costanera",
+     "timesCleared": false,
+     "updated": false
+    }
+   }
+  ],
+  [
+   "publish again, no key",
+   {
+    "status": 409,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "conflict": true,
+     "error": "This track is already on the board. Publish a copy under a new name, or update it from the browser that first sent it."
+    }
+   }
+  ],
+  [
+   "publish bad json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+   }
+  ],
+  [
+   "publish null",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not a JSON object."
+    }
+   }
+  ],
+  [
+   "publish array",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not a JSON object."
+    }
+   }
+  ],
+  [
+   "publish bad author",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A published track needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens."
+    }
+   }
+  ],
+  [
+   "publish bad document",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "This board accepts schemaVersion 1, 2, 3 and 4 tracks."
+    }
+   }
+  ],
+  [
+   "publish no document",
+   {
+    "status": 500,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "The board failed."
+    }
+   }
+  ],
+  [
+   "publish bad tags",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "There is no tag called \"nope\"."
+    }
+   }
+  ],
+  [
+   "publish rename with key",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Ada Rook",
+     "id": "trk-1a2b3c4d",
+     "name": "Costanera Norte",
+     "timesCleared": false,
+     "updated": true
+    }
+   }
+  ],
+  [
+   "publish room",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Bo",
+     "editKey": "<key-2>",
+     "id": "trk-2b3c4d5e",
+     "name": "Sala",
+     "timesCleared": false,
+     "updated": false
+    }
+   }
+  ],
+  [
+   "publish map",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Cy",
+     "editKey": "<key-3>",
+     "id": "trk-3c4d5e6f",
+     "name": "Ring",
+     "timesCleared": false,
+     "updated": false
+    }
+   }
+  ],
+  [
+   "publish too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track is too large to publish."
+    }
+   }
+  ],
+  [
+   "list",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "tags": [
+      {
+       "id": "race",
+       "label": "Race track"
+      },
+      {
+       "id": "skills",
+       "label": "Skills practice"
+      },
+      {
+       "id": "experiment",
+       "label": "Experiment"
+      },
+      {
+       "id": "freestyle",
+       "label": "Freestyle"
+      },
+      {
+       "id": "beginner",
+       "label": "Beginner"
+      },
+      {
+       "id": "technical",
+       "label": "Technical"
+      },
+      {
+       "id": "micro",
+       "label": "Small field"
+      },
+      {
+       "id": "big",
+       "label": "Big field"
+      },
+      {
+       "id": "showcase",
+       "label": "Showcase"
+      }
+     ],
+     "tracks": [
+      {
+       "author": "Cy",
+       "best": null,
+       "designer": "",
+       "elements": 3,
+       "gates": 3,
+       "gifUtc": null,
+       "hasGif": false,
+       "hasLogo": false,
+       "id": "trk-3c4d5e6f",
+       "map": "swiss2",
+       "name": "Ring",
+       "plan": {
+        "depth": 89.28203199999999,
+        "map": "swiss2",
+        "marks": [
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 70,
+          "y": 44.641016,
+          "yaw": 1.570796
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 10,
+          "yaw": -0.523599
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 79.28203199999999,
+          "yaw": -2.617994
+         }
+        ],
+        "numbers": [
+         {
+          "n": 1,
+          "stack": 0,
+          "x": 70,
+          "y": 44.641016
+         },
+         {
+          "n": 2,
+          "stack": 0,
+          "x": 10,
+          "y": 10
+         },
+         {
+          "n": 3,
+          "stack": 0,
+          "x": 10,
+          "y": 79.28203199999999
+         }
+        ],
+        "path": [
+         {
+          "x": 70,
+          "y": 44.641016
+         },
+         {
+          "x": 10,
+          "y": 10
+         },
+         {
+          "x": 10,
+          "y": 79.28203199999999
+         }
+        ],
+        "trackClass": "full",
+        "width": 80
+       },
+       "planes": "<planes some>",
+       "publishedUtc": "<t>",
+       "series": "",
+       "tags": [],
+       "times": 0,
+       "trackClass": "full",
+       "updatedUtc": "<t>",
+       "wing": {
+        "best": null,
+        "times": 0
+       }
+      },
+      {
+       "author": "Bo",
+       "best": null,
+       "designer": "",
+       "elements": 3,
+       "gates": 2,
+       "gifUtc": null,
+       "hasGif": false,
+       "hasLogo": false,
+       "id": "trk-2b3c4d5e",
+       "map": null,
+       "name": "Sala",
+       "plan": {
+        "depth": 6,
+        "marks": [
+         {
+          "padSize": 0.1,
+          "pads": 1,
+          "seq": false,
+          "spacing": 0.3,
+          "type": "startPads",
+          "x": 0,
+          "y": 1.5,
+          "yaw": 0
+         },
+         {
+          "clearW": 0.7112,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 0,
+          "y": 0.6,
+          "yaw": 0
+         },
+         {
+          "clearW": 0.7112,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 2,
+          "y": 0.6,
+          "yaw": 0
+         }
+        ],
+        "numbers": [
+         {
+          "n": 1,
+          "stack": 0,
+          "x": 0,
+          "y": 0.6
+         },
+         {
+          "n": 2,
+          "stack": 0,
+          "x": 2,
+          "y": 0.6
+         }
+        ],
+        "path": [
+         {
+          "x": 0,
+          "y": 0.6
+         },
+         {
+          "x": 2,
+          "y": 0.6
+         }
+        ],
+        "trackClass": "micro",
+        "width": 5
+       },
+       "planes": "<planes none>",
+       "publishedUtc": "<t>",
+       "series": "",
+       "tags": [],
+       "times": 0,
+       "trackClass": "micro",
+       "updatedUtc": "<t>",
+       "wing": null
+      },
+      {
+       "author": "Ada Rook",
+       "best": null,
+       "designer": "",
+       "elements": 2,
+       "gates": 2,
+       "gifUtc": null,
+       "hasGif": false,
+       "hasLogo": false,
+       "id": "trk-1a2b3c4d",
+       "map": null,
+       "name": "Costanera Norte",
+       "plan": {
+        "depth": 40,
+        "marks": [
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 8,
+          "yaw": 0
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 30,
+          "y": 8,
+          "yaw": 0
+         }
+        ],
+        "numbers": [
+         {
+          "n": 1,
+          "stack": 0,
+          "x": 10,
+          "y": 8
+         },
+         {
+          "n": 2,
+          "stack": 0,
+          "x": 30,
+          "y": 8
+         }
+        ],
+        "path": [
+         {
+          "x": 10,
+          "y": 8
+         },
+         {
+          "x": 30,
+          "y": 8
+         }
+        ],
+        "trackClass": "full",
+        "width": 60
+       },
+       "planes": "<planes none>",
+       "publishedUtc": "<t>",
+       "series": "",
+       "tags": [
+        "race",
+        "technical"
+       ],
+       "times": 0,
+       "trackClass": "full",
+       "updatedUtc": "<t>",
+       "wing": null
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "one",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Ada Rook",
+     "best": null,
+     "designer": "",
+     "elements": 2,
+     "gates": 2,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-1a2b3c4d",
+     "map": null,
+     "name": "Costanera Norte",
+     "plan": {
+      "depth": 40,
+      "marks": [
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 10,
+        "y": 8,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 30,
+        "y": 8,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 10,
+        "y": 8
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 30,
+        "y": 8
+       }
+      ],
+      "path": [
+       {
+        "x": 10,
+        "y": 8
+       },
+       {
+        "x": 30,
+        "y": 8
+       }
+      ],
+      "trackClass": "full",
+      "width": 60
+     },
+     "planes": "<planes none>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [
+      "race",
+      "technical"
+     ],
+     "times": [],
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": null
+    }
+   }
+  ],
+  [
+   "one missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track is not on the board."
+    }
+   }
+  ],
+  [
+   "one bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "one bad escape",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "document",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Bo",
+     "document": {
+      "branding": {
+       "logo": null,
+       "logoName": ""
+      },
+      "createdUtc": "<t>",
+      "elements": [
+       {
+        "dims": {
+         "padSize": 0.1,
+         "pads": 1,
+         "spacing": 0.3
+        },
+        "id": "el-1",
+        "position": {
+         "x": 0,
+         "y": 1.5,
+         "z": 0
+        },
+        "type": "startPads",
+        "yaw": 0
+       },
+       {
+        "dims": {
+         "clearH": 0.7112,
+         "clearW": 0.7112,
+         "levels": 1,
+         "sillH": 0
+        },
+        "id": "el-2",
+        "position": {
+         "x": 0,
+         "y": 0.6,
+         "z": 0
+        },
+        "type": "gate",
+        "yaw": 0
+       },
+       {
+        "dims": {
+         "clearH": 0.7112,
+         "clearW": 0.7112,
+         "levels": 1,
+         "sillH": 0
+        },
+        "id": "el-3",
+        "position": {
+         "x": 2,
+         "y": 0.6,
+         "z": 0
+        },
+        "type": "gate",
+        "yaw": 0
+       }
+      ],
+      "field": {
+       "depth": 6,
+       "gridSize": 0.0254,
+       "width": 5
+      },
+      "id": "trk-2b3c4d5e",
+      "modifiedUtc": "<t>",
+      "name": "Sala",
+      "schemaVersion": 3,
+      "sequence": [
+       {
+        "apertureIndex": 0,
+        "elementId": "el-2",
+        "entry": 1,
+        "id": "seq-1"
+       },
+       {
+        "apertureIndex": 0,
+        "elementId": "el-3",
+        "entry": 1,
+        "id": "seq-2"
+       }
+      ],
+      "settings": {
+       "minCurveRadius": 2,
+       "samplesPerSegment": 24,
+       "tangentScale": 0.4
+      },
+      "trackClass": "micro"
+     },
+     "id": "trk-2b3c4d5e",
+     "name": "Sala"
+    }
+   }
+  ],
+  [
+   "document missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track is not on the board."
+    }
+   }
+  ],
+  [
+   "document bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "gif by owner",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bytes": 32,
+     "gifUtc": "<t>",
+     "id": "trk-2b3c4d5e"
+    }
+   }
+  ],
+  [
+   "gif with data prefix",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bytes": 32,
+     "gifUtc": "<t>",
+     "id": "trk-2b3c4d5e"
+    }
+   }
+  ],
+  [
+   "gif stranger",
+   {
+    "status": 403,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track was published from another browser, so this one cannot change its animation."
+    }
+   }
+  ],
+  [
+   "gif admin",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bytes": 32,
+     "gifUtc": "<t>",
+     "id": "trk-2b3c4d5e"
+    }
+   }
+  ],
+  [
+   "gif on a field",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "This board keeps an animation for a room, not for a field track."
+    }
+   }
+  ],
+  [
+   "gif not a gif",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That upload is not a GIF."
+    }
+   }
+  ],
+  [
+   "gif missing track",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track is not on the board."
+    }
+   }
+  ],
+  [
+   "gif bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "gif bad json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That upload was not readable."
+    }
+   }
+  ],
+  [
+   "gif get",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/gif",
+     "cache-control": "public, max-age=31536000, immutable",
+     "connection": "close",
+     "content-length": "32"
+    },
+    "body": "<bytes 32 30c6ec6ffe652928>"
+   }
+  ],
+  [
+   "gif get none",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track has no animation."
+    }
+   }
+  ],
+  [
+   "gif get bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "time",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "craft": null,
+     "id": "<tm-1>",
+     "lapMs": "<lap field>",
+     "name": "Ada Rook",
+     "postedUtc": "<t>",
+     "rank": 1,
+     "threeMs": 7135,
+     "times": 1
+    }
+   }
+  ],
+  [
+   "time no ghost",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A time on the board comes with its ghost. The simulator records one for every lap; post from there."
+    }
+   }
+  ],
+  [
+   "time bad ghost",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That ghost recording is not usable base64."
+    }
+   }
+  ],
+  [
+   "time unsigned",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A time on the board is signed by the pilot key the simulator keeps. Post from there."
+    }
+   }
+  ],
+  [
+   "time bad name",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A time on the board needs a name, two to twenty four letters, numbers, spaces, dots, underscores or hyphens."
+    }
+   }
+  ],
+  [
+   "time bad lap",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That lap time is not usable."
+    }
+   }
+  ],
+  [
+   "time bad json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Unexpected end of JSON input"
+    }
+   }
+  ],
+  [
+   "time array",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not a JSON object."
+    }
+   }
+  ],
+  [
+   "time forged",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That signature does not match this post."
+    }
+   }
+  ],
+  [
+   "time squatter",
+   {
+    "status": 403,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That name belongs to another pilot. Pick another name, or import their pilot key."
+    }
+   }
+  ],
+  [
+   "time bad craft",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That is not an aircraft this board knows."
+    }
+   }
+  ],
+  [
+   "time plane on a field",
+   {
+    "status": 422,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That lap does not hold up against the track: a plane races a track built inside a world, and this one is a field track of its own class."
+    }
+   }
+  ],
+  [
+   "time padded past the line",
+   {
+    "status": 422,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That lap does not hold up against the track: the track measures 2400 ms and the claim is 4000 ms."
+    }
+   }
+  ],
+  [
+   "time missing track",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "No track with that id is on the board."
+    }
+   }
+  ],
+  [
+   "time bad track id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "time second pilot",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "craft": null,
+     "id": "<tm-2>",
+     "lapMs": "<lap field>",
+     "name": "Bo",
+     "postedUtc": "<t>",
+     "rank": 2,
+     "threeMs": null,
+     "times": 2
+    }
+   }
+  ],
+  [
+   "time room",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "craft": null,
+     "id": "<tm-3>",
+     "lapMs": "<lap room>",
+     "name": "Bo",
+     "postedUtc": "<t>",
+     "rank": 1,
+     "threeMs": null,
+     "times": 1
+    }
+   }
+  ],
+  [
+   "time map quad",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "craft": null,
+     "id": "<tm-4>",
+     "lapMs": "<lap map>",
+     "name": "Ada Rook",
+     "postedUtc": "<t>",
+     "rank": 1,
+     "threeMs": null,
+     "times": 1
+    }
+   }
+  ],
+  [
+   "time map plane",
+   {
+    "status": 422,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That lap does not hold up against the track: the Skyhunter does not fit gate 1, 1.75 m wide."
+    }
+   }
+  ],
+  [
+   "one after times",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Ada Rook",
+     "best": {
+      "lapMs": "<lap field>",
+      "name": "Ada Rook"
+     },
+     "designer": "",
+     "elements": 2,
+     "gates": 2,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-1a2b3c4d",
+     "map": null,
+     "name": "Costanera Norte",
+     "plan": {
+      "depth": 40,
+      "marks": [
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 10,
+        "y": 8,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 30,
+        "y": 8,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 10,
+        "y": 8
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 30,
+        "y": 8
+       }
+      ],
+      "path": [
+       {
+        "x": 10,
+        "y": 8
+       },
+       {
+        "x": 30,
+        "y": 8
+       }
+      ],
+      "trackClass": "full",
+      "width": 60
+     },
+     "planes": "<planes none>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [
+      "race",
+      "technical"
+     ],
+     "times": [
+      {
+       "craft": null,
+       "hasGhost": true,
+       "id": "<tm-1>",
+       "lapMs": "<lap field>",
+       "name": "Ada Rook",
+       "postedUtc": "<t>",
+       "threeMs": 7135
+      },
+      {
+       "craft": null,
+       "hasGhost": true,
+       "id": "<tm-2>",
+       "lapMs": "<lap field>",
+       "name": "Bo",
+       "postedUtc": "<t>",
+       "threeMs": null
+      }
+     ],
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": null
+    }
+   }
+  ],
+  [
+   "map after times",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Cy",
+     "best": {
+      "lapMs": "<lap map>",
+      "name": "Ada Rook"
+     },
+     "designer": "",
+     "elements": 3,
+     "gates": 3,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-3c4d5e6f",
+     "map": "swiss2",
+     "name": "Ring",
+     "plan": {
+      "depth": 89.28203199999999,
+      "map": "swiss2",
+      "marks": [
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 70,
+        "y": 44.641016,
+        "yaw": 1.570796
+       },
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 10,
+        "y": 10,
+        "yaw": -0.523599
+       },
+       {
+        "clearW": 1.524,
+        "levels": 1,
+        "seq": true,
+        "type": "gate",
+        "x": 10,
+        "y": 79.28203199999999,
+        "yaw": -2.617994
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 70,
+        "y": 44.641016
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 10,
+        "y": 10
+       },
+       {
+        "n": 3,
+        "stack": 0,
+        "x": 10,
+        "y": 79.28203199999999
+       }
+      ],
+      "path": [
+       {
+        "x": 70,
+        "y": 44.641016
+       },
+       {
+        "x": 10,
+        "y": 10
+       },
+       {
+        "x": 10,
+        "y": 79.28203199999999
+       }
+      ],
+      "trackClass": "full",
+      "width": 80
+     },
+     "planes": "<planes some>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [],
+     "times": [
+      {
+       "craft": null,
+       "hasGhost": true,
+       "id": "<tm-4>",
+       "lapMs": "<lap map>",
+       "name": "Ada Rook",
+       "postedUtc": "<t>",
+       "threeMs": null
+      }
+     ],
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": {
+      "best": null,
+      "times": 0
+     }
+    }
+   }
+  ],
+  [
+   "ghost",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "ghost": "<ghost d7fca20ecbd9>",
+     "id": "<tm-1>",
+     "lapMs": "<lap field>",
+     "name": "Ada Rook"
+    }
+   }
+  ],
+  [
+   "ghost missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That time is not on the board."
+    }
+   }
+  ],
+  [
+   "ghost bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "claim",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "claimed": true,
+     "name": "Maverick"
+    }
+   }
+  ],
+  [
+   "claim again",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "claimed": false,
+     "name": "Maverick"
+    }
+   }
+  ],
+  [
+   "claim taken",
+   {
+    "status": 403,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That name belongs to another pilot. Pick another name, or import their pilot key."
+    }
+   }
+  ],
+  [
+   "claim wrong signature",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That signature does not match this name."
+    }
+   }
+  ],
+  [
+   "claim bad name",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A pilot name is 2 to 24 letters, numbers, spaces, dots, underscores or hyphens."
+    }
+   }
+  ],
+  [
+   "claim unsigned",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A time on the board is signed by the pilot key the simulator keeps. Post from there."
+    }
+   }
+  ],
+  [
+   "claim not json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Unexpected token 'x', \"x\" is not valid JSON"
+    }
+   }
+  ],
+  [
+   "claim null",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not usable."
+    }
+   }
+  ],
+  [
+   "link unsigned by old",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Both pilot keys must sign a link."
+    }
+   }
+  ],
+  [
+   "link same key",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A link names two different pilot keys, each with its signature."
+    }
+   }
+  ],
+  [
+   "link malformed",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A link names two different pilot keys, each with its signature."
+    }
+   }
+  ],
+  [
+   "link",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "names": 1,
+     "times": 0
+    }
+   }
+  ],
+  [
+   "run",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bestCombo": 2000,
+     "bestTrick": 800,
+     "crashes": 1,
+     "durationMs": 120000,
+     "id": "<run-1>",
+     "improved": true,
+     "map": "alps",
+     "name": "Ada Rook",
+     "postedUtc": "<t>",
+     "rank": 1,
+     "runs": 1,
+     "score": 5000,
+     "signature": "Matty flip",
+     "style": "expert",
+     "tricks": 20,
+     "unique": 8
+    }
+   }
+  ],
+  [
+   "run worse",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bestCombo": 2000,
+     "bestTrick": 800,
+     "crashes": 1,
+     "durationMs": 120000,
+     "id": "<run-1>",
+     "improved": false,
+     "map": "alps",
+     "name": "Ada Rook",
+     "postedUtc": "<t>",
+     "rank": 1,
+     "runs": 1,
+     "score": 5000,
+     "signature": "Matty flip",
+     "style": "expert",
+     "tricks": 20,
+     "unique": 8
+    }
+   }
+  ],
+  [
+   "run bad",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That is not a map this board keeps scores for."
+    }
+   }
+  ],
+  [
+   "run not json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+   }
+  ],
+  [
+   "runs",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "maps": [
+      "alps",
+      "swiss2",
+      "yellowstone"
+     ],
+     "runs": [
+      {
+       "bestCombo": 2000,
+       "bestTrick": 800,
+       "crashes": 1,
+       "durationMs": 120000,
+       "id": "<run-1>",
+       "map": "alps",
+       "name": "Ada Rook",
+       "postedUtc": "<t>",
+       "score": 5000,
+       "signature": "Matty flip",
+       "style": "expert",
+       "tricks": 20,
+       "unique": 8
+      }
+     ],
+     "tags": [
+      {
+       "id": "race",
+       "label": "Race track"
+      },
+      {
+       "id": "skills",
+       "label": "Skills practice"
+      },
+      {
+       "id": "experiment",
+       "label": "Experiment"
+      },
+      {
+       "id": "freestyle",
+       "label": "Freestyle"
+      },
+      {
+       "id": "beginner",
+       "label": "Beginner"
+      },
+      {
+       "id": "technical",
+       "label": "Technical"
+      },
+      {
+       "id": "micro",
+       "label": "Small field"
+      },
+      {
+       "id": "big",
+       "label": "Big field"
+      },
+      {
+       "id": "showcase",
+       "label": "Showcase"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "runs alps",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "maps": [
+      "alps",
+      "swiss2",
+      "yellowstone"
+     ],
+     "runs": [
+      {
+       "bestCombo": 2000,
+       "bestTrick": 800,
+       "crashes": 1,
+       "durationMs": 120000,
+       "id": "<run-1>",
+       "map": "alps",
+       "name": "Ada Rook",
+       "postedUtc": "<t>",
+       "score": 5000,
+       "signature": "Matty flip",
+       "style": "expert",
+       "tricks": 20,
+       "unique": 8
+      }
+     ],
+     "tags": [
+      {
+       "id": "race",
+       "label": "Race track"
+      },
+      {
+       "id": "skills",
+       "label": "Skills practice"
+      },
+      {
+       "id": "experiment",
+       "label": "Experiment"
+      },
+      {
+       "id": "freestyle",
+       "label": "Freestyle"
+      },
+      {
+       "id": "beginner",
+       "label": "Beginner"
+      },
+      {
+       "id": "technical",
+       "label": "Technical"
+      },
+      {
+       "id": "micro",
+       "label": "Small field"
+      },
+      {
+       "id": "big",
+       "label": "Big field"
+      },
+      {
+       "id": "showcase",
+       "label": "Showcase"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "runs bad map",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That is not a map this board keeps scores for."
+    }
+   }
+  ],
+  [
+   "bug",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "context": {},
+     "expected": "",
+     "id": "<bug-1>",
+     "images": [
+      {
+       "n": 1,
+       "size": 69,
+       "type": "image/png"
+      }
+     ],
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "resolution": "",
+     "status": "open",
+     "steps": "",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>",
+     "what": "The third gate draws completely black at dusk."
+    }
+   }
+  ],
+  [
+   "bug bad",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Pick a kind: crash, blocking, wrong, visual, feel or other."
+    }
+   }
+  ],
+  [
+   "bug not json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+   }
+  ],
+  [
+   "bugs no token",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A token is needed to read tickets."
+    }
+   }
+  ],
+  [
+   "bugs bearer",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bugs": [
+      {
+       "id": "<bug-1>",
+       "kind": "visual",
+       "map": "",
+       "reporter": "Anonymous",
+       "status": "open",
+       "submittedUtc": "<t>",
+       "title": "Gate draws black",
+       "updatedUtc": "<t>"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "bugs query token",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bugs": [
+      {
+       "id": "<bug-1>",
+       "kind": "visual",
+       "map": "",
+       "reporter": "Anonymous",
+       "status": "open",
+       "submittedUtc": "<t>",
+       "title": "Gate draws black",
+       "updatedUtc": "<t>"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "bugs admin",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bugs": [
+      {
+       "id": "<bug-1>",
+       "kind": "visual",
+       "map": "",
+       "reporter": "Anonymous",
+       "status": "open",
+       "submittedUtc": "<t>",
+       "title": "Gate draws black",
+       "updatedUtc": "<t>"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "bugs bad status",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Status is open, in_progress, fixed, wontfix or duplicate."
+    }
+   }
+  ],
+  [
+   "bugs bad kind",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Kind is crash, blocking, wrong, visual, feel or other."
+    }
+   }
+  ],
+  [
+   "bug get",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "context": {},
+     "expected": "",
+     "id": "<bug-1>",
+     "images": [
+      {
+       "n": 1,
+       "size": 69,
+       "type": "image/png"
+      }
+     ],
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "resolution": "",
+     "status": "open",
+     "steps": "",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>",
+     "what": "The third gate draws completely black at dusk."
+    }
+   }
+  ],
+  [
+   "bug get no token",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A token is needed to read or update tickets."
+    }
+   }
+  ],
+  [
+   "bug get missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That ticket is not on the board."
+    }
+   }
+  ],
+  [
+   "bug get bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "bug image",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/png",
+     "cache-control": "private, no-store",
+     "connection": "close",
+     "x-content-type-options": "nosniff",
+     "content-length": "69"
+    },
+    "body": "<bytes 69 8f546265c1101ceb>"
+   }
+  ],
+  [
+   "bug image none",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That ticket has no such image."
+    }
+   }
+  ],
+  [
+   "bug image out of range",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "bug image no token",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A token is needed to read tickets."
+    }
+   }
+  ],
+  [
+   "bug update",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "context": {},
+     "expected": "",
+     "id": "<bug-1>",
+     "images": [
+      {
+       "n": 1,
+       "size": 69,
+       "type": "image/png"
+      }
+     ],
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "resolution": "Done.",
+     "status": "fixed",
+     "steps": "",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>",
+     "what": "The third gate draws completely black at dusk."
+    }
+   }
+  ],
+  [
+   "bug update bad",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Status is open, in_progress, fixed, wontfix or duplicate."
+    }
+   }
+  ],
+  [
+   "bug update missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That ticket is not on the board."
+    }
+   }
+  ],
+  [
+   "bug update no token",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "A token is needed to read or update tickets."
+    }
+   }
+  ],
+  [
+   "session none",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Not signed in."
+    }
+   }
+  ],
+  [
+   "session token",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "email": "",
+     "expiresUtc": null,
+     "kind": "token",
+     "sponsors": [
+      {
+       "link": "https://sim.example/?utm_source=acme&utm_medium=sponsor",
+       "name": "Acme FPV",
+       "slug": "acme"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "login wrong",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That email and password do not open this board."
+    }
+   }
+  ],
+  [
+   "login bad json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not JSON."
+    }
+   }
+  ],
+  [
+   "login array",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request was not a JSON object."
+    }
+   }
+  ],
+  [
+   "login",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "email": "keeper@example.com",
+     "expiresUtc": "<t>",
+     "sponsors": [
+      {
+       "link": "https://sim.example/?utm_source=acme&utm_medium=sponsor",
+       "name": "Acme FPV",
+       "slug": "acme"
+      }
+     ],
+     "token": "<session>"
+    }
+   }
+  ],
+  [
+   "session person",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "email": "keeper@example.com",
+     "expiresUtc": "<t>",
+     "kind": "session",
+     "sponsors": [
+      {
+       "link": "https://sim.example/?utm_source=acme&utm_medium=sponsor",
+       "name": "Acme FPV",
+       "slug": "acme"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "session junk",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Not signed in."
+    }
+   }
+  ],
+  [
+   "remove no admin",
+   {
+    "status": 403,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Removing a track from this board needs an admin."
+    }
+   }
+  ],
+  [
+   "remove bad id",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That address is not usable."
+    }
+   }
+  ],
+  [
+   "remove missing",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That track is not on the board."
+    }
+   }
+  ],
+  [
+   "remove",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "author": "Bo",
+     "id": "trk-2b3c4d5e",
+     "name": "Sala",
+     "times": 1
+    }
+   }
+  ],
+  [
+   "list after remove",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "tags": [
+      {
+       "id": "race",
+       "label": "Race track"
+      },
+      {
+       "id": "skills",
+       "label": "Skills practice"
+      },
+      {
+       "id": "experiment",
+       "label": "Experiment"
+      },
+      {
+       "id": "freestyle",
+       "label": "Freestyle"
+      },
+      {
+       "id": "beginner",
+       "label": "Beginner"
+      },
+      {
+       "id": "technical",
+       "label": "Technical"
+      },
+      {
+       "id": "micro",
+       "label": "Small field"
+      },
+      {
+       "id": "big",
+       "label": "Big field"
+      },
+      {
+       "id": "showcase",
+       "label": "Showcase"
+      }
+     ],
+     "tracks": [
+      {
+       "author": "Cy",
+       "best": {
+        "lapMs": "<lap map>",
+        "name": "Ada Rook"
+       },
+       "designer": "",
+       "elements": 3,
+       "gates": 3,
+       "gifUtc": null,
+       "hasGif": false,
+       "hasLogo": false,
+       "id": "trk-3c4d5e6f",
+       "map": "swiss2",
+       "name": "Ring",
+       "plan": {
+        "depth": 89.28203199999999,
+        "map": "swiss2",
+        "marks": [
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 70,
+          "y": 44.641016,
+          "yaw": 1.570796
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 10,
+          "yaw": -0.523599
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 79.28203199999999,
+          "yaw": -2.617994
+         }
+        ],
+        "numbers": [
+         {
+          "n": 1,
+          "stack": 0,
+          "x": 70,
+          "y": 44.641016
+         },
+         {
+          "n": 2,
+          "stack": 0,
+          "x": 10,
+          "y": 10
+         },
+         {
+          "n": 3,
+          "stack": 0,
+          "x": 10,
+          "y": 79.28203199999999
+         }
+        ],
+        "path": [
+         {
+          "x": 70,
+          "y": 44.641016
+         },
+         {
+          "x": 10,
+          "y": 10
+         },
+         {
+          "x": 10,
+          "y": 79.28203199999999
+         }
+        ],
+        "trackClass": "full",
+        "width": 80
+       },
+       "planes": "<planes some>",
+       "publishedUtc": "<t>",
+       "series": "",
+       "tags": [],
+       "times": 1,
+       "trackClass": "full",
+       "updatedUtc": "<t>",
+       "wing": {
+        "best": null,
+        "times": 0
+       }
+      },
+      {
+       "author": "Ada Rook",
+       "best": {
+        "lapMs": "<lap field>",
+        "name": "Ada Rook"
+       },
+       "designer": "",
+       "elements": 2,
+       "gates": 2,
+       "gifUtc": null,
+       "hasGif": false,
+       "hasLogo": false,
+       "id": "trk-1a2b3c4d",
+       "map": null,
+       "name": "Costanera Norte",
+       "plan": {
+        "depth": 40,
+        "marks": [
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 10,
+          "y": 8,
+          "yaw": 0
+         },
+         {
+          "clearW": 1.524,
+          "levels": 1,
+          "seq": true,
+          "type": "gate",
+          "x": 30,
+          "y": 8,
+          "yaw": 0
+         }
+        ],
+        "numbers": [
+         {
+          "n": 1,
+          "stack": 0,
+          "x": 10,
+          "y": 8
+         },
+         {
+          "n": 2,
+          "stack": 0,
+          "x": 30,
+          "y": 8
+         }
+        ],
+        "path": [
+         {
+          "x": 10,
+          "y": 8
+         },
+         {
+          "x": 30,
+          "y": 8
+         }
+        ],
+        "trackClass": "full",
+        "width": 60
+       },
+       "planes": "<planes none>",
+       "publishedUtc": "<t>",
+       "series": "",
+       "tags": [
+        "race",
+        "technical"
+       ],
+       "times": 2,
+       "trackClass": "full",
+       "updatedUtc": "<t>",
+       "wing": null
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "event visit",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "event session",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "event flush",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "event as text",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "event bad",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That is not a version of this format the board reads."
+    }
+   }
+  ],
+  [
+   "event not json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That event was not readable."
+    }
+   }
+  ],
+  [
+   "event gpc",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "event too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That event is too large."
+    }
+   }
+  ],
+  [
+   "stats",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "public, max-age=20",
+     "connection": "close"
+    },
+    "body": {
+     "allTime": {
+      "countries": 2,
+      "crashes": 1,
+      "flightS": 50,
+      "laps": 2,
+      "sessions": 1,
+      "visits": 2
+     },
+     "board": {
+      "pilots": 2,
+      "pilotsOnMoreThanOneDay": 0,
+      "times": 3,
+      "tracks": 2
+     },
+     "countries": [
+      {
+       "dim": "country",
+       "key": "NZ",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      },
+      {
+       "dim": "country",
+       "key": "AU",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      },
+      {
+       "dim": "country",
+       "key": "ZZ",
+       "laps": 2,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "craft": [
+      {
+       "dim": "craft",
+       "key": "sky1800",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      },
+      {
+       "dim": "craft",
+       "key": "5inch",
+       "laps": 2,
+       "sessions": 0,
+       "visits": 0
+      }
+     ],
+     "days": [
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 1,
+       "day": "<day>",
+       "flightS": 50,
+       "laps": 2,
+       "newVisitors": 1,
+       "returningVisitors": 1,
+       "sessions": 1,
+       "visits": 2
+      }
+     ],
+     "firstDay": "<day>",
+     "generatedUtc": "<t>",
+     "inputs": [
+      {
+       "dim": "input",
+       "key": "gamepad",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      }
+     ],
+     "live": {
+      "flying": 1
+     },
+     "maps": [
+      {
+       "dim": "map",
+       "key": "custom",
+       "laps": 2,
+       "sessions": 1,
+       "visits": 0
+      }
+     ],
+     "sources": [
+      {
+       "dim": "source",
+       "key": "direct",
+       "laps": 2,
+       "name": "Direct",
+       "sessions": 1,
+       "visits": 1
+      },
+      {
+       "dim": "source",
+       "key": "acme",
+       "laps": 0,
+       "name": "Acme FPV",
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "surfaces": [
+      {
+       "dim": "surface",
+       "key": "board",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      },
+      {
+       "dim": "surface",
+       "key": "sim",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "today": {
+      "crashes": 1,
+      "day": "<day>",
+      "flightS": 50,
+      "laps": 2,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     },
+     "window": {
+      "countries": 2,
+      "crashes": 1,
+      "days": 30,
+      "flightS": 50,
+      "laps": 2,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     }
+    }
+   }
+  ],
+  [
+   "stats cached",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "public, max-age=20",
+     "connection": "close"
+    },
+    "body": {
+     "allTime": {
+      "countries": 2,
+      "crashes": 1,
+      "flightS": 50,
+      "laps": 2,
+      "sessions": 1,
+      "visits": 2
+     },
+     "board": {
+      "pilots": 2,
+      "pilotsOnMoreThanOneDay": 0,
+      "times": 3,
+      "tracks": 2
+     },
+     "countries": [
+      {
+       "dim": "country",
+       "key": "NZ",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      },
+      {
+       "dim": "country",
+       "key": "AU",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      },
+      {
+       "dim": "country",
+       "key": "ZZ",
+       "laps": 2,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "craft": [
+      {
+       "dim": "craft",
+       "key": "sky1800",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      },
+      {
+       "dim": "craft",
+       "key": "5inch",
+       "laps": 2,
+       "sessions": 0,
+       "visits": 0
+      }
+     ],
+     "days": [
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 1,
+       "day": "<day>",
+       "flightS": 50,
+       "laps": 2,
+       "newVisitors": 1,
+       "returningVisitors": 1,
+       "sessions": 1,
+       "visits": 2
+      }
+     ],
+     "firstDay": "<day>",
+     "generatedUtc": "<t>",
+     "inputs": [
+      {
+       "dim": "input",
+       "key": "gamepad",
+       "laps": 0,
+       "sessions": 1,
+       "visits": 0
+      }
+     ],
+     "live": {
+      "flying": 1
+     },
+     "maps": [
+      {
+       "dim": "map",
+       "key": "custom",
+       "laps": 2,
+       "sessions": 1,
+       "visits": 0
+      }
+     ],
+     "sources": [
+      {
+       "dim": "source",
+       "key": "direct",
+       "laps": 2,
+       "name": "Direct",
+       "sessions": 1,
+       "visits": 1
+      },
+      {
+       "dim": "source",
+       "key": "acme",
+       "laps": 0,
+       "name": "Acme FPV",
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "surfaces": [
+      {
+       "dim": "surface",
+       "key": "board",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      },
+      {
+       "dim": "surface",
+       "key": "sim",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "today": {
+      "crashes": 1,
+      "day": "<day>",
+      "flightS": 50,
+      "laps": 2,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     },
+     "window": {
+      "countries": 2,
+      "crashes": 1,
+      "days": 30,
+      "flightS": 50,
+      "laps": 2,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     }
+    }
+   }
+  ],
+  [
+   "drained oversize",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "keep-alive"
+    },
+    "body": {
+     "error": "That event is too large."
+    }
+   }
+  ],
+  [
+   "same socket next",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "keep-alive"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "far oversize closes",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That event is too large."
+    }
+   }
+  ],
+  [
+   "after close",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "keep-alive"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "login too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That sign in was too large."
+    }
+   }
+  ],
+  [
+   "login password not a string",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That email and password do not open this board."
+    }
+   }
+  ],
+  [
+   "login password too long",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That email and password do not open this board."
+    }
+   }
+  ],
+  [
+   "gif too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That animation is too large for this board."
+    }
+   }
+  ],
+  [
+   "time too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That time is too large to post."
+    }
+   }
+  ],
+  [
+   "pilots too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That request is too large."
+    }
+   }
+  ],
+  [
+   "run too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That run is too large to post."
+    }
+   }
+  ],
+  [
+   "bug too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That report is too large."
+    }
+   }
+  ],
+  [
+   "bug update not json",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+   }
+  ],
+  [
+   "bug update too large",
+   {
+    "status": 413,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That update is too large."
+    }
+   }
+  ],
+  [
+   "login flooded",
+   {
+    "status": 429,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Too many sign in attempts from here. Try again in a few minutes."
+    }
+   }
+  ],
+  [
+   "run at the limit",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bestCombo": 2000,
+     "bestTrick": 800,
+     "crashes": 1,
+     "durationMs": 120000,
+     "id": "<run-2>",
+     "improved": true,
+     "map": "alps",
+     "name": "Pilot seven",
+     "postedUtc": "<t>",
+     "rank": 7,
+     "runs": 7,
+     "score": 5000,
+     "signature": "Matty flip",
+     "style": "expert",
+     "tricks": 20,
+     "unique": 8
+    }
+   }
+  ],
+  [
+   "runs flooded",
+   {
+    "status": 429,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Too many runs posted from here. Fly another and try again shortly."
+    }
+   }
+  ],
+  [
+   "bug at the limit",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "context": {},
+     "expected": "",
+     "id": "<bug-2>",
+     "images": [],
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "resolution": "",
+     "status": "open",
+     "steps": "",
+     "submittedUtc": "<t>",
+     "title": "The eighth report",
+     "updatedUtc": "<t>",
+     "what": "The third gate draws completely black at dusk."
+    }
+   }
+  ],
+  [
+   "bugs flooded",
+   {
+    "status": 429,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Too many reports from here. Try again in a few minutes."
+    }
+   }
+  ],
+  [
+   "another forwarded address is not",
+   {
+    "status": 201,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "context": {},
+     "expected": "",
+     "id": "<bug-3>",
+     "images": [],
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "resolution": "",
+     "status": "open",
+     "steps": "",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>",
+     "what": "The third gate draws completely black at dusk."
+    }
+   }
+  ],
+  [
+   "events flooded",
+   {
+    "status": 429,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Too many events from here."
+    }
+   }
+  ],
+  [
+   "gpc still answers when flooded",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "pilots flooded",
+   {
+    "status": 429,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Too many name changes from here. Try again shortly."
+    }
+   }
+  ],
+  [
+   "flood is per route",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "ok": true,
+     "store": "file"
+    }
+   }
+  ],
+  [
+   "static /",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/html; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /index.html",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/html; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /bugs",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/html; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /bugs.html",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/html; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /app.js",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/javascript; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /icon.svg",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/svg+xml",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /favicon.ico",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/x-icon",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /apple-touch-icon.png",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/png",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /og.png",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/png",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /credits/lestar.jpg",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "image/jpeg",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /strings/en.js",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/javascript; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "<not pinned>"
+   }
+  ],
+  [
+   "static /missing.html",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static /../package.json",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static /%2e%2e/package.json",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static /%zz",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "bad path"
+   }
+  ],
+  [
+   "static /public/app.js",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static /src/server.js",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static //etc/passwd",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ],
+  [
+   "static /credits/",
+   {
+    "status": 404,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "text/plain; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": "not found"
+   }
+  ]
+ ],
+ "removalLog": {
+  "lines": [
+   "removed trk-2b3c4d5e \"Sala\" by Bo, 1 time(s), by keeper@example.com"
+  ]
+ },
+ "bare": [
+  [
+   "version without REVISION",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "commit": null,
+     "fdfpv": null
+    }
+   }
+  ],
+  [
+   "config",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "http://127.0.0.1:<port>",
+     "simOrigin": "http://127.0.0.1:8000"
+    }
+   }
+  ],
+  [
+   "config ignores forwarded",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "http://127.0.0.1:<port>",
+     "simOrigin": "http://127.0.0.1:8000"
+    }
+   }
+  ],
+  [
+   "login with no admins",
+   {
+    "status": 503,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "This board has no admin accounts."
+    }
+   }
+  ],
+  [
+   "session with no admins",
+   {
+    "status": 401,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Not signed in."
+    }
+   }
+  ],
+  [
+   "bugs open without a token",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "bugs": []
+    }
+   }
+  ],
+  [
+   "remove with no admin token",
+   {
+    "status": 403,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "Removing a track from this board needs an admin."
+    }
+   }
+  ],
+  [
+   "event country ignored",
+   {
+    "status": 204,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": ""
+   }
+  ],
+  [
+   "stats",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "public, max-age=20",
+     "connection": "close"
+    },
+    "body": {
+     "allTime": {
+      "countries": 0,
+      "crashes": 0,
+      "flightS": 0,
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     "board": {
+      "pilots": 0,
+      "pilotsOnMoreThanOneDay": 0,
+      "times": 0,
+      "tracks": 0
+     },
+     "countries": [
+      {
+       "dim": "country",
+       "key": "ZZ",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "craft": [],
+     "days": [
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 0,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 0
+      },
+      {
+       "crashes": 0,
+       "day": "<day>",
+       "flightS": 0,
+       "laps": 0,
+       "newVisitors": 1,
+       "returningVisitors": 0,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "firstDay": "<day>",
+     "generatedUtc": "<t>",
+     "inputs": [],
+     "live": {
+      "flying": 0
+     },
+     "maps": [],
+     "sources": [
+      {
+       "dim": "source",
+       "key": "other",
+       "laps": 0,
+       "name": "Other",
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "surfaces": [
+      {
+       "dim": "surface",
+       "key": "board",
+       "laps": 0,
+       "sessions": 0,
+       "visits": 1
+      }
+     ],
+     "today": {
+      "crashes": 0,
+      "day": "<day>",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     "window": {
+      "countries": 0,
+      "crashes": 0,
+      "days": 30,
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    }
+   }
+  ],
+  [
+   "runs",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "maps": [
+      "alps",
+      "swiss2",
+      "yellowstone"
+     ],
+     "runs": [],
+     "tags": [
+      {
+       "id": "race",
+       "label": "Race track"
+      },
+      {
+       "id": "skills",
+       "label": "Skills practice"
+      },
+      {
+       "id": "experiment",
+       "label": "Experiment"
+      },
+      {
+       "id": "freestyle",
+       "label": "Freestyle"
+      },
+      {
+       "id": "beginner",
+       "label": "Beginner"
+      },
+      {
+       "id": "technical",
+       "label": "Technical"
+      },
+      {
+       "id": "micro",
+       "label": "Small field"
+      },
+      {
+       "id": "big",
+       "label": "Big field"
+      },
+      {
+       "id": "showcase",
+       "label": "Showcase"
+      }
+     ]
+    }
+   }
+  ]
+ ],
+ "bareWarned": true,
+ "public": [
+  [
+   "config with BOARD_PUBLIC_ORIGIN",
+   {
+    "status": 200,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "boardOrigin": "https://board.example",
+     "simOrigin": "http://127.0.0.1:8000"
+    }
+   }
+  ]
+ ],
+ "badRevision": {
+  "started": false,
+  "exitedNonZero": true,
+  "named": true
+ }
+}
