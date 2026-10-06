@@ -332,7 +332,8 @@ const DOC_ODD = [DELETE, null, 0, -1, 'x', 4, 5, 2.5, [], {}, true, 6000, -3001,
     { logos: [{ image: big(200 * 1024) }, { image: big(185 * 1024) }] },
     { logos: [{ image: 'data:image/svg+xml;base64,AAAA' }] }, { logos: [null] }, { logos: [{ image: 7 }] },
     { logos: 'nope', logo: PNG_LOGO }, { logo: PNG_LOGO.replace('png', 'jpeg') }, { logo: PNG_LOGO.replace('png', 'webp') },
-    { logo: PNG_LOGO.replace('png', 'gif') }, { logo: `${PNG_LOGO}!` },
+    { logo: PNG_LOGO.replace('png', 'gif') }, { logo: `${PNG_LOGO}!` }, { logo: { image: PNG_LOGO } }, { logo: 7 },
+    { logo: [PNG_LOGO] }, { logos: [PNG_LOGO, { image: PNG_LOGO, name: 'b' }] }, { logos: [[PNG_LOGO]] },
   ];
   brandings.forEach((b, i) => add(`inspectDocument.branding#${i}`, 'inspectDocument', { ...documents[3], branding: b }));
 
