@@ -14,6 +14,7 @@
     "validate:golden": "node tests/validate-golden.js",
     "admin:golden": "node tests/admin-golden.js",
     "store:golden": "node tests/store-golden.js",
+    "server:golden": "node tests/server-golden.js",
     "lint:licence": "node scripts/licence-lint.js",
     "lint:nouns": "node scripts/noun-lint.js",
     "lint:copy": "node scripts/copy-lint.js",
