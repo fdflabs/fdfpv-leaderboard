@@ -1,0 +1,5550 @@
+{
+ "kind": "postgres",
+ "steps": [
+  [
+   "publish field",
+   {
+    "author": "Ada",
+    "editKey": "<key-1>",
+    "id": "trk-10000001",
+    "name": "Costanera",
+    "timesCleared": false,
+    "updated": false
+   }
+  ],
+  [
+   "publish field again, no key",
+   {
+    "conflict": true,
+    "error": "This track is already on the board. Publish a copy under a new name, or update it from the browser that first sent it.",
+    "status": 409
+   }
+  ],
+  [
+   "publish field again, wrong key",
+   {
+    "conflict": true,
+    "error": "This track is already on the board. Publish a copy under a new name, or update it from the browser that first sent it.",
+    "status": 409
+   }
+  ],
+  [
+   "publish room",
+   {
+    "author": "Bo",
+    "editKey": "<key-2>",
+    "id": "trk-20000001",
+    "name": "Sala",
+    "timesCleared": false,
+    "updated": false
+   }
+  ],
+  [
+   "publish map",
+   {
+    "author": "Cy",
+    "editKey": "<key-3>",
+    "id": "trk-30000001",
+    "name": "Valle Alto",
+    "timesCleared": false,
+    "updated": false
+   }
+  ],
+  [
+   "time Ada 42000",
+   {
+    "craft": null,
+    "id": "<tm-1>",
+    "lapMs": 42000,
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": null,
+    "times": 1
+   }
+  ],
+  [
+   "time Bo 41000 with ghost and three",
+   {
+    "craft": null,
+    "id": "<tm-2>",
+    "lapMs": 41000,
+    "name": "Bo",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": 125000,
+    "times": 2
+   }
+  ],
+  [
+   "time Cy 41000 ties later",
+   {
+    "craft": null,
+    "id": "<tm-3>",
+    "lapMs": 41000,
+    "name": "Cy",
+    "postedUtc": "<t>",
+    "rank": 2,
+    "threeMs": null,
+    "times": 3
+   }
+  ],
+  [
+   "time on a missing track",
+   {
+    "error": "That track is not on the board.",
+    "status": 404
+   }
+  ],
+  [
+   "parallel times",
+   [
+    {
+     "name": "Di",
+     "times": 4
+    },
+    {
+     "name": "Ev",
+     "times": 5
+    }
+   ]
+  ],
+  [
+   "quad time on map",
+   {
+    "craft": null,
+    "id": "<tm-4>",
+    "lapMs": 90000,
+    "name": "Cy",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": null,
+    "times": 1
+   }
+  ],
+  [
+   "plane time on map",
+   {
+    "craft": "sky1800",
+    "id": "<tm-5>",
+    "lapMs": 95000,
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": null,
+    "times": 1
+   }
+  ],
+  [
+   "faster plane time on map",
+   {
+    "craft": "cub1400",
+    "id": "<tm-6>",
+    "lapMs": 80000,
+    "name": "Bo",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": null,
+    "times": 2
+   }
+  ],
+  [
+   "room time with three",
+   {
+    "craft": null,
+    "id": "<tm-7>",
+    "lapMs": 9000,
+    "name": "Bo",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": 27500,
+    "times": 1
+   }
+  ],
+  [
+   "get field",
+   {
+    "author": "Ada",
+    "best": {
+     "lapMs": 41000,
+     "name": "Bo"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 20,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 20,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 20,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [
+     "race"
+    ],
+    "times": [
+     {
+      "craft": null,
+      "hasGhost": true,
+      "id": "<tm-2>",
+      "lapMs": 41000,
+      "name": "Bo",
+      "postedUtc": "<t>",
+      "threeMs": 125000
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-3>",
+      "lapMs": 41000,
+      "name": "Cy",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-1>",
+      "lapMs": 42000,
+      "name": "Ada",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-8>",
+      "lapMs": 50000,
+      "name": "Di",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-9>",
+      "lapMs": 50500,
+      "name": "Ev",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ],
+  [
+   "get map",
+   {
+    "author": "Cy",
+    "best": {
+     "lapMs": 90000,
+     "name": "Cy"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-30000001",
+    "map": "swiss2",
+    "name": "Valle Alto",
+    "plan": {
+     "depth": 118,
+     "map": "swiss2",
+     "marks": [
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 24,
+       "y": 64,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 144,
+       "y": 94,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 224,
+       "y": 24,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 24,
+       "y": 64
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 144,
+       "y": 94
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "path": [
+      {
+       "x": 24,
+       "y": 64
+      },
+      {
+       "x": 144,
+       "y": 94
+      },
+      {
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "trackClass": "full",
+     "width": 248
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [
+     {
+      "craft": "cub1400",
+      "hasGhost": false,
+      "id": "<tm-6>",
+      "lapMs": 80000,
+      "name": "Bo",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-4>",
+      "lapMs": 90000,
+      "name": "Cy",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": "sky1800",
+      "hasGhost": false,
+      "id": "<tm-5>",
+      "lapMs": 95000,
+      "name": "Ada",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": {
+     "best": {
+      "lapMs": 80000,
+      "name": "Bo"
+     },
+     "times": 2
+    }
+   }
+  ],
+  [
+   "get missing",
+   null
+  ],
+  [
+   "list",
+   [
+    {
+     "author": "Cy",
+     "best": {
+      "lapMs": 90000,
+      "name": "Cy"
+     },
+     "designer": "",
+     "elements": 3,
+     "gates": 3,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-30000001",
+     "map": "swiss2",
+     "name": "Valle Alto",
+     "plan": {
+      "depth": 118,
+      "map": "swiss2",
+      "marks": [
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 24,
+        "y": 64,
+        "yaw": 0
+       },
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 144,
+        "y": 94,
+        "yaw": 0
+       },
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 224,
+        "y": 24,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 24,
+        "y": 64
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 144,
+        "y": 94
+       },
+       {
+        "n": 3,
+        "stack": 0,
+        "x": 224,
+        "y": 24
+       }
+      ],
+      "path": [
+       {
+        "x": 24,
+        "y": 64
+       },
+       {
+        "x": 144,
+        "y": 94
+       },
+       {
+        "x": 224,
+        "y": 24
+       }
+      ],
+      "trackClass": "full",
+      "width": 248
+     },
+     "planes": "<planes>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [],
+     "times": 1,
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": {
+      "best": {
+       "lapMs": 80000,
+       "name": "Bo"
+      },
+      "times": 2
+     }
+    },
+    {
+     "author": "Bo",
+     "best": {
+      "lapMs": 9000,
+      "name": "Bo"
+     },
+     "designer": "Mbói",
+     "elements": 2,
+     "gates": 2,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-20000001",
+     "map": null,
+     "name": "Sala",
+     "plan": {
+      "depth": 6,
+      "marks": [
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 1,
+        "y": 10,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 2,
+        "y": 11,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 1,
+        "y": 10
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 2,
+        "y": 11
+       }
+      ],
+      "path": [
+       {
+        "x": 1,
+        "y": 10
+       },
+       {
+        "x": 2,
+        "y": 11
+       }
+      ],
+      "trackClass": "micro",
+      "width": 5
+     },
+     "planes": "<planes>",
+     "publishedUtc": "<t>",
+     "series": "Rooms",
+     "tags": [
+      "skills",
+      "beginner"
+     ],
+     "times": 1,
+     "trackClass": "micro",
+     "updatedUtc": "<t>",
+     "wing": null
+    },
+    {
+     "author": "Ada",
+     "best": {
+      "lapMs": 41000,
+      "name": "Bo"
+     },
+     "designer": "",
+     "elements": 3,
+     "gates": 3,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-10000001",
+     "map": null,
+     "name": "Costanera",
+     "plan": {
+      "depth": 40,
+      "marks": [
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 10,
+        "y": 10,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 20,
+        "y": 11,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 30,
+        "y": 12,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 10,
+        "y": 10
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 20,
+        "y": 11
+       },
+       {
+        "n": 3,
+        "stack": 0,
+        "x": 30,
+        "y": 12
+       }
+      ],
+      "path": [
+       {
+        "x": 10,
+        "y": 10
+       },
+       {
+        "x": 20,
+        "y": 11
+       },
+       {
+        "x": 30,
+        "y": 12
+       }
+      ],
+      "trackClass": "full",
+      "width": 60
+     },
+     "planes": "<planes>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [
+      "race"
+     ],
+     "times": 5,
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": null
+    }
+   ]
+  ],
+  [
+   "document",
+   {
+    "author": "Bo",
+    "document": {
+     "branding": {
+      "logos": []
+     },
+     "credit": {
+      "designer": "Mbói",
+      "series": "Rooms"
+     },
+     "elements": [
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-1",
+       "name": "Gate",
+       "position": {
+        "x": 1,
+        "y": 10,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      },
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-2",
+       "name": "Gate",
+       "position": {
+        "x": 2,
+        "y": 11,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      }
+     ],
+     "field": {
+      "depth": 6,
+      "gridSize": 0.0254,
+      "width": 5
+     },
+     "id": "trk-20000001",
+     "name": "Sala",
+     "schemaVersion": 3,
+     "sequence": [
+      {
+       "apertureIndex": 0,
+       "elementId": "el-1",
+       "entry": 0,
+       "id": "sq-1"
+      },
+      {
+       "apertureIndex": 0,
+       "elementId": "el-2",
+       "entry": 0,
+       "id": "sq-2"
+      }
+     ],
+     "settings": {
+      "minCurveRadius": 2,
+      "samplesPerSegment": 24,
+      "tangentScale": 1
+     },
+     "trackClass": "micro"
+    },
+    "id": "trk-20000001",
+    "name": "Sala"
+   }
+  ],
+  [
+   "document missing",
+   null
+  ],
+  [
+   "ghost",
+   {
+    "ghost": "R0hPU1Q=",
+    "id": "<tm-2>",
+    "lapMs": 41000,
+    "name": "Bo"
+   }
+  ],
+  [
+   "ghost of a time without one",
+   {
+    "ghost": null,
+    "id": "<tm-1>",
+    "lapMs": 42000,
+    "name": "Ada"
+   }
+  ],
+  [
+   "ghost missing",
+   null
+  ],
+  [
+   "gif by owner",
+   {
+    "gifUtc": "<t>",
+    "id": "trk-20000001"
+   }
+  ],
+  [
+   "gif by a stranger",
+   {
+    "error": "That track was published from another browser, so this one cannot change its animation.",
+    "status": 403
+   }
+  ],
+  [
+   "gif with no key",
+   {
+    "error": "That track was published from another browser, so this one cannot change its animation.",
+    "status": 403
+   }
+  ],
+  [
+   "gif by admin",
+   {
+    "gifUtc": "<t>",
+    "id": "trk-10000001"
+   }
+  ],
+  [
+   "gif on a missing track",
+   null
+  ],
+  [
+   "get gif",
+   {
+    "bytes": "<bytes 40 aaa9217da25f5a0b>",
+    "gifUtc": "<t>"
+   }
+  ],
+  [
+   "get gif missing",
+   null
+  ],
+  [
+   "rename keeps times and gif",
+   {
+    "author": "Ada",
+    "editKey": "<undefined>",
+    "id": "trk-10000001",
+    "name": "Costanera Norte",
+    "timesCleared": false,
+    "updated": true
+   }
+  ],
+  [
+   "after rename",
+   {
+    "author": "Ada",
+    "best": {
+     "lapMs": 41000,
+     "name": "Bo"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": "<t>",
+    "hasGif": true,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera Norte",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 20,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 20,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 20,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [
+     "race",
+     "technical"
+    ],
+    "times": [
+     {
+      "craft": null,
+      "hasGhost": true,
+      "id": "<tm-2>",
+      "lapMs": 41000,
+      "name": "Bo",
+      "postedUtc": "<t>",
+      "threeMs": 125000
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-3>",
+      "lapMs": 41000,
+      "name": "Cy",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-1>",
+      "lapMs": 42000,
+      "name": "Ada",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-8>",
+      "lapMs": 50000,
+      "name": "Di",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-9>",
+      "lapMs": 50500,
+      "name": "Ev",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ],
+  [
+   "new author renames their times",
+   {
+    "author": "Ada Two",
+    "editKey": "<undefined>",
+    "id": "trk-10000001",
+    "name": "Costanera Norte",
+    "timesCleared": false,
+    "updated": true
+   }
+  ],
+  [
+   "after new author",
+   {
+    "author": "Ada Two",
+    "best": {
+     "lapMs": 41000,
+     "name": "Bo"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": "<t>",
+    "hasGif": true,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera Norte",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 20,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 20,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 20,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [
+     {
+      "craft": null,
+      "hasGhost": true,
+      "id": "<tm-2>",
+      "lapMs": 41000,
+      "name": "Bo",
+      "postedUtc": "<t>",
+      "threeMs": 125000
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-3>",
+      "lapMs": 41000,
+      "name": "Cy",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-1>",
+      "lapMs": 42000,
+      "name": "Ada Two",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-8>",
+      "lapMs": 50000,
+      "name": "Di",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-9>",
+      "lapMs": 50500,
+      "name": "Ev",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ],
+  [
+   "relayout clears times and gif",
+   {
+    "author": "Ada Two",
+    "editKey": "<undefined>",
+    "id": "trk-10000001",
+    "name": "Costanera Norte",
+    "timesCleared": true,
+    "updated": true
+   }
+  ],
+  [
+   "after relayout",
+   {
+    "author": "Ada Two",
+    "best": null,
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera Norte",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 25,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 25,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 25,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ],
+  [
+   "gif after relayout",
+   null
+  ],
+  [
+   "time after relayout",
+   {
+    "craft": null,
+    "id": "<tm-10>",
+    "lapMs": 39000,
+    "name": "Ada Two",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "threeMs": null,
+    "times": 1
+   }
+  ],
+  [
+   "claim new",
+   {
+    "claimed": true
+   }
+  ],
+  [
+   "claim again same key",
+   {
+    "claimed": false
+   }
+  ],
+  [
+   "claim other case",
+   {
+    "claimed": false
+   }
+  ],
+  [
+   "claim by another key",
+   {
+    "error": "That name belongs to another pilot. Pick another name, or import their pilot key.",
+    "status": 403
+   }
+  ],
+  [
+   "claim second name",
+   {
+    "claimed": true
+   }
+  ],
+  [
+   "move key",
+   {
+    "names": 2,
+    "times": 1
+   }
+  ],
+  [
+   "move key nothing",
+   {
+    "names": 0,
+    "times": 0
+   }
+  ],
+  [
+   "claim after move, old key",
+   {
+    "error": "That name belongs to another pilot. Pick another name, or import their pilot key.",
+    "status": 403
+   }
+  ],
+  [
+   "claim after move, new key",
+   {
+    "claimed": false
+   }
+  ],
+  [
+   "run first",
+   {
+    "bestCombo": 2000,
+    "bestTrick": 800,
+    "crashes": 1,
+    "durationMs": 120000,
+    "id": "<run-1>",
+    "improved": true,
+    "map": "alps",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "runs": 1,
+    "score": 5000,
+    "signature": "Matty flip",
+    "style": "expert",
+    "tricks": 20,
+    "unique": 8
+   }
+  ],
+  [
+   "run worse",
+   {
+    "bestCombo": 2000,
+    "bestTrick": 800,
+    "crashes": 1,
+    "durationMs": 120000,
+    "id": "<run-1>",
+    "improved": false,
+    "map": "alps",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "runs": 1,
+    "score": 5000,
+    "signature": "Matty flip",
+    "style": "expert",
+    "tricks": 20,
+    "unique": 8
+   }
+  ],
+  [
+   "run equal",
+   {
+    "bestCombo": 2000,
+    "bestTrick": 800,
+    "crashes": 1,
+    "durationMs": 120000,
+    "id": "<run-1>",
+    "improved": false,
+    "map": "alps",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "runs": 1,
+    "score": 5000,
+    "signature": "Matty flip",
+    "style": "expert",
+    "tricks": 20,
+    "unique": 8
+   }
+  ],
+  [
+   "run other pilot same score",
+   {
+    "bestCombo": 900,
+    "bestTrick": 700,
+    "crashes": 0,
+    "durationMs": 100000,
+    "id": "<run-2>",
+    "improved": true,
+    "map": "alps",
+    "name": "Bo",
+    "postedUtc": "<t>",
+    "rank": 2,
+    "runs": 2,
+    "score": 5000,
+    "signature": "Power loop",
+    "style": "expert",
+    "tricks": 10,
+    "unique": 5
+   }
+  ],
+  [
+   "run better",
+   {
+    "bestCombo": 3000,
+    "bestTrick": 850,
+    "crashes": 2,
+    "durationMs": 110000,
+    "id": "<run-3>",
+    "improved": true,
+    "map": "alps",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "runs": 2,
+    "score": 9000,
+    "signature": "Split S",
+    "style": "expert",
+    "tricks": 30,
+    "unique": 12
+   }
+  ],
+  [
+   "run other map",
+   {
+    "bestCombo": 100,
+    "bestTrick": 100,
+    "crashes": 0,
+    "durationMs": 5000,
+    "id": "<run-4>",
+    "improved": true,
+    "map": "swiss2",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "rank": 1,
+    "runs": 1,
+    "score": 100,
+    "signature": "",
+    "style": "arcade",
+    "tricks": 1,
+    "unique": 1
+   }
+  ],
+  [
+   "runs all",
+   [
+    {
+     "bestCombo": 3000,
+     "bestTrick": 850,
+     "crashes": 2,
+     "durationMs": 110000,
+     "id": "<run-3>",
+     "map": "alps",
+     "name": "Ada",
+     "postedUtc": "<t>",
+     "score": 9000,
+     "signature": "Split S",
+     "style": "expert",
+     "tricks": 30,
+     "unique": 12
+    },
+    {
+     "bestCombo": 900,
+     "bestTrick": 700,
+     "crashes": 0,
+     "durationMs": 100000,
+     "id": "<run-2>",
+     "map": "alps",
+     "name": "Bo",
+     "postedUtc": "<t>",
+     "score": 5000,
+     "signature": "Power loop",
+     "style": "expert",
+     "tricks": 10,
+     "unique": 5
+    },
+    {
+     "bestCombo": 100,
+     "bestTrick": 100,
+     "crashes": 0,
+     "durationMs": 5000,
+     "id": "<run-4>",
+     "map": "swiss2",
+     "name": "Ada",
+     "postedUtc": "<t>",
+     "score": 100,
+     "signature": "",
+     "style": "arcade",
+     "tricks": 1,
+     "unique": 1
+    }
+   ]
+  ],
+  [
+   "runs alps",
+   [
+    {
+     "bestCombo": 3000,
+     "bestTrick": 850,
+     "crashes": 2,
+     "durationMs": 110000,
+     "id": "<run-3>",
+     "map": "alps",
+     "name": "Ada",
+     "postedUtc": "<t>",
+     "score": 9000,
+     "signature": "Split S",
+     "style": "expert",
+     "tricks": 30,
+     "unique": 12
+    },
+    {
+     "bestCombo": 900,
+     "bestTrick": 700,
+     "crashes": 0,
+     "durationMs": 100000,
+     "id": "<run-2>",
+     "map": "alps",
+     "name": "Bo",
+     "postedUtc": "<t>",
+     "score": 5000,
+     "signature": "Power loop",
+     "style": "expert",
+     "tricks": 10,
+     "unique": 5
+    }
+   ]
+  ],
+  [
+   "runs none",
+   []
+  ],
+  [
+   "bug one",
+   {
+    "context": {
+     "gpu": "x",
+     "map": "field"
+    },
+    "expected": "",
+    "id": "<bug-1>",
+    "images": [],
+    "kind": "feel",
+    "map": "field",
+    "reporter": "Ada",
+    "resolution": "",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Yaw feels late",
+    "updatedUtc": "<t>",
+    "what": "A right yaw stick takes a beat before the quad turns."
+   }
+  ],
+  [
+   "bug with shots",
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-2>",
+    "images": [
+     {
+      "n": 1,
+      "size": 69,
+      "type": "image/png"
+     },
+     {
+      "n": 2,
+      "size": 8,
+      "type": "image/jpeg"
+     }
+    ],
+    "kind": "visual",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Gate draws black",
+    "updatedUtc": "<t>",
+    "what": "The third gate draws completely black at dusk."
+   }
+  ],
+  [
+   "bug no context",
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-3>",
+    "images": [],
+    "kind": "crash",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Crash on load",
+    "updatedUtc": "<t>",
+    "what": "The page crashed while loading the alps map."
+   }
+  ],
+  [
+   "bugs all",
+   [
+    {
+     "id": "<bug-3>",
+     "kind": "crash",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Crash on load",
+     "updatedUtc": "<t>"
+    },
+    {
+     "id": "<bug-2>",
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>"
+    },
+    {
+     "id": "<bug-1>",
+     "kind": "feel",
+     "map": "field",
+     "reporter": "Ada",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Yaw feels late",
+     "updatedUtc": "<t>"
+    }
+   ]
+  ],
+  [
+   "bugs open visual",
+   [
+    {
+     "id": "<bug-2>",
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>"
+    }
+   ]
+  ],
+  [
+   "bugs limit 1",
+   [
+    {
+     "id": "<bug-3>",
+     "kind": "crash",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Crash on load",
+     "updatedUtc": "<t>"
+    }
+   ]
+  ],
+  [
+   "bugs limit junk",
+   [
+    {
+     "id": "<bug-3>",
+     "kind": "crash",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Crash on load",
+     "updatedUtc": "<t>"
+    },
+    {
+     "id": "<bug-2>",
+     "kind": "visual",
+     "map": "",
+     "reporter": "Anonymous",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Gate draws black",
+     "updatedUtc": "<t>"
+    },
+    {
+     "id": "<bug-1>",
+     "kind": "feel",
+     "map": "field",
+     "reporter": "Ada",
+     "status": "open",
+     "submittedUtc": "<t>",
+     "title": "Yaw feels late",
+     "updatedUtc": "<t>"
+    }
+   ]
+  ],
+  [
+   "bug get",
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-2>",
+    "images": [
+     {
+      "n": 1,
+      "size": 69,
+      "type": "image/png"
+     },
+     {
+      "n": 2,
+      "size": 8,
+      "type": "image/jpeg"
+     }
+    ],
+    "kind": "visual",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Gate draws black",
+    "updatedUtc": "<t>",
+    "what": "The third gate draws completely black at dusk."
+   }
+  ],
+  [
+   "bug image 1",
+   {
+    "bytes": "<bytes 69 8f546265c1101ceb>",
+    "type": "image/png"
+   }
+  ],
+  [
+   "bug image 2",
+   {
+    "bytes": "<bytes 8 42ac5df2dd7b2fcf>",
+    "type": "image/jpeg"
+   }
+  ],
+  [
+   "bug image 3",
+   null
+  ],
+  [
+   "bug update status",
+   {
+    "context": {
+     "gpu": "x",
+     "map": "field"
+    },
+    "expected": "",
+    "id": "<bug-1>",
+    "images": [],
+    "kind": "feel",
+    "map": "field",
+    "reporter": "Ada",
+    "resolution": "Rates.",
+    "status": "fixed",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Yaw feels late",
+    "updatedUtc": "<t>",
+    "what": "A right yaw stick takes a beat before the quad turns."
+   }
+  ],
+  [
+   "bug update resolution only",
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-2>",
+    "images": [
+     {
+      "n": 1,
+      "size": 69,
+      "type": "image/png"
+     },
+     {
+      "n": 2,
+      "size": 8,
+      "type": "image/jpeg"
+     }
+    ],
+    "kind": "visual",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "Looking.",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Gate draws black",
+    "updatedUtc": "<t>",
+    "what": "The third gate draws completely black at dusk."
+   }
+  ],
+  [
+   "bug update status only",
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-3>",
+    "images": [],
+    "kind": "crash",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "in_progress",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Crash on load",
+    "updatedUtc": "<t>",
+    "what": "The page crashed while loading the alps map."
+   }
+  ],
+  [
+   "bug update missing",
+   {
+    "error": "That ticket is not on the board.",
+    "status": 404
+   }
+  ],
+  [
+   "bugs fixed",
+   [
+    {
+     "id": "<bug-1>",
+     "kind": "feel",
+     "map": "field",
+     "reporter": "Ada",
+     "status": "fixed",
+     "submittedUtc": "<t>",
+     "title": "Yaw feels late",
+     "updatedUtc": "<t>"
+    }
+   ]
+  ],
+  [
+   "bug get missing",
+   null
+  ],
+  [
+   "stats",
+   "recorded"
+  ],
+  [
+   "stats 7 days",
+   {
+    "allTime": {
+     "countries": 4,
+     "crashes": 1,
+     "flightS": 110,
+     "laps": 3,
+     "sessions": 2,
+     "visits": 4
+    },
+    "countries": [
+     {
+      "dim": "country",
+      "key": "AU",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "NZ",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "country",
+      "key": "FR",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "ZZ",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "craft": [
+     {
+      "dim": "craft",
+      "key": "5inch",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "craft",
+      "key": "sky1800",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "days": [
+     {
+      "crashes": 0,
+      "day": "2026-09-30",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 1,
+      "day": "2026-10-01",
+      "flightS": 50,
+      "laps": 3,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-02",
+      "flightS": 60,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-03",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-04",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-05",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-06",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "firstDay": "2026-08-01",
+    "generatedUtc": "<t>",
+    "inputs": [
+     {
+      "dim": "input",
+      "key": "gamepad",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "input",
+      "key": "keyboard",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "maps": [
+     {
+      "dim": "map",
+      "key": "custom",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "map",
+      "key": "city",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "sources": [
+     {
+      "dim": "source",
+      "key": "direct",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "source",
+      "key": "acme",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "source",
+      "key": "other",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "surfaces": [
+     {
+      "dim": "surface",
+      "key": "board",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "surface",
+      "key": "landing",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "surface",
+      "key": "sim",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "today": {
+     "crashes": 0,
+     "day": "2026-10-06",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 1,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    "window": {
+     "countries": 3,
+     "crashes": 1,
+     "days": 7,
+     "flightS": 110,
+     "laps": 3,
+     "newVisitors": 2,
+     "returningVisitors": 1,
+     "sessions": 2,
+     "visits": 3
+    }
+   }
+  ],
+  [
+   "stats 30 days",
+   {
+    "allTime": {
+     "countries": 4,
+     "crashes": 1,
+     "flightS": 110,
+     "laps": 3,
+     "sessions": 2,
+     "visits": 4
+    },
+    "countries": [
+     {
+      "dim": "country",
+      "key": "AU",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "NZ",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "country",
+      "key": "FR",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "ZZ",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "craft": [
+     {
+      "dim": "craft",
+      "key": "5inch",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "craft",
+      "key": "sky1800",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "days": [
+     {
+      "crashes": 0,
+      "day": "2026-09-07",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-08",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-09",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-10",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-11",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-12",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-13",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-14",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-15",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-16",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-17",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-18",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-19",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-20",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-21",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-22",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-23",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-24",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-25",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-26",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-27",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-28",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-29",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-30",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 1,
+      "day": "2026-10-01",
+      "flightS": 50,
+      "laps": 3,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-02",
+      "flightS": 60,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-03",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-04",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-05",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-06",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "firstDay": "2026-08-01",
+    "generatedUtc": "<t>",
+    "inputs": [
+     {
+      "dim": "input",
+      "key": "gamepad",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "input",
+      "key": "keyboard",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "maps": [
+     {
+      "dim": "map",
+      "key": "custom",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "map",
+      "key": "city",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "sources": [
+     {
+      "dim": "source",
+      "key": "direct",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "source",
+      "key": "acme",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "source",
+      "key": "other",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "surfaces": [
+     {
+      "dim": "surface",
+      "key": "board",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "surface",
+      "key": "landing",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "surface",
+      "key": "sim",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "today": {
+     "crashes": 0,
+     "day": "2026-10-06",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 1,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    "window": {
+     "countries": 3,
+     "crashes": 1,
+     "days": 30,
+     "flightS": 110,
+     "laps": 3,
+     "newVisitors": 2,
+     "returningVisitors": 1,
+     "sessions": 2,
+     "visits": 3
+    }
+   }
+  ],
+  [
+   "stats 90 days",
+   {
+    "allTime": {
+     "countries": 4,
+     "crashes": 1,
+     "flightS": 110,
+     "laps": 3,
+     "sessions": 2,
+     "visits": 4
+    },
+    "countries": [
+     {
+      "dim": "country",
+      "key": "AU",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "NZ",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "country",
+      "key": "BR",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "FR",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "country",
+      "key": "ZZ",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "craft": [
+     {
+      "dim": "craft",
+      "key": "5inch",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "craft",
+      "key": "sky1800",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "days": [
+     {
+      "crashes": 0,
+      "day": "2026-07-09",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-10",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-11",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-12",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-13",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-14",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-15",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-16",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-17",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-18",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-19",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-20",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-21",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-22",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-23",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-24",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-25",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-26",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-27",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-28",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-29",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-30",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-07-31",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-01",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-02",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-03",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-04",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-05",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-06",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-07",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-08",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-09",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-10",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-11",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-12",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-13",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-14",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-15",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-16",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-17",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-18",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-19",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-20",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-21",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-22",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-23",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-24",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-25",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-26",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-27",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-28",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-29",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-30",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-08-31",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-01",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-02",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-03",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-04",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-05",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-06",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-07",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-08",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-09",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-10",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-11",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-12",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-13",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-14",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-15",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-16",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-17",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-18",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-19",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-20",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-21",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-22",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-23",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-24",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-25",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-26",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-27",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-28",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-29",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-09-30",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 1,
+      "day": "2026-10-01",
+      "flightS": 50,
+      "laps": 3,
+      "newVisitors": 1,
+      "returningVisitors": 1,
+      "sessions": 1,
+      "visits": 2
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-02",
+      "flightS": 60,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-03",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-04",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-05",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 0,
+      "returningVisitors": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "crashes": 0,
+      "day": "2026-10-06",
+      "flightS": 0,
+      "laps": 0,
+      "newVisitors": 1,
+      "returningVisitors": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "firstDay": "2026-08-01",
+    "generatedUtc": "<t>",
+    "inputs": [
+     {
+      "dim": "input",
+      "key": "gamepad",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "input",
+      "key": "keyboard",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "maps": [
+     {
+      "dim": "map",
+      "key": "custom",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 0
+     },
+     {
+      "dim": "map",
+      "key": "city",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 0
+     }
+    ],
+    "sources": [
+     {
+      "dim": "source",
+      "key": "direct",
+      "laps": 3,
+      "sessions": 1,
+      "visits": 2
+     },
+     {
+      "dim": "source",
+      "key": "acme",
+      "laps": 0,
+      "sessions": 1,
+      "visits": 1
+     },
+     {
+      "dim": "source",
+      "key": "other",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "surfaces": [
+     {
+      "dim": "surface",
+      "key": "board",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 2
+     },
+     {
+      "dim": "surface",
+      "key": "landing",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     },
+     {
+      "dim": "surface",
+      "key": "sim",
+      "laps": 0,
+      "sessions": 0,
+      "visits": 1
+     }
+    ],
+    "today": {
+     "crashes": 0,
+     "day": "2026-10-06",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 1,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    "window": {
+     "countries": 4,
+     "crashes": 1,
+     "days": 90,
+     "flightS": 110,
+     "laps": 3,
+     "newVisitors": 3,
+     "returningVisitors": 1,
+     "sessions": 2,
+     "visits": 4
+    }
+   }
+  ],
+  [
+   "facts",
+   {
+    "pilots": 4,
+    "pilotsOnMoreThanOneDay": 0,
+    "times": 5,
+    "tracks": 3
+   }
+  ],
+  [
+   "remove room",
+   {
+    "author": "Bo",
+    "id": "trk-20000001",
+    "name": "Sala",
+    "times": 1
+   }
+  ],
+  [
+   "remove missing",
+   null
+  ],
+  [
+   "list after remove",
+   [
+    {
+     "author": "Ada Two",
+     "best": {
+      "lapMs": 39000,
+      "name": "Ada Two"
+     },
+     "designer": "",
+     "elements": 3,
+     "gates": 3,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-10000001",
+     "map": null,
+     "name": "Costanera Norte",
+     "plan": {
+      "depth": 40,
+      "marks": [
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 10,
+        "y": 10,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 25,
+        "y": 11,
+        "yaw": 0
+       },
+       {
+        "clearW": 1.524,
+        "d": "<undefined>",
+        "levels": 1,
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 30,
+        "y": 12,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 10,
+        "y": 10
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 25,
+        "y": 11
+       },
+       {
+        "n": 3,
+        "stack": 0,
+        "x": 30,
+        "y": 12
+       }
+      ],
+      "path": [
+       {
+        "x": 10,
+        "y": 10
+       },
+       {
+        "x": 25,
+        "y": 11
+       },
+       {
+        "x": 30,
+        "y": 12
+       }
+      ],
+      "trackClass": "full",
+      "width": 60
+     },
+     "planes": "<planes>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [],
+     "times": 1,
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": null
+    },
+    {
+     "author": "Cy",
+     "best": {
+      "lapMs": 90000,
+      "name": "Cy"
+     },
+     "designer": "",
+     "elements": 3,
+     "gates": 3,
+     "gifUtc": null,
+     "hasGif": false,
+     "hasLogo": false,
+     "id": "trk-30000001",
+     "map": "swiss2",
+     "name": "Valle Alto",
+     "plan": {
+      "depth": 118,
+      "map": "swiss2",
+      "marks": [
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 24,
+        "y": 64,
+        "yaw": 0
+       },
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 144,
+        "y": 94,
+        "yaw": 0
+       },
+       {
+        "clearW": "<undefined>",
+        "d": "<undefined>",
+        "levels": "<undefined>",
+        "padSize": "<undefined>",
+        "pads": "<undefined>",
+        "seq": true,
+        "spacing": "<undefined>",
+        "type": "gate",
+        "w": "<undefined>",
+        "x": 224,
+        "y": 24,
+        "yaw": 0
+       }
+      ],
+      "numbers": [
+       {
+        "n": 1,
+        "stack": 0,
+        "x": 24,
+        "y": 64
+       },
+       {
+        "n": 2,
+        "stack": 0,
+        "x": 144,
+        "y": 94
+       },
+       {
+        "n": 3,
+        "stack": 0,
+        "x": 224,
+        "y": 24
+       }
+      ],
+      "path": [
+       {
+        "x": 24,
+        "y": 64
+       },
+       {
+        "x": 144,
+        "y": 94
+       },
+       {
+        "x": 224,
+        "y": 24
+       }
+      ],
+      "trackClass": "full",
+      "width": 248
+     },
+     "planes": "<planes>",
+     "publishedUtc": "<t>",
+     "series": "",
+     "tags": [],
+     "times": 1,
+     "trackClass": "full",
+     "updatedUtc": "<t>",
+     "wing": {
+      "best": {
+       "lapMs": 80000,
+       "name": "Bo"
+      },
+      "times": 2
+     }
+    }
+   ]
+  ],
+  [
+   "facts after remove",
+   {
+    "pilots": 4,
+    "pilotsOnMoreThanOneDay": 0,
+    "times": 4,
+    "tracks": 2
+   }
+  ]
+ ],
+ "readAll": {
+  "bugs": [
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-1>",
+    "images": [],
+    "kind": "crash",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "in_progress",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Crash on load",
+    "updatedUtc": "<t>",
+    "what": "The page crashed while loading the alps map."
+   },
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-2>",
+    "images": [
+     {
+      "n": 1,
+      "size": 69,
+      "type": "image/png"
+     },
+     {
+      "n": 2,
+      "size": 8,
+      "type": "image/jpeg"
+     }
+    ],
+    "kind": "visual",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "Looking.",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Gate draws black",
+    "updatedUtc": "<t>",
+    "what": "The third gate draws completely black at dusk."
+   },
+   {
+    "context": {
+     "gpu": "x",
+     "map": "field"
+    },
+    "expected": "",
+    "id": "<bug-3>",
+    "images": [],
+    "kind": "feel",
+    "map": "field",
+    "reporter": "Ada",
+    "resolution": "Rates.",
+    "status": "fixed",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Yaw feels late",
+    "updatedUtc": "<t>",
+    "what": "A right yaw stick takes a beat before the quad turns."
+   },
+   {
+    "context": {},
+    "expected": "",
+    "id": "<bug-4>",
+    "images": [],
+    "kind": "other",
+    "map": "",
+    "reporter": "Anonymous",
+    "resolution": "",
+    "status": "open",
+    "steps": "",
+    "submittedUtc": "<t>",
+    "title": "Old ticket",
+    "updatedUtc": "<t>",
+    "what": "Written before screenshots existed."
+   }
+  ],
+  "documents": [
+   {
+    "author": "Ada Two",
+    "document": {
+     "branding": {
+      "logos": []
+     },
+     "elements": [
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-1",
+       "name": "Gate",
+       "position": {
+        "x": 10,
+        "y": 10,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      },
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-2",
+       "name": "Gate",
+       "position": {
+        "x": 25,
+        "y": 11,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      },
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-3",
+       "name": "Gate",
+       "position": {
+        "x": 30,
+        "y": 12,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      }
+     ],
+     "field": {
+      "depth": 40,
+      "gridSize": 1,
+      "width": 60
+     },
+     "id": "trk-10000001",
+     "name": "Costanera Norte",
+     "schemaVersion": 2,
+     "sequence": [
+      {
+       "apertureIndex": 0,
+       "elementId": "el-1",
+       "entry": 0,
+       "id": "sq-1"
+      },
+      {
+       "apertureIndex": 0,
+       "elementId": "el-2",
+       "entry": 0,
+       "id": "sq-2"
+      },
+      {
+       "apertureIndex": 0,
+       "elementId": "el-3",
+       "entry": 0,
+       "id": "sq-3"
+      }
+     ],
+     "settings": {
+      "minCurveRadius": 2,
+      "samplesPerSegment": 24,
+      "tangentScale": 1
+     }
+    },
+    "id": "trk-10000001",
+    "name": "Costanera Norte"
+   },
+   {
+    "author": "Cy",
+    "document": {
+     "branding": {
+      "logos": []
+     },
+     "credit": null,
+     "elements": [
+      {
+       "dims": {},
+       "id": "el-1",
+       "orientation": {
+        "w": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "position": {
+        "x": 0,
+        "y": 0,
+        "z": 30
+       },
+       "type": "wideGate5"
+      },
+      {
+       "dims": {},
+       "id": "el-2",
+       "orientation": {
+        "w": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "position": {
+        "x": 120,
+        "y": 30,
+        "z": 30
+       },
+       "type": "wideGate5"
+      },
+      {
+       "dims": {},
+       "id": "el-3",
+       "orientation": {
+        "w": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "position": {
+        "x": 200,
+        "y": -40,
+        "z": 30
+       },
+       "type": "wideGate5"
+      }
+     ],
+     "field": {
+      "depth": 40,
+      "gridSize": 1,
+      "width": 60
+     },
+     "id": "trk-30000001",
+     "map": "swiss2",
+     "name": "Valle Alto",
+     "schemaVersion": 4,
+     "sequence": [
+      {
+       "apertureIndex": 0,
+       "elementId": "el-1",
+       "entry": 0,
+       "id": "sq-1"
+      },
+      {
+       "apertureIndex": 0,
+       "elementId": "el-2",
+       "entry": 0,
+       "id": "sq-2"
+      },
+      {
+       "apertureIndex": 0,
+       "elementId": "el-3",
+       "entry": 0,
+       "id": "sq-3"
+      }
+     ],
+     "settings": {
+      "minCurveRadius": 2,
+      "samplesPerSegment": 24,
+      "tangentScale": 1
+     },
+     "trackClass": "full"
+    },
+    "id": "trk-30000001",
+    "name": "Valle Alto"
+   },
+   {
+    "author": "Old",
+    "document": {
+     "branding": {
+      "logo": null,
+      "logoName": ""
+     },
+     "elements": [
+      {
+       "dims": {
+        "clearH": 1.524,
+        "clearW": 1.524,
+        "levels": 1,
+        "sillH": 0
+       },
+       "id": "el-1",
+       "name": "Gate",
+       "position": {
+        "x": 30,
+        "y": 20,
+        "z": 0
+       },
+       "type": "gate",
+       "yaw": 0
+      }
+     ],
+     "field": {
+      "depth": 40,
+      "gridSize": 1,
+      "width": 60
+     },
+     "id": "trk-40000001",
+     "name": "Viejo",
+     "schemaVersion": 1,
+     "sequence": [
+      {
+       "apertureIndex": 0,
+       "elementId": "el-1",
+       "entry": 1,
+       "id": "sq-1"
+      }
+     ],
+     "settings": {}
+    },
+    "id": "trk-40000001",
+    "name": "Viejo"
+   }
+  ],
+  "facts": {
+   "pilots": 6,
+   "pilotsOnMoreThanOneDay": 1,
+   "times": 7,
+   "tracks": 3
+  },
+  "ghosts": [
+   [
+    {
+     "ghost": null,
+     "id": "<tm-1>",
+     "lapMs": 39000,
+     "name": "Ada Two"
+    }
+   ],
+   [
+    {
+     "ghost": null,
+     "id": "<tm-2>",
+     "lapMs": 80000,
+     "name": "Bo"
+    },
+    {
+     "ghost": null,
+     "id": "<tm-3>",
+     "lapMs": 90000,
+     "name": "Cy"
+    },
+    {
+     "ghost": null,
+     "id": "<tm-4>",
+     "lapMs": 95000,
+     "name": "Ada"
+    }
+   ],
+   [
+    null,
+    null,
+    null
+   ]
+  ],
+  "gifs": [
+   null,
+   null,
+   null
+  ],
+  "images": [
+   null,
+   {
+    "bytes": "<bytes 69 8f546265c1101ceb>",
+    "type": "image/png"
+   },
+   null,
+   null
+  ],
+  "list": [
+   {
+    "author": "Ada Two",
+    "best": {
+     "lapMs": 39000,
+     "name": "Ada Two"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera Norte",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 25,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 25,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 25,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": 1,
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   },
+   {
+    "author": "Cy",
+    "best": {
+     "lapMs": 90000,
+     "name": "Cy"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-30000001",
+    "map": "swiss2",
+    "name": "Valle Alto",
+    "plan": {
+     "depth": 118,
+     "map": "swiss2",
+     "marks": [
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 24,
+       "y": 64,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 144,
+       "y": 94,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 224,
+       "y": 24,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 24,
+       "y": 64
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 144,
+       "y": 94
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "path": [
+      {
+       "x": 24,
+       "y": 64
+      },
+      {
+       "x": 144,
+       "y": 94
+      },
+      {
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "trackClass": "full",
+     "width": 248
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": 1,
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": {
+     "best": {
+      "lapMs": 80000,
+      "name": "Bo"
+     },
+     "times": 2
+    }
+   },
+   {
+    "author": "Old",
+    "best": {
+     "lapMs": 29000,
+     "name": "old a"
+    },
+    "designer": "",
+    "elements": 1,
+    "gates": 1,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-40000001",
+    "map": null,
+    "name": "Viejo",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 20,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 30,
+       "y": 20
+      }
+     ],
+     "path": [
+      {
+       "x": 30,
+       "y": 20
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": 3,
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ],
+  "runs": [
+   {
+    "bestCombo": 3000,
+    "bestTrick": 850,
+    "crashes": 2,
+    "durationMs": 110000,
+    "id": "<run-1>",
+    "map": "alps",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "score": 9000,
+    "signature": "Split S",
+    "style": "expert",
+    "tricks": 30,
+    "unique": 12
+   },
+   {
+    "bestCombo": 900,
+    "bestTrick": 700,
+    "crashes": 0,
+    "durationMs": 100000,
+    "id": "<run-2>",
+    "map": "alps",
+    "name": "Bo",
+    "postedUtc": "<t>",
+    "score": 5000,
+    "signature": "Power loop",
+    "style": "expert",
+    "tricks": 10,
+    "unique": 5
+   },
+   {
+    "bestCombo": 200,
+    "bestTrick": 150,
+    "crashes": 0,
+    "durationMs": 60000,
+    "id": null,
+    "map": "yellowstone",
+    "name": "Old Run",
+    "postedUtc": "<t>",
+    "score": 300,
+    "signature": "",
+    "style": "expert",
+    "tricks": 3,
+    "unique": 2
+   },
+   {
+    "bestCombo": 100,
+    "bestTrick": 100,
+    "crashes": 0,
+    "durationMs": 5000,
+    "id": "<run-3>",
+    "map": "swiss2",
+    "name": "Ada",
+    "postedUtc": "<t>",
+    "score": 100,
+    "signature": "",
+    "style": "arcade",
+    "tricks": 1,
+    "unique": 1
+   }
+  ],
+  "stats": {
+   "allTime": {
+    "countries": 4,
+    "crashes": 1,
+    "flightS": 110,
+    "laps": 3,
+    "sessions": 2,
+    "visits": 4
+   },
+   "countries": [
+    {
+     "dim": "country",
+     "key": "AU",
+     "laps": 3,
+     "sessions": 1,
+     "visits": 1
+    },
+    {
+     "dim": "country",
+     "key": "NZ",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 0
+    },
+    {
+     "dim": "country",
+     "key": "FR",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    {
+     "dim": "country",
+     "key": "ZZ",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    }
+   ],
+   "craft": [
+    {
+     "dim": "craft",
+     "key": "5inch",
+     "laps": 3,
+     "sessions": 1,
+     "visits": 0
+    },
+    {
+     "dim": "craft",
+     "key": "sky1800",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 0
+    }
+   ],
+   "days": [
+    {
+     "crashes": 0,
+     "day": "2026-09-07",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-08",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-09",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-10",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-11",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-12",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-13",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-14",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-15",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-16",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-17",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-18",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-19",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-20",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-21",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-22",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-23",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-24",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-25",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-26",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-27",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-28",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-29",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-09-30",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 1,
+     "day": "2026-10-01",
+     "flightS": 50,
+     "laps": 3,
+     "newVisitors": 1,
+     "returningVisitors": 1,
+     "sessions": 1,
+     "visits": 2
+    },
+    {
+     "crashes": 0,
+     "day": "2026-10-02",
+     "flightS": 60,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-10-03",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-10-04",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-10-05",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 0,
+     "returningVisitors": 0,
+     "sessions": 1,
+     "visits": 0
+    },
+    {
+     "crashes": 0,
+     "day": "2026-10-06",
+     "flightS": 0,
+     "laps": 0,
+     "newVisitors": 1,
+     "returningVisitors": 0,
+     "sessions": 0,
+     "visits": 1
+    }
+   ],
+   "firstDay": "2026-08-01",
+   "generatedUtc": "<t>",
+   "inputs": [
+    {
+     "dim": "input",
+     "key": "gamepad",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 0
+    },
+    {
+     "dim": "input",
+     "key": "keyboard",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 0
+    }
+   ],
+   "maps": [
+    {
+     "dim": "map",
+     "key": "custom",
+     "laps": 3,
+     "sessions": 1,
+     "visits": 0
+    },
+    {
+     "dim": "map",
+     "key": "city",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 0
+    }
+   ],
+   "sources": [
+    {
+     "dim": "source",
+     "key": "direct",
+     "laps": 3,
+     "sessions": 1,
+     "visits": 1
+    },
+    {
+     "dim": "source",
+     "key": "acme",
+     "laps": 0,
+     "sessions": 1,
+     "visits": 1
+    },
+    {
+     "dim": "source",
+     "key": "other",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    }
+   ],
+   "surfaces": [
+    {
+     "dim": "surface",
+     "key": "board",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    {
+     "dim": "surface",
+     "key": "landing",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    },
+    {
+     "dim": "surface",
+     "key": "sim",
+     "laps": 0,
+     "sessions": 0,
+     "visits": 1
+    }
+   ],
+   "today": {
+    "crashes": 0,
+    "day": "2026-10-06",
+    "flightS": 0,
+    "laps": 0,
+    "newVisitors": 1,
+    "returningVisitors": 0,
+    "sessions": 0,
+    "visits": 1
+   },
+   "window": {
+    "countries": 3,
+    "crashes": 1,
+    "days": 30,
+    "flightS": 110,
+    "laps": 3,
+    "newVisitors": 2,
+    "returningVisitors": 1,
+    "sessions": 2,
+    "visits": 3
+   }
+  },
+  "tracks": [
+   {
+    "author": "Ada Two",
+    "best": {
+     "lapMs": 39000,
+     "name": "Ada Two"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-10000001",
+    "map": null,
+    "name": "Costanera Norte",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 10,
+       "y": 10,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 25,
+       "y": 11,
+       "yaw": 0
+      },
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 12,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 10,
+       "y": 10
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 25,
+       "y": 11
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "path": [
+      {
+       "x": 10,
+       "y": 10
+      },
+      {
+       "x": 25,
+       "y": 11
+      },
+      {
+       "x": 30,
+       "y": 12
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-1>",
+      "lapMs": 39000,
+      "name": "Ada Two",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   },
+   {
+    "author": "Cy",
+    "best": {
+     "lapMs": 90000,
+     "name": "Cy"
+    },
+    "designer": "",
+    "elements": 3,
+    "gates": 3,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-30000001",
+    "map": "swiss2",
+    "name": "Valle Alto",
+    "plan": {
+     "depth": 118,
+     "map": "swiss2",
+     "marks": [
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 24,
+       "y": 64,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 144,
+       "y": 94,
+       "yaw": 0
+      },
+      {
+       "clearW": "<undefined>",
+       "d": "<undefined>",
+       "levels": "<undefined>",
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 224,
+       "y": 24,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 24,
+       "y": 64
+      },
+      {
+       "n": 2,
+       "stack": 0,
+       "x": 144,
+       "y": 94
+      },
+      {
+       "n": 3,
+       "stack": 0,
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "path": [
+      {
+       "x": 24,
+       "y": 64
+      },
+      {
+       "x": 144,
+       "y": 94
+      },
+      {
+       "x": 224,
+       "y": 24
+      }
+     ],
+     "trackClass": "full",
+     "width": 248
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [
+     {
+      "craft": "cub1400",
+      "hasGhost": false,
+      "id": "<tm-2>",
+      "lapMs": 80000,
+      "name": "Bo",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": "<tm-3>",
+      "lapMs": 90000,
+      "name": "Cy",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": "sky1800",
+      "hasGhost": false,
+      "id": "<tm-4>",
+      "lapMs": 95000,
+      "name": "Ada",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": {
+     "best": {
+      "lapMs": 80000,
+      "name": "Bo"
+     },
+     "times": 2
+    }
+   },
+   {
+    "author": "Old",
+    "best": {
+     "lapMs": 29000,
+     "name": "old a"
+    },
+    "designer": "",
+    "elements": 1,
+    "gates": 1,
+    "gifUtc": null,
+    "hasGif": false,
+    "hasLogo": false,
+    "id": "trk-40000001",
+    "map": null,
+    "name": "Viejo",
+    "plan": {
+     "depth": 40,
+     "marks": [
+      {
+       "clearW": 1.524,
+       "d": "<undefined>",
+       "levels": 1,
+       "padSize": "<undefined>",
+       "pads": "<undefined>",
+       "seq": true,
+       "spacing": "<undefined>",
+       "type": "gate",
+       "w": "<undefined>",
+       "x": 30,
+       "y": 20,
+       "yaw": 0
+      }
+     ],
+     "numbers": [
+      {
+       "n": 1,
+       "stack": 0,
+       "x": 30,
+       "y": 20
+      }
+     ],
+     "path": [
+      {
+       "x": 30,
+       "y": 20
+      }
+     ],
+     "trackClass": "full",
+     "width": 60
+    },
+    "planes": "<planes>",
+    "publishedUtc": "<t>",
+    "series": "",
+    "tags": [],
+    "times": [
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": null,
+      "lapMs": 29000,
+      "name": "old a",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": null,
+      "lapMs": 30000,
+      "name": "Old A",
+      "postedUtc": "<t>",
+      "threeMs": null
+     },
+     {
+      "craft": null,
+      "hasGhost": false,
+      "id": null,
+      "lapMs": 31000,
+      "name": "Once",
+      "postedUtc": "<t>",
+      "threeMs": null
+     }
+    ],
+    "trackClass": "full",
+    "updatedUtc": "<t>",
+    "wing": null
+   }
+  ]
+ }
+}
