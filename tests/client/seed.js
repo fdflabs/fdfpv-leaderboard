@@ -137,7 +137,7 @@ export async function seedBoard(origin) {
 
   await post('/api/bugs', {
     kind: 'visual', title: 'Gate flickers at dusk', what: 'The third gate flickers when the sun is low over the lake.',
-    reporter: 'Tatu', context: { map: 'alps' },
+    reporter: 'Tatu', context: { map: 'alps' }, images: [LOGO.split(',')[1]],
   });
   await post('/api/bugs', {
     kind: 'crash', title: 'Tab froze after a reset', what: 'Pressing reset twice in a row froze the whole tab for me.',

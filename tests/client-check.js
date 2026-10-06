@@ -199,11 +199,38 @@ function scenes(trackIds) {
     { name: 'bugs', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list .ticket, #list button').length > 0` },
     { name: 'bugs-ticket', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
       then: `document.querySelector('#list button').click()`, thenReady: `document.getElementById('sheet')?.textContent.length > 0 || true` },
+    { name: 'bugs-kind', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
+      then: `(() => { const k = document.getElementById('kind'); k.value = 'visual'; k.dispatchEvent(new Event('change')); })()`,
+      thenReady: `document.querySelectorAll('#list button').length === 1` },
+    { name: 'bugs-image', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
+      then: `[...document.querySelectorAll('#list button')].find((b) => b.textContent.includes('Gate flickers')).click()`,
+      thenReady: `document.querySelector('#sheet .shot img')?.complete === true` },
+    { name: 'bugs-save', path: '/bugs.html', act: BUGS, ready: `document.querySelectorAll('#list button').length > 0`,
+      then: `(async () => {
+        document.querySelector('#list button').click();
+        await new Promise((r) => setTimeout(r, 400));
+        document.querySelector('#sheet textarea').value = 'Looked at it.';
+        [...document.querySelectorAll('#sheet .actions button')][0].click();
+      })()`,
+      thenReady: `document.querySelectorAll('#list button').length === 1` },
+    /* A token kept by an earlier visit is put back in the box, and the
+     * board's admin sign in opens the inbox without one. These two are
+     * what a storage key rename has to keep working across the deploy, so
+     * the keys are seeded under the names the page has always used. */
+    { name: 'bugs-kept-token', path: '/bugs.html', before: `sessionStorage.setItem('webfpv.bugs.token', ${JSON.stringify(BUGS_TOKEN)})`,
+      ready: `document.querySelectorAll('#list button').length > 0` },
+    { name: 'bugs-admin-session', path: '/', act: SIGN_IN, ready: `!document.getElementById('admin-signed').hidden`,
+      then: `location.href = 'bugs.html'`, thenReady: `document.querySelectorAll('#list button').length > 0` },
   ];
   base.push({ name: 'plans', path: '/api/health', plans: true });
   const spanish = base
     .filter((s) => !s.plans && !s.path.startsWith('/bugs'))
     .map((s) => ({ ...s, name: `es-${s.name}`, spanish: true }));
+  /* The inbox has no language link; it reads ?lang= like the board. */
+  for (const name of ['bugs', 'bugs-image']) {
+    const s = base.find((b) => b.name === name);
+    spanish.push({ ...s, name: `es-${name}`, path: '/bugs.html?lang=es' });
+  }
   return [...base, ...spanish];
 }
 
@@ -242,6 +269,9 @@ async function walk(tree, template, frozenMs, trackIds) {
     for (const scene of scenes(trackIds)) {
       await tab.navigate(`${board.origin}/empty`);
       await tab.evaluate('localStorage.clear(); sessionStorage.clear(); true');
+      if (scene.before) {
+        await tab.evaluate(`${scene.before}; true`);
+      }
       /* Room for the previous scene's unload beacon to land before this
        * scene starts counting what it sends. */
       await tab.sleep(400);
