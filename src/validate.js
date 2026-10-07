@@ -30,6 +30,7 @@
  * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
 import { createHash } from 'node:crypto';
+import { AIRFRAME_IDS } from './airframes.js';
 
 const refuse = (error) => ({ error });
 
@@ -1102,19 +1103,13 @@ export const STATS_KINDS = ['visit', 'session', 'flush'];
 export const STATS_SURFACES = ['sim', 'builder', 'board', 'landing'];
 
 /*
- * Airframe ids as the simulator's configs/airframes.js spells them, so the
- * page can print a name from the id. `5inch` and `whoop65` left that
- * catalogue on 2026-10-03 but stay: older clients folded every aircraft
- * onto them and their stored rows are history. An unknown id folds to
- * `other` instead of being refused, since refusing would drop the session
- * and its minute of "flying now" whenever the simulator adds an airframe.
+ * The aircraft, by the ids the simulator gives them, so the page can print
+ * a name from an id. The list is generated into src/airframes.js. An id not
+ * on it folds to `other` rather than being refused, since refusing would
+ * drop the session and its minute of "flying now" whenever the simulator
+ * adds an airframe before this board has heard of it.
  */
-export const STATS_CRAFT = [
-  '5inch', 'whoop65',
-  '7inch', '10inch', 'interceptor', 'sky1800', 'cub1400', 'radian2000', 'bramor2300', 'slowstick1180',
-  'timber1500', 'timber1500f', 'cub1400f', 'bombshell1118', 'kadet1981', 'uglystik1567', 'tigermoth1803',
-  'p51d1450', 'f16878', 'zagi1219', 'nrj1490', 'striker2500',
-];
+export const STATS_CRAFT = AIRFRAME_IDS;
 
 /* `custom` is a track, built or fetched; `city` is freestyle. Others fold
  * so a new simulator map never makes an older board refuse sessions. */

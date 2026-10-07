@@ -522,7 +522,9 @@ const AIRFRAME_NAMES = {
 };
 for (const id of ['7inch', '10inch', 'interceptor', 'sky1800', 'cub1400', 'radian2000', 'bramor2300', 'slowstick1180',
   'timber1500', 'timber1500f', 'cub1400f', 'bombshell1118', 'kadet1981', 'uglystik1567', 'tigermoth1803', 'p51d1450',
-  'f16878', 'zagi1219', 'nrj1490', 'striker2500']) {
+  'f16878', 'zagi1219', 'nrj1490', 'striker2500',
+  /* Retired by the simulator on 2026-09-29; older builds still send them. */
+  'quickie1293', 'edge1524', 'extra1308', 'pitts850', 'wot41334']) {
   AIRFRAME_NAMES[id] = str(`stats.craft_${id}`);
 }
 const MAP_NAMES = { custom: 'Track', city: str('stats.freestyle_city'), other: 'Other' };

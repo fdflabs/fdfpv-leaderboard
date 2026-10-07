@@ -845,8 +845,16 @@ function statsWireFormat() {
 }
 
 async function statsAirframes(take) {
-  /* The simulator's current catalogue, from a checkout of it: the pinned
-   * submodule lags the game, so the real list has to be named. */
+  /* The pinned simulator's catalogue, always: re-pinning vendor/fdfpv onto
+   * a simulator with a new airframe fails here until scripts/airframes.js
+   * has added it to src/airframes.js. */
+  const pinned = (await import('../vendor/fdfpv/configs/airframes.js')).AIRFRAME_IDS;
+  check('every airframe in the pinned simulator\'s catalogue is counted as itself', pinned.length >= 20 && pinned.every((id) => (
+    take({ v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad' }).event.craft === id
+    && take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: id, flightS: 5 }).event.craft === id
+  )), pinned.filter((id) => !STATS_CRAFT.includes(id)).join());
+  /* And the simulator's current catalogue from a checkout of it, which can
+   * be ahead of the pin. */
   const catalogue = process.env.FDFPV_AIRFRAMES;
   if (!catalogue) {
     skip('FDFPV_AIRFRAMES (path to the simulator\'s configs/airframes.js) is not set');
