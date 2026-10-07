@@ -55,6 +55,42 @@ const arg = (name) => {
   return i === -1 ? null : process.argv[i + 1];
 };
 const against = arg('--against');
+/* --rule-usage <file>: write the page's style rules that match nothing in
+ * any scene, a list to check by hand before deleting a rule. */
+const ruleUsageFile = arg('--rule-usage');
+const ruleUsage = ruleUsageFile ? new Set() : null;
+const RULES_IN_USE = `(() => {
+  const used = [];
+  const visit = (rules, where) => {
+    for (const rule of rules) {
+      if (rule.cssRules && !rule.selectorText) {
+        visit(rule.cssRules, where + (rule.conditionText ? '@' + rule.conditionText + ' ' : ''));
+        continue;
+      }
+      if (!rule.selectorText) {
+        continue;
+      }
+      for (const part of rule.selectorText.split(',')) {
+        const plain = part.replace(/::?[a-z-]+(\\([^)]*\\))?/g, (m) => (/^:(not|is|where|has)/.test(m) ? m : '')).trim() || '*';
+        try {
+          if (document.querySelector(plain)) {
+            used.push(where + part.trim());
+          }
+        } catch {
+          used.push(where + part.trim());
+        }
+      }
+    }
+  };
+  for (const sheet of document.styleSheets) {
+    try {
+      visit(sheet.cssRules, '');
+    } catch {
+      /* A stylesheet from elsewhere: not ours to check. */
+    }
+  }
+  return used;
+})()`;
 const outDir = arg('--out');
 /* A screenshot may differ in this share of its pixels and still count as
  * the same page. Two walks of one tree differ in none; the clock readings
@@ -234,6 +270,19 @@ function scenes(trackIds, fixtures) {
     const s = base.find((b) => b.name === name);
     spanish.push({ ...s, name: `es-${name}`, path: '/bugs.html?lang=es' });
   }
+  /* The page's layout steps at 560, 720, 860, 900 and 1080 px, so the
+   * main scenes are also read at a phone's, a tablet's and a small
+   * laptop's width. */
+  const sized = [];
+  const SIZES = [['phone', 390, 844], ['tablet', 768, 1024], ['laptop', 1000, 800]];
+  for (const name of ['tracks', 'sheet-field', 'sheet-room', 'stats', 'stats-busy', 'admin', 'credits', 'bugs', 'bugs-image',
+    'board-empty', 'tracks-nothing']) {
+    const s = base.find((b) => b.name === name);
+    for (const [label, w, h] of SIZES) {
+      sized.push({ ...s, name: `${label}-${name}`, viewport: [w, h] });
+    }
+  }
+  spanish.push(...sized);
   /* Scenes that change the board (a ticket marked, a track removed) go
    * last, so every other scene reads the board as seeded. */
   const all = [...base, ...spanish];
@@ -439,6 +488,7 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
       /* Room for the previous scene's unload beacon to land before this
        * scene starts counting what it sends. */
       await tab.sleep(400);
+      await tab.resize(...(scene.viewport || [1280, 900]));
       tab.stubs.clear();
       for (const [path, answer] of Object.entries(scene.stub || {})) {
         tab.stubs.set(path, answer);
@@ -472,6 +522,11 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
         await settle(tab);
       }
       await dropInit?.();
+      if (ruleUsage) {
+        for (const rule of await tab.evaluate(RULES_IN_USE)) {
+          ruleUsage.add(rule);
+        }
+      }
       /* The two readings of the server's real clock (see serverClockFree)
        * are masked on the page itself too, so the screenshots agree. */
       await tab.evaluate(`for (const n of document.querySelectorAll('#admin-until, #stats-fresh')) {
@@ -643,6 +698,31 @@ function firstDifference(a, b) {
     i += 1;
   }
   return `at ${i}: was ${JSON.stringify(a.slice(Math.max(0, i - 40), i + 80))}, now ${JSON.stringify(b.slice(Math.max(0, i - 40), i + 80))}`;
+}
+
+if (ruleUsageFile) {
+  const all = await allRules();
+  const unused = all.filter((r) => !ruleUsage.has(r));
+  writeFileSync(ruleUsageFile, `${unused.join('\n')}\n`);
+  console.log(`rule usage: ${unused.length} of ${all.length} selectors matched nothing; listed in ${ruleUsageFile}`);
+}
+
+/* Every selector in the board page's and the inbox's style sheets, read
+ * by a browser so the list is the CSSOM's own. */
+async function allRules() {
+  const board = await startBoard(root, template);
+  const tab = await openTab({ allowOrigin: board.origin });
+  try {
+    const out = [];
+    for (const page of ['/', '/bugs.html']) {
+      await tab.navigate(`${board.origin}${page}`);
+      out.push(...await tab.evaluate(RULES_IN_USE.replace('if (document.querySelector(plain))', 'if (true)')));
+    }
+    return [...new Set(out)];
+  } finally {
+    await tab.close();
+    board.stop();
+  }
 }
 
 rmSync(scratch, { recursive: true, force: true });

@@ -51,7 +51,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * reaches the board; its method, path and body are kept in `swallowed`.
  * A path in `stubs` is answered with the JSON set there.
  */
-export async function openTab({ allowOrigin, seed = [], width = 1280, height = 900, swallow = [] }) {
+export async function openTab({ allowOrigin, seed = [], width: startWidth = 1280, height: startHeight = 900, swallow = [] }) {
+  let width = startWidth;
+  let height = startHeight;
   const binary = chromePath();
   if (!binary) {
     throw new Error('no Chrome found; set BOARD_CHROME');
@@ -204,6 +206,13 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
     await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
 
+  /* A different viewport, for the scenes that look at a phone or a tablet. */
+  async function resize(w, h) {
+    width = w;
+    height = h;
+    await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  }
+
   /* Script run before page scripts on the next navigations, until the
    * returned function is called. */
   async function beforePages(source) {
@@ -211,5 +220,5 @@ export async function openTab({ allowOrigin, seed = [], width = 1280, height = 9
     return () => send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
   }
 
-  return { send, evaluate, until, navigate, screenshot, close, errors, swallowed, stubs, beforePages, sleep };
+  return { send, evaluate, until, navigate, screenshot, close, errors, swallowed, stubs, beforePages, resize, sleep };
 }
