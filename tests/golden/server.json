@@ -318,7 +318,7 @@
   [
    "publish no document",
    {
-    "status": 500,
+    "status": 400,
     "headers": {
      "access-control-allow-origin": "*",
      "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -329,7 +329,25 @@
      "connection": "close"
     },
     "body": {
-     "error": "The board failed."
+     "error": "That publish carried no track document."
+    }
+   }
+  ],
+  [
+   "publish null document",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That file is not a track document."
     }
    }
   ],
@@ -1188,6 +1206,42 @@
     },
     "body": {
      "error": "That upload was not readable."
+    }
+   }
+  ],
+  [
+   "gif null body",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That upload carried no animation."
+    }
+   }
+  ],
+  [
+   "gif list body",
+   {
+    "status": 400,
+    "headers": {
+     "access-control-allow-origin": "*",
+     "access-control-allow-methods": "GET, POST, OPTIONS",
+     "access-control-allow-headers": "content-type, authorization",
+     "vary": "origin",
+     "content-type": "application/json; charset=utf-8",
+     "cache-control": "no-store",
+     "connection": "close"
+    },
+    "body": {
+     "error": "That upload carried no animation."
     }
    }
   ],

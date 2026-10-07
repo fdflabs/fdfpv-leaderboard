@@ -557,12 +557,14 @@ async function uploadAnimation({ req, res, params }) {
   if (!held) {
     return refuse(res, 404, TRACK_GONE);
   }
-  const checked = inspectGif({ base64: json.gif, document: held.document });
+  /* `null` and a list parse as JSON too; neither carries an animation. */
+  const upload = isPlainObject(json) ? json : {};
+  const checked = inspectGif({ base64: upload.gif, document: held.document });
   if (checked.error) {
     return refuse(res, 400, checked.error);
   }
   const done = await store.setGif({
-    id, bytes: checked.bytes, editKey: stringOr(json.editKey), admin: Boolean(adminOf(req)),
+    id, bytes: checked.bytes, editKey: stringOr(upload.editKey), admin: Boolean(adminOf(req)),
   });
   if (!done) {
     return refuse(res, 404, TRACK_GONE);

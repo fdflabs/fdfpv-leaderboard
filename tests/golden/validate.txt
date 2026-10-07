@@ -4770,7 +4770,7 @@ planFromDocument.sparse#4	48044597f383a40b
 planFromDocument.sparse#5	eacbb2e897323f46
 planFromDocument.sparse#6	c1d28d2c997b531b
 planFromDocument.sparse#7	2d3bc488ea2c7323
-inspectDocument.odd#0	c96bddfaaa8cda1b
+inspectDocument.odd#0	b65d34f346c0c704
 inspectDocument.odd#1	5cdca05185058dc8
 inspectDocument.odd#2	4d4cb3a75b6fe147
 inspectDocument.odd#3	4d4cb3a75b6fe147
@@ -7927,7 +7927,7 @@ const.RUN_ID_RE	8bf67a76cc3cb3ef
 const.RUN_MAPS	c5b0002129baa3bd
 const.RUN_STYLES	bf88de183bd6ede8
 const.STATS_COUNTRY_UNKNOWN	06c6d300bc8f4ec6
-const.STATS_CRAFT	85c4553923c5826d
+const.STATS_CRAFT	099a139346320318
 const.STATS_INPUTS	d0e75a87e7f25b32
 const.STATS_KINDS	df46bace7ceb9f0f
 const.STATS_MAPS	1fd49f5f9684a8a1

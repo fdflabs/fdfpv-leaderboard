@@ -2341,7 +2341,7 @@
         <!--
           The name is the way back to the front door, here and in the spine,
           because that is where every visitor looks for it. The href is the
-          checkout's landing page until app.js (bindHome, with landingOrigin
+          checkout's landing page until app.js (wireHomeLinks, with landingOrigin
           from origins.js) puts the real one in. It opens in this tab: a way
           back that leaves this page open behind it is not a way back. The
           links to the simulator are the ones that name its tab.
@@ -2392,13 +2392,13 @@
 
     <!--
       Everything a dialog has to make inert sits in one of four regions
-      (setPageInert in app.js), so the tabs and the aircraft switch live
+      (pageInert in app.js), so the tabs and the aircraft switch live
       inside <main> rather than beside it.
     -->
     <main id="tracks">
       <!--
         Two tabs, each a real link with its own hash: linkable, kept across a
-        reload, walked by the back button. route() in app.js swaps the views
+        reload, walked by the back button. followAddress() in app.js swaps the views
         on hashchange, so a pasted #stats needs no click. They are anchors
         with role="tab", so a screen reader hears tabs and a pointer still
         gets a link to copy.
@@ -2544,7 +2544,7 @@
             <div class="shot" id="sheet-shot"></div>
             <dl class="facts" id="sheet-facts"></dl>
             <div class="actions" id="sheet-actions"></div>
-            <!-- Filled only for a signed in admin; paintSheetAdmin in
+            <!-- Filled only for a signed in admin; paintTrackAdmin in
                  app.js says why removal is a second press, not a dialog. -->
             <div class="admin-tools" id="sheet-admin" hidden></div>
           </div>

@@ -24,6 +24,7 @@
     "client:check": "node tests/client-check.js",
     "client:keys": "node tests/client-keys.js",
     "wing:e2e": "FDFPV_BOARD=. node vendor/fdfpv/scripts/wing-e2e.js",
+    "airframes": "node scripts/airframes.js",
     "admin:hash": "node scripts/admin-hash.js"
   },
   "dependencies": {

@@ -315,6 +315,7 @@ async function fullBoard(port, walk) {
   await hit('publish bad author', 'POST', '/api/tracks', { body: { author: 'A', document: field } });
   await hit('publish bad document', 'POST', '/api/tracks', { body: { author: 'Ada Rook', document: { schemaVersion: 9 } } });
   await hit('publish no document', 'POST', '/api/tracks', { body: { author: 'Ada Rook' } });
+  await hit('publish null document', 'POST', '/api/tracks', { body: { author: 'Ada Rook', document: null } });
   await hit('publish bad tags', 'POST', '/api/tracks', { body: { author: 'Ada Rook', document: fieldDoc('trk-9a9a9a9a'), tags: ['nope'] } });
   await hit('publish rename with key', 'POST', '/api/tracks', { body: { author: 'Ada Rook', document: fieldDoc('trk-1a2b3c4d', 'Costanera Norte'), editKey, tags: ['race', 'technical'] } });
   const room = roomDoc('trk-2b3c4d5e');
@@ -344,6 +345,8 @@ async function fullBoard(port, walk) {
   await hit('gif missing track', 'POST', '/api/tracks/trk-00000000/gif', { body: gifBody });
   await hit('gif bad id', 'POST', '/api/tracks/x/gif', { body: gifBody });
   await hit('gif bad json', 'POST', '/api/tracks/trk-2b3c4d5e/gif', { body: '{' });
+  await hit('gif null body', 'POST', '/api/tracks/trk-2b3c4d5e/gif', { body: 'null' });
+  await hit('gif list body', 'POST', '/api/tracks/trk-2b3c4d5e/gif', { body: '[1]' });
   await hit('gif get', 'GET', '/api/tracks/trk-2b3c4d5e/gif');
   await hit('gif get none', 'GET', '/api/tracks/trk-1a2b3c4d/gif');
   await hit('gif get bad id', 'GET', '/api/tracks/x/gif');

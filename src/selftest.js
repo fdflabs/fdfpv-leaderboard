@@ -845,8 +845,16 @@ function statsWireFormat() {
 }
 
 async function statsAirframes(take) {
-  /* The simulator's current catalogue, from a checkout of it: the pinned
-   * submodule lags the game, so the real list has to be named. */
+  /* The pinned simulator's catalogue, always: re-pinning vendor/fdfpv onto
+   * a simulator with a new airframe fails here until scripts/airframes.js
+   * has added it to src/airframes.js. */
+  const pinned = (await import('../vendor/fdfpv/configs/airframes.js')).AIRFRAME_IDS;
+  check('every airframe in the pinned simulator\'s catalogue is counted as itself', pinned.length >= 20 && pinned.every((id) => (
+    take({ v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad' }).event.craft === id
+    && take({ v: 1, kind: 'flush', tab: 'aaaa1111', craft: id, flightS: 5 }).event.craft === id
+  )), pinned.filter((id) => !STATS_CRAFT.includes(id)).join());
+  /* And the simulator's current catalogue from a checkout of it, which can
+   * be ahead of the pin. */
   const catalogue = process.env.FDFPV_AIRFRAMES;
   if (!catalogue) {
     skip('FDFPV_AIRFRAMES (path to the simulator\'s configs/airframes.js) is not set');
@@ -1252,15 +1260,15 @@ async function pageChecks(board) {
   check('app.js imports it by a relative path', app.includes("from './origins.js'"));
   check('and it exports what app.js imports',
     originsText.includes('export function guessSimOrigin') && originsText.includes('export function landingOrigin'));
-  /* Both marks lead home and both carry the id bindHome binds; renaming one
+  /* Both marks lead home and both carry the id wireHomeLinks binds; renaming one
    * leaves a link to a checkout's port on a public board. */
   check('both marks are bound to the front door',
     html.includes('id="brand-home"') && html.includes('id="spine-home"') && app.includes("['brand-home', 'spine-home']"));
   const homeLinks = html.match(/<a\b[^>]*id="(?:brand|spine)-home"[^>]*>/g) || [];
   check('and the way home stays in this tab', homeLinks.length === 2 && homeLinks.every((a) => !a.includes('target=')));
-  const cardSource = app.slice(app.indexOf('function cardFor('));
+  const cardSource = app.slice(app.indexOf('function buildTrackCard('));
   const attached = cardSource.indexOf('card.append(body)');
-  const painted = cardSource.indexOf('paintPodium(');
+  const painted = cardSource.indexOf('fillTopThree(');
   check('a card is in the page before its times are painted onto it', attached !== -1 && painted !== -1 && attached < painted);
   /* One simulator tab: every link to it names the tab, and nothing asks
    * for noopener, which would quietly turn the name into _blank and open a
