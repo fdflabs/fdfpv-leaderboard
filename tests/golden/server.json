@@ -318,7 +318,7 @@
   [
    "publish no document",
    {
-    "status": 500,
+    "status": 400,
     "headers": {
      "access-control-allow-origin": "*",
      "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -329,7 +329,7 @@
      "connection": "close"
     },
     "body": {
-     "error": "The board failed."
+     "error": "That publish carried no track document."
     }
    }
   ],
@@ -1212,7 +1212,7 @@
   [
    "gif null body",
    {
-    "status": 500,
+    "status": 400,
     "headers": {
      "access-control-allow-origin": "*",
      "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -1223,7 +1223,7 @@
      "connection": "close"
     },
     "body": {
-     "error": "The board failed."
+     "error": "That upload carried no animation."
     }
    }
   ],

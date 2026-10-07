@@ -610,6 +610,11 @@ function gateCount(document) {
 }
 
 function parsedDocument(raw) {
+  /* JSON.stringify of undefined is undefined, not text: a publish that
+   * left the document out has to be told so, not fail on a length. */
+  if (raw === undefined) {
+    return refuse('That publish carried no track document.');
+  }
   if (typeof raw === 'string' && raw.length > DOCUMENT_MAX_CHARS) {
     return refuse('That track is too large to publish.');
   }
