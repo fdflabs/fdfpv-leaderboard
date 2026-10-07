@@ -1252,15 +1252,15 @@ async function pageChecks(board) {
   check('app.js imports it by a relative path', app.includes("from './origins.js'"));
   check('and it exports what app.js imports',
     originsText.includes('export function guessSimOrigin') && originsText.includes('export function landingOrigin'));
-  /* Both marks lead home and both carry the id bindHome binds; renaming one
+  /* Both marks lead home and both carry the id wireHomeLinks binds; renaming one
    * leaves a link to a checkout's port on a public board. */
   check('both marks are bound to the front door',
     html.includes('id="brand-home"') && html.includes('id="spine-home"') && app.includes("['brand-home', 'spine-home']"));
   const homeLinks = html.match(/<a\b[^>]*id="(?:brand|spine)-home"[^>]*>/g) || [];
   check('and the way home stays in this tab', homeLinks.length === 2 && homeLinks.every((a) => !a.includes('target=')));
-  const cardSource = app.slice(app.indexOf('function cardFor('));
+  const cardSource = app.slice(app.indexOf('function buildTrackCard('));
   const attached = cardSource.indexOf('card.append(body)');
-  const painted = cardSource.indexOf('paintPodium(');
+  const painted = cardSource.indexOf('fillTopThree(');
   check('a card is in the page before its times are painted onto it', attached !== -1 && painted !== -1 && attached < painted);
   /* One simulator tab: every link to it names the tab, and nothing asks
    * for noopener, which would quietly turn the name into _blank and open a

@@ -327,7 +327,7 @@ function flyHref(config, id, ghostId, craft) {
 }
 
 /* The builder opens on the track's own class. */
-function remixHref(config, id) {
+function builderRemixUrl(config, id) {
   const back = encodeURIComponent(config.boardOrigin);
   const track = board.tracks.find((t) => t.id === id);
   const cls = track ? `&class=${classOf(track)}` : '';
@@ -336,7 +336,7 @@ function remixHref(config, id) {
 
 /* Relative to simOrigin with its trailing slash, so a simulator mounted
  * under a path keeps the path. */
-function orbitHref(config, id) {
+function orbitFrameUrl(config, id) {
   const url = new URL('src/share/orbit.html', `${config.simOrigin}/`);
   url.searchParams.set('map', 'custom');
   url.searchParams.set('share', id);
@@ -345,7 +345,7 @@ function orbitHref(config, id) {
 }
 
 /* The credits roll is the simulator's #credits page. */
-function creditsHref(config) {
+function simCreditsUrl(config) {
   const sim = String(config?.simOrigin || simulatorGuess() || 'http://127.0.0.1:8000').replace(/\/+$/, '');
   try {
     if (window.location.hostname === 'fdfpv.example' || window.location.hostname === 'www.fdfpv.example') {
@@ -365,7 +365,7 @@ function simLink(cls, text, href) {
 }
 
 /* The mint "chase" that races a recorded lap, on the podium and the sheet. */
-function chaseLink(config, trackId, row) {
+function ghostChaseAnchor(config, trackId, row) {
   const a = simLink('chase', 'chase', flyHref(config, trackId, row.id, row.craft));
   a.title = str('app.fly_against_s_recorded_lap', { name: row.name });
   return a;
@@ -461,7 +461,7 @@ function sizeOf(track) {
  * gets the plan, since no stylesheet can stop a GIF; a GIF that fails to
  * load is swapped for the plan rather than a broken image.
  */
-function cardArt(track) {
+function tileArtwork(track) {
   if (!track.hasGif || stillness()) {
     return planCanvas(track.plan, planLabel(track));
   }
@@ -502,14 +502,14 @@ function bylineOf(track) {
 
 const moreText = (n) => (n > 3 ? str('app.all', { plural: counted(n, 'time', 'times') }) : str('app.track_detail'));
 
-function cardFor(track, config) {
+function buildTrackCard(track, config) {
   const card = make('article', 'card');
   card.dataset.id = track.id;
 
   const tile = make('a', 'tile');
   tile.href = trackHash(track.id);
   tile.setAttribute('aria-label', str('app.and_times', { name: track.name, v2: track.hasGif ? str('app.a_lap') : 'plan' }));
-  tile.append(cardArt(track));
+  tile.append(tileArtwork(track));
   const chip = worldOf(track) || fieldSize(track);
   if (chip) {
     tile.append(make('span', 'tile-chip', chip));
@@ -562,7 +562,7 @@ function cardFor(track, config) {
  * the page. One time is a record and not a podium, and the holder's name
  * appears once: on the record line alone, or on the podium.
  */
-function paintPodium(card, times) {
+function fillTopThree(card, times) {
   const part = (cls) => card.querySelector(cls);
   const [podium, none, more, record] = ['.podium', '.none', '.more', '.record'].map(part);
   if (!podium || !none) {
@@ -593,7 +593,7 @@ function paintPodium(card, times) {
     li.append(make('span', 'rk', String(i + 1)), make('span', 'nm', row.name), lapNode(row.lapMs, 'tm'));
     if (row.hasGhost && row.id) {
       li.classList.add('has-chase');
-      li.append(chaseLink(board.config, card.dataset.id, row));
+      li.append(ghostChaseAnchor(board.config, card.dataset.id, row));
     }
     podium.append(li);
   });
@@ -642,7 +642,7 @@ function nothingMatches() {
     if (by) {
       by.value = '';
     }
-    paintTags();
+    renderTagFilters();
     paintGrid();
     find?.focus();
   });
@@ -666,11 +666,11 @@ function paintGrid() {
   list.textContent = '';
   notice.textContent = '';
   for (const track of shown) {
-    const card = cardFor(track, board.config);
+    const card = buildTrackCard(track, board.config);
     list.append(card);
     const rows = boardRows(track, loadedTimes(track.id));
     if (rows) {
-      paintPodium(card, rows);
+      fillTopThree(card, rows);
     }
   }
   paintPlans(list);
@@ -688,7 +688,7 @@ function paintGrid() {
  * kind exists; a tag nobody wears is disabled (unless it is on, or the
  * reader could not untick it), never hidden, so the bar does not reflow.
  */
-function paintTags() {
+function renderTagFilters() {
   const bar = $('tagbar');
   if (!bar) {
     return;
@@ -708,14 +708,14 @@ function paintTags() {
       if (!board.tags.delete(tag.id)) {
         board.tags.add(tag.id);
       }
-      paintTags();
+      renderTagFilters();
       paintGrid();
     });
     bar.append(btn);
   }
 }
 
-function paintAuthors() {
+function renderAuthorChoices() {
   const select = $('by');
   if (!select) {
     return;
@@ -773,7 +773,7 @@ function railSection(kicker, title) {
   return section;
 }
 
-function paintRail() {
+function renderStandings() {
   const rail = $('rail');
   const deck = $('deck');
   if (!rail || !deck) {
@@ -849,7 +849,7 @@ function paintCounts() {
 /* One request per track however many callers want it at once. */
 const pending = new Map();
 
-async function loadTimes(id) {
+async function fetchTrackTimes(id) {
   if (board.timesById.has(id)) {
     return board.timesById.get(id);
   }
@@ -877,16 +877,16 @@ async function loadTimes(id) {
 async function fetchAllTimes() {
   await Promise.all(board.tracks.filter((t) => timesOn(t) > 0).map(async (track) => {
     try {
-      const times = await loadTimes(track.id);
+      const times = await fetchTrackTimes(track.id);
       const card = document.querySelector(`.card[data-id="${CSS.escape(track.id)}"]`);
       if (card) {
-        paintPodium(card, boardRows(track, times));
+        fillTopThree(card, boardRows(track, times));
       }
     } catch {
       /* The list's record stays on the card. */
     }
   }));
-  paintRail();
+  renderStandings();
   paintCounts();
 }
 
@@ -950,13 +950,13 @@ function chooseCraft(craft, { remember = true } = {}) {
   if (remember) {
     keepCraft(board.craft);
   }
-  paintCraftCounts();
-  paintTags();
+  renderAircraftCounts();
+  renderTagFilters();
   paintGrid();
 }
 
 /* Counted over the whole board: the switch sits above the filters. */
-function paintCraftCounts() {
+function renderAircraftCounts() {
   for (const cls of CLASSES) {
     const n = board.tracks.filter((t) => offeredTo(t, cls)).length;
     const cell = $(`craft-${cls}-count`);
@@ -1033,12 +1033,12 @@ function takeSession(body, kind) {
 function signOut() {
   Object.assign(admin, { token: '', email: '', kind: '', expiresUtc: '', sponsors: [] });
   keepToken('');
-  paintAdmin();
+  renderAdminPanel();
 }
 
 /* Signed in, the button shows whose hands are on the board, by the local
  * part of the address. */
-function paintAdminButton() {
+function renderAdminToggle() {
   const btn = $('admin-open');
   if (!btn) {
     return;
@@ -1092,8 +1092,8 @@ function paintSponsors() {
 
 /* The panel's two faces and the sheet's control follow one fact, so they
  * are always painted together. */
-function paintAdmin() {
-  paintAdminButton();
+function renderAdminPanel() {
+  renderAdminToggle();
   const [form, signed] = [$('admin-signin'), $('admin-signed')];
   if (form) {
     form.hidden = isSignedIn();
@@ -1125,7 +1125,7 @@ function showAdminError(message) {
   }
 }
 
-async function signIn(email, password) {
+async function requestAdminSession(email, password) {
   const body = await adminRequest('api/admin/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1134,7 +1134,7 @@ async function signIn(email, password) {
   admin.token = body.token || '';
   takeSession(body, 'session');
   keepToken(admin.token);
-  paintAdmin();
+  renderAdminPanel();
 }
 
 /* A token kept from before a reload is checked with the board, not
@@ -1144,16 +1144,16 @@ async function signIn(email, password) {
 async function resumeAdmin() {
   admin.token = keptToken();
   if (!admin.token) {
-    paintAdmin();
+    renderAdminPanel();
     return;
   }
   try {
     const body = await adminRequest('api/admin/session');
     takeSession(body, body.kind || 'session');
-    paintAdmin();
+    renderAdminPanel();
   } catch (err) {
     if (!err.signedOut) {
-      paintAdmin();
+      renderAdminPanel();
     }
   }
 }
@@ -1217,28 +1217,28 @@ function forgetTrack(id) {
   board.tracks = board.tracks.filter((t) => t.id !== id);
   board.timesById.delete(id);
   paintCounts();
-  paintCraftCounts();
-  paintAuthors();
-  paintTags();
+  renderAircraftCounts();
+  renderAuthorChoices();
+  renderTagFilters();
   paintGrid();
-  paintRail();
-  clearHash();
+  renderStandings();
+  dropAddressHash();
 }
 
-function bindAdmin() {
+function wireAdminPanel() {
   $('admin-open')?.addEventListener('click', () => {
     showAdminError('');
-    openSheet($('admin-sheet'));
-    paintAdmin();
+    presentSheet($('admin-sheet'));
+    renderAdminPanel();
     /* Straight into the address field, when there is one to type into. */
     if ($('admin-email') && !$('admin-signin').hidden) {
       $('admin-email').focus();
     }
   });
-  $('admin-close')?.addEventListener('click', closeAdmin);
+  $('admin-close')?.addEventListener('click', dismissAdminPanel);
   $('admin-signout')?.addEventListener('click', () => {
     signOut();
-    closeAdmin();
+    dismissAdminPanel();
   });
   $('admin-signin')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1249,7 +1249,7 @@ function bindAdmin() {
       busy.hidden = false;
     }
     try {
-      await signIn($('admin-email').value, password.value);
+      await requestAdminSession($('admin-email').value, password.value);
       /* The password leaves the page as soon as it has been used. */
       password.value = '';
     } catch (err) {
@@ -1266,7 +1266,7 @@ function bindAdmin() {
 
 /* The panel has no address of its own, so closing it re-routes: a track
  * sheet open behind it comes back. */
-function closeAdmin() {
+function dismissAdminPanel() {
   const panel = $('admin-sheet');
   if (!panel || panel.hidden) {
     return;
@@ -1274,7 +1274,7 @@ function closeAdmin() {
   panel.hidden = true;
   document.body.classList.remove('locked');
   pageInert(false);
-  route();
+  followAddress();
   const back = board.lastFocus;
   if (back && document.contains(back) && !panel.contains(back)) {
     back.focus();
@@ -1300,7 +1300,7 @@ function addFact(list, label, value) {
 
 /* The plan at full size, with the simulator's orbit camera over it when
  * motion is allowed; the plan stays until the frame says it is ready. */
-function paintShot(host, track) {
+function renderSheetPicture(host, track) {
   host.textContent = '';
   host.append(planCanvas(track.plan, planLabel(track), { scaleBar: true, pad: 26 }));
   if (stillness()) {
@@ -1311,7 +1311,7 @@ function paintShot(host, track) {
   frame.title = str('app.a_flight_through_the_track', { name: track.name });
   frame.tabIndex = -1;
   frame.setAttribute('aria-hidden', 'true');
-  frame.src = orbitHref(board.config, track.id);
+  frame.src = orbitFrameUrl(board.config, track.id);
   const waiting = make('div', 'shot-wait');
   waiting.append(make('span', 'shot-dot'), make('span', null, str('app.flying_the_track')));
   host.append(waiting, frame);
@@ -1375,7 +1375,7 @@ function paintTimes(host, track, times) {
     when.title = dateText(row.postedUtc);
     const chase = make('td', 'chase');
     if (row.hasGhost && row.id) {
-      chase.append(chaseLink(board.config, track.id, row));
+      chase.append(ghostChaseAnchor(board.config, track.id, row));
     }
     tr.append(gap, when, chase);
     tbody.append(tr);
@@ -1447,11 +1447,11 @@ function paintFacts(track) {
   }
 }
 
-async function paintSheet(track) {
+async function renderTrackSheet(track) {
   $('sheet-kicker').textContent = track.times > 0 ? `${counted(track.times, 'time', 'times')} posted` : str('app.open_track');
   $('sheet-title').textContent = track.name;
   paintSheetByline(track);
-  paintShot($('sheet-shot'), track);
+  renderSheetPicture($('sheet-shot'), track);
   paintFacts(track);
 
   /* The builder navigates the simulator's tab in place, so it shares the
@@ -1460,7 +1460,7 @@ async function paintSheet(track) {
   fly.href = flyHref(board.config, track.id);
   fly.target = SIM_WINDOW;
   const remix = make('a', 'text', str('app.remix_in_the_builder'));
-  remix.href = remixHref(board.config, track.id);
+  remix.href = builderRemixUrl(board.config, track.id);
   remix.target = SIM_WINDOW;
   const actions = $('sheet-actions');
   actions.textContent = '';
@@ -1476,7 +1476,7 @@ async function paintSheet(track) {
     return;
   }
   try {
-    const fetched = boardRows(track, await loadTimes(track.id));
+    const fetched = boardRows(track, await fetchTrackTimes(track.id));
     if (board.openId === track.id) {
       paintRecord($('sheet-hero'), track, fetched);
       paintTimes($('sheet-board'), track, fetched);
@@ -1507,7 +1507,7 @@ const anySheetOpen = () => SHEETS.some((id) => !$(id).hidden);
 /* Every sheet, the admin panel included, so opening a track over the
  * panel replaces it instead of stacking. Emptying the shot stops the
  * simulator that was running in it. */
-function closeSheets() {
+function dismissSheets() {
   for (const id of SHEETS) {
     $(id).hidden = true;
   }
@@ -1519,11 +1519,11 @@ function closeSheets() {
   pageInert(false);
 }
 
-function openSheet(node) {
+function presentSheet(node) {
   if (!anySheetOpen()) {
     board.lastFocus = document.activeElement;
   }
-  closeSheets();
+  dismissSheets();
   node.hidden = false;
   node.scrollTop = 0;
   document.body.classList.add('locked');
@@ -1531,10 +1531,10 @@ function openSheet(node) {
   node.querySelector('.btn')?.focus();
 }
 
-function clearHash() {
+function dropAddressHash() {
   const back = board.lastFocus;
   history.replaceState(null, '', `${location.pathname}${location.search}`);
-  route();
+  followAddress();
   if (back && document.contains(back)) {
     back.focus();
   }
@@ -1549,7 +1549,7 @@ function clearHash() {
  */
 let currentTab = '';
 
-function showTab(name) {
+function selectView(name) {
   const stats = name === 'stats';
   const changed = Boolean(currentTab) && currentTab !== name;
   currentTab = name;
@@ -1581,21 +1581,21 @@ function showTab(name) {
  * rewritten in place to #track= so the visitor leaves with the new
  * spelling and Back still works.
  */
-function route() {
+function followAddress() {
   const hash = location.hash;
   if (hash === '#stats') {
-    closeSheets();
-    showTab('stats');
+    dismissSheets();
+    selectView('stats');
     return;
   }
-  showTab('tracks');
+  selectView('tracks');
   if (hash === '#credits') {
-    window.location.replace(creditsHref(board.config));
+    window.location.replace(simCreditsUrl(board.config));
     return;
   }
   const asked = hash.match(/^#(?:track|course)=(.+)$/);
   if (!asked) {
-    closeSheets();
+    dismissSheets();
     return;
   }
   let id = asked[1];
@@ -1606,15 +1606,15 @@ function route() {
   }
   const track = trackById(id);
   if (!track) {
-    closeSheets();
+    dismissSheets();
     return;
   }
   if (hash.startsWith('#course=')) {
     history.replaceState(null, '', trackHash(track.id));
   }
-  openSheet($('sheet'));
+  presentSheet($('sheet'));
   board.openId = id;
-  paintSheet(track);
+  renderTrackSheet(track);
 }
 
 /* ================================================================== */
@@ -1656,7 +1656,7 @@ bindLanguageLink();
 function bindSimLinks(config) {
   const sim = inLanguage(`${config.simOrigin}/`);
   const builder = inLanguage(`${config.simOrigin}/src/trackbuilder/index.html`);
-  const credits = creditsHref(config);
+  const credits = simCreditsUrl(config);
   for (const [id, href] of [
     ['sim-link', sim], ['foot-sim', sim], ['builder-link', builder], ['spine-build', builder],
     ['mast-credits', credits], ['spine-credits', credits], ['foot-credits', credits],
@@ -1670,7 +1670,7 @@ function bindSimLinks(config) {
 }
 
 /* The marks go home, in this tab, and owe nothing to /api/config. */
-function bindHome() {
+function wireHomeLinks() {
   const href = frontDoor();
   if (!href) {
     return;
@@ -1682,16 +1682,16 @@ function bindHome() {
   }
 }
 
-function bindCraftSwitch() {
+function wireAircraftSwitch() {
   for (const cls of CLASSES) {
     $(`craft-${cls}`)?.addEventListener('click', () => chooseCraft(cls));
   }
 }
 
-function bindToolbar() {
+function wireToolbar() {
   const [find, sort, by] = [$('find'), $('sort'), $('by')];
   const refilter = () => {
-    paintTags();
+    renderTagFilters();
     paintGrid();
   };
   find?.addEventListener('input', () => {
@@ -1730,19 +1730,19 @@ function learnTags(payload) {
   }
 }
 
-function bindCredits() {
+function wireCreditsLinks() {
   const roll = $('credits-roll');
   if (roll) {
     fillCredits(roll, { assetBase: 'credits' });
   }
   for (const id of ['credits-close', 'sheet-close']) {
-    $(id)?.addEventListener('click', clearHash);
+    $(id)?.addEventListener('click', dropAddressHash);
   }
 }
 
 /* A sheet's orbit frame says when its first frame is drawn, and the plan
  * under it hands over. */
-function watchOrbit() {
+function listenForOrbit() {
   window.addEventListener('message', (event) => {
     if (event.data?.type !== 'fdfpv-orbit-ready') {
       return;
@@ -1765,7 +1765,7 @@ function watchOrbit() {
  * browser, since the hrefs are real for opening in a new tab. Arrows, Home
  * and End move between tabs and follow them, as a tablist promises.
  */
-function bindTabs() {
+function wireViewTabs() {
   const row = $('tabs');
   if (!row) {
     return;
@@ -1781,7 +1781,7 @@ function bindTabs() {
       if (location.hash !== href) {
         history.pushState(null, '', href);
       }
-      route();
+      followAddress();
     });
   }
   const moves = {
@@ -1810,13 +1810,13 @@ function bindTabs() {
  * sheet, but never undoes a tab address. / jumps to the search unless the
  * reader is typing or a sheet is open.
  */
-function watchKeys() {
+function wireKeyboard() {
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       if (!$('admin-sheet').hidden) {
-        closeAdmin();
+        dismissAdminPanel();
       } else if (location.hash && location.hash !== '#stats' && location.hash !== '#tracks') {
-        clearHash();
+        dropAddressHash();
       }
       return;
     }
@@ -1835,7 +1835,7 @@ function watchKeys() {
 }
 
 /* Plans are drawn at real pixels, so a resize repaints them. */
-function watchResize() {
+function redrawOnResize() {
   let timer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(timer);
@@ -1867,33 +1867,33 @@ function emptyBoard() {
   return box;
 }
 
-async function start() {
+async function boot() {
   /* This tab is the board: the simulator opens the board under this name,
    * so checking times between runs comes back here instead of stacking
    * tabs. The name survives navigation within the origin. */
   window.name = BOARD_WINDOW;
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', followAddress);
   if (location.hash === '#credits') {
-    route();
+    followAddress();
     return;
   }
   watchMasthead();
-  watchOrbit();
-  watchKeys();
-  watchResize();
-  bindCredits();
+  listenForOrbit();
+  wireKeyboard();
+  redrawOnResize();
+  wireCreditsLinks();
   /*
    * The Admin button, the statistics tab and the first route come before
    * any request: they have to work on an empty board and on one whose list
    * failed, which is when somebody needs them. Neither the session check
    * nor the visit is awaited.
    */
-  bindAdmin();
+  wireAdminPanel();
   resumeAdmin();
   mountStats(here('api/stats'));
-  bindTabs();
+  wireViewTabs();
   pingVisit('board', here('api/stats/events'));
-  route();
+  followAddress();
 
   const list = $('list');
   const notice = $('notice');
@@ -1902,7 +1902,7 @@ async function start() {
   /* The markup's simulator links are loopback addresses for a checkout,
    * so they are bound from the guess now, before any request can fail. */
   bindSimLinks(board.config);
-  bindHome();
+  wireHomeLinks();
 
   /* Config only corrects simOrigin, which the guess already answered, so
    * losing it is quiet; losing the track list is not. */
@@ -1931,13 +1931,13 @@ async function start() {
     return;
   }
   $('toolbar').hidden = false;
-  bindToolbar();
-  bindCraftSwitch();
-  paintAuthors();
+  wireToolbar();
+  wireAircraftSwitch();
+  renderAuthorChoices();
   /* Paints the counts, the tags and the grid; needs the tracks in hand. */
   chooseCraft(chosenCraft(), { remember: false });
-  route();
+  followAddress();
   await fetchAllTimes();
 }
 
-start();
+boot();
