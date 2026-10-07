@@ -151,20 +151,19 @@ function projectCard({ url, name, light = false, title, href, copy, spells = tru
     node('div', 'credit-copy', copy));
 }
 
-/* A person: face and slot on the left, name, note and handle on the right,
+/* A person: face and slot on the left, name and handle on the right,
  * the whole card a link when there is a channel. */
-function personCard({ kind, face, slot, name, label, note, channel, handle }) {
+function personCard({ kind, face, slot, name, channel, handle }) {
   const card = node('article', `credit person ${kind}`);
   const slotTag = slot ? node('span', 'credit-slot', slot) : null;
   slotTag?.setAttribute('aria-hidden', 'true');
   card.append(node('div', 'credit-stack', facePlate(face, name), slotTag));
-  const title = label ?? document.createTextNode(name);
+  const title = document.createTextNode(name);
   if (channel) {
     card.classList.add('is-link');
   }
   card.append(node('div', 'credit-copy',
     node('h4', null, channel ? outLink(channel, title) : title),
-    note ? node('p', null, note) : null,
     handle ? node('span', 'credit-handle', handle) : null));
   return card;
 }
@@ -190,21 +189,10 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
   const youtube = (handle) => `https://www.youtube.com/${handle}`;
   host.textContent = '';
 
-  /* Who makes this fork, then the upstream's own roll as it was. */
   host.append(
     node('p', 'credits-lede', str('credits.fdfpv_by'), outLink('https://fdflabs.com', 'fdflabs.com')),
     node('p', 'credits-lede', str('credits.a_browser_fpv_racing_simulator_the')),
   );
-
-  host.append(block(str('credits.made_by'), '', personCard({
-    kind: 'maker',
-    face: asset('andagain.jpg'),
-    name: 'andAgainFPV',
-    label: node('span', 'maker-mark', str('credits.andagain'), node('span', 'fpv', 'FPV')),
-    note: str('credits.built_this_simulator_the_track_builder'),
-    channel: youtube('@andAgainFPV'),
-    handle: 'youtube.com/@andAgainFPV',
-  })));
 
   host.append(block(str('credits.beta_test_pilots'), str('credits.they_flew_it_until_it_felt'),
     node('div', 'credit-row pilots', ...BETA_PILOTS.map(([slot, name, face, handle]) => personCard({
@@ -239,7 +227,7 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
     node('b', null, r.designer), str('credits.text', { v1: r.tracks.join(', ') })));
   host.append(block(str('credits.the_racegow5_rooms'), str('credits.eight_tracks_six_builders_read_off'),
     node('div', 'credit-rooms', ...rooms, node('p', 'credit-room-note', str('credits.series_and_animations_by'),
-      outLink('https://racegow.com/tracks', 'RaceGOW'), str('credits.brought_into_this_simulator_by_andagainfpv')))));
+      outLink('https://racegow.com/tracks', 'RaceGOW'), '.'))));
 
   host.append(block(str('credits.the_horde'), str('credits.written_with_grok_built_with_claude'),
     node('div', 'credit-row pair',
