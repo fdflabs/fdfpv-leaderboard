@@ -127,13 +127,16 @@ function drawList() {
     return;
   }
   for (const t of inbox.tickets) {
-    const row = make('button', inbox.open?.id === t.id ? str('bugs.ticket_on') : 'ticket',
+    const row = make('button', 'ticket',
       make('div', 'id', t.id),
       make('div', 'title', t.title),
       make('div', 'meta',
         make('span', t.kind === 'feel' ? 'kind feel' : 'kind', kindName(t.kind)),
         str('bugs.text', { reporter: t.reporter, v2: t.map ? ` · ${t.map}` : '' })));
     row.type = 'button';
+    /* A class name, not copy: it once came from the string table and the
+     * Spanish table spelled it "ticket en", which no rule matches. */
+    row.classList.toggle('on', inbox.open?.id === t.id);
     row.addEventListener('click', () => openTicket(t.id));
     list.append(row);
   }

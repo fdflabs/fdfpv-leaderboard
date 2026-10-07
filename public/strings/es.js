@@ -110,7 +110,6 @@ export default {
   "bugs.testers_file_bug_tickets_and_flight": "Los testers envían tickets de bugs y comentarios sobre la sensación de vuelo desde el simulador, y ambos\n        llegan aquí. Esta página los lista para que tú, o un agente, puedan leer uno y marcarlo.\n        Los mismos datos que",
   "bugs.text": " · {reporter}{v2}",
   "bugs.text_2": "{reporter} · {when}",
-  "bugs.ticket_on": "ticket en",
   "bugs.update": "Actualizar",
   "bugs.what_happened": "Qué pasó",
   "bugs.what_you_did_for_the_next": "Lo que hiciste, para la siguiente persona.",
