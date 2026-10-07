@@ -22,7 +22,9 @@
  * You should have received a copy of the GNU General Public License
  * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
-import { moveKey, moveRenamedKeys, RENAMED } from '../public/keys.js';
+import {
+  LANG_KEY, STATS_KEY, moveKey, moveRenamedKeys, readSharedKey, RENAMED, writeSharedKey,
+} from '../public/keys.js';
 
 let failed = 0;
 let passed = 0;
@@ -101,6 +103,39 @@ try {
   threw = true;
 }
 check('a storage that refuses access breaks nothing', !threw);
+
+/* The two keys shared with the simulator: an old build of either site
+ * reads and writes only the old name; this one reads both and writes both.
+ * Whatever the order, each reads the value written last. */
+for (const [key, oldName] of [[LANG_KEY, 'webfpv.lang'], [STATS_KEY, 'webfpv.stats.v1']]) {
+  const shared = new FakeStorage({});
+  check(`${key}: nothing stored reads null`, readSharedKey(key, shared) === null);
+  shared.setItem(oldName, 'A');
+  check(`${key}: a value only under the old name is read`, readSharedKey(key, shared) === 'A');
+  writeSharedKey(key, 'B', shared);
+  check(`${key}: a write goes under both names`, shared.getItem(key) === 'B' && shared.getItem(oldName) === 'B');
+  shared.setItem(oldName, 'C');
+  check(`${key}: an old build writing later wins`, readSharedKey(key, shared) === 'C');
+  writeSharedKey(key, 'D', shared);
+  check(`${key}: and this build writing after that wins again`, readSharedKey(key, shared) === 'D' && shared.getItem(oldName) === 'D');
+  const fresh = new FakeStorage({ [key]: 'N' });
+  check(`${key}: a value only under the new name is read`, readSharedKey(key, fresh) === 'N');
+  const halfRefused = new FakeStorage({});
+  const setItem = halfRefused.setItem.bind(halfRefused);
+  halfRefused.setItem = (k, v) => {
+    if (k === key) {
+      throw new Error('QuotaExceededError');
+    }
+    setItem(k, v);
+  };
+  try {
+    writeSharedKey(key, 'E', halfRefused);
+  } catch {
+    /* Refused, as storage does. */
+  }
+  check(`${key}: a refused second write still reads the newer value`, readSharedKey(key, halfRefused) === 'E');
+}
+check('the shared names', LANG_KEY === 'fdfpv.lang' && STATS_KEY === 'fdfpv.stats.v1');
 
 console.log(failed ? `\n${failed} failed, ${passed} passed` : `\n${passed} passed`);
 process.exit(failed ? 1 : 0);

@@ -37,13 +37,14 @@
  * along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
  */
 import { str } from './strings/index.js';
+/* The memory is shared with the simulator on the same origin; see the
+ * header and keys.js. */
+import { STATS_KEY, readSharedKey, writeSharedKey } from './keys.js';
 
 /* ================================================================== */
 /* What this browser remembers and sends                               */
 /* ================================================================== */
 
-/* Shared with the simulator on the same origin; see the header. */
-const MEMORY_KEY = 'webfpv.stats.v1';
 /* A poster arrival still counts when the visitor comes back at the
  * weekend, and stops being a label after a month. */
 const SPONSOR_MEMORY_DAYS = 30;
@@ -64,7 +65,7 @@ function dayGap(from, to) {
  * the page says so rather than correcting for it. */
 function recall() {
   try {
-    const raw = localStorage.getItem(MEMORY_KEY);
+    const raw = readSharedKey(STATS_KEY);
     const held = raw ? JSON.parse(raw) : null;
     return held !== null && typeof held === 'object' && !Array.isArray(held) ? held : {};
   } catch {
@@ -74,7 +75,7 @@ function recall() {
 
 function remember(memory) {
   try {
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
+    writeSharedKey(STATS_KEY, JSON.stringify(memory));
     return true;
   } catch {
     return false;
