@@ -1603,7 +1603,7 @@
   [
    "time room",
    {
-    "status": 201,
+    "status": 422,
     "headers": {
      "access-control-allow-origin": "*",
      "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -1614,14 +1614,7 @@
      "connection": "close"
     },
     "body": {
-     "craft": null,
-     "id": "<tm-3>",
-     "lapMs": "<lap room>",
-     "name": "Bo",
-     "postedUtc": "<t>",
-     "rank": 1,
-     "threeMs": null,
-     "times": 1
+     "error": "That lap does not hold up against the track: no aircraft flies this track: it was drawn for a RaceGOW room and the 65 mm whoop, which were removed."
     }
    }
   ],
@@ -1640,7 +1633,7 @@
     },
     "body": {
      "craft": null,
-     "id": "<tm-4>",
+     "id": "<tm-3>",
      "lapMs": "<lap map>",
      "name": "Ada Rook",
      "postedUtc": "<t>",
@@ -1883,7 +1876,7 @@
       {
        "craft": null,
        "hasGhost": true,
-       "id": "<tm-4>",
+       "id": "<tm-3>",
        "lapMs": "<lap map>",
        "name": "Ada Rook",
        "postedUtc": "<t>",
@@ -2294,7 +2287,8 @@
      "maps": [
       "alps",
       "swiss2",
-      "yellowstone"
+      "itaipu",
+      "interior"
      ],
      "runs": [
       {
@@ -2371,7 +2365,8 @@
      "maps": [
       "alps",
       "swiss2",
-      "yellowstone"
+      "itaipu",
+      "interior"
      ],
      "runs": [
       {
@@ -3159,7 +3154,7 @@
      "author": "Bo",
      "id": "trk-2b3c4d5e",
      "name": "Sala",
-     "times": 1
+     "times": 0
     }
    }
   ],
@@ -5201,7 +5196,7 @@
  ],
  "removalLog": {
   "lines": [
-   "removed trk-2b3c4d5e \"Sala\" by Bo, 1 time(s), by keeper@example.com"
+   "removed trk-2b3c4d5e \"Sala\" by Bo, 0 time(s), by keeper@example.com"
   ]
  },
  "bare": [
@@ -5756,7 +5751,8 @@
      "maps": [
       "alps",
       "swiss2",
-      "yellowstone"
+      "itaipu",
+      "interior"
      ],
      "runs": [],
      "tags": [

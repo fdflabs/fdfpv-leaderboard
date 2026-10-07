@@ -97,6 +97,7 @@ export default {
   "app.tracks_built_by": "tracks built by {author}",
   "app.world": "World",
   "app.world_alps": "The Alps",
+  "app.world_itaipu": "Itaipu",
   "app.world_swiss2": "Swiss valley",
   "app.you_are_looking_at_the_tracks": "You are looking at the {v1} tracks.",
   "bugs.back_to_tracks_and_statistics": "Back to Tracks and Statistics",

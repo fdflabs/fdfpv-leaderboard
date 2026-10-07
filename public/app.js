@@ -213,7 +213,7 @@ const AIRCRAFT_NAME = { full: str('app.five_inch'), micro: '65 mm whoop', wing: 
 /* The simulator's airframe id per class (its configs/airframes.js). */
 const AIRFRAME_ID = { full: '5inch', micro: 'whoop65', wing: 'wing1000' };
 /* MIRRORS MAP_IDS in src/validate.js, named as the simulator names them. */
-const WORLD_NAME = { swiss2: str('app.world_swiss2'), alps: str('app.world_alps') };
+const WORLD_NAME = { swiss2: str('app.world_swiss2'), alps: str('app.world_alps'), itaipu: str('app.world_itaipu') };
 
 const classOf = (track) => (track && CLASSES.includes(track.trackClass) ? track.trackClass : 'full');
 const worldOf = (track) => (track && WORLD_NAME[track.map]) || '';
