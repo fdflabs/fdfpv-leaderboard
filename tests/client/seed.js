@@ -27,6 +27,9 @@ import { syntheticLapBytes } from '../../vendor/fdfpv/tests/lib/synthlap.js';
 import { mapTrackDocument } from '../../vendor/fdfpv/tests/lib/maptrack.js';
 import { createIdentity, memoryStorage } from '../../vendor/fdfpv/src/share/identity.js';
 
+/* A 96 by 64 GIF: big enough for the board's size rule, small enough to
+ * keep here. */
+const ROOM_GIF = 'R0lGODdhYABAAIEAABAWEX3/tP/UXAAAACwAAAAAYABAAEAI/wABCBxIsKDBgwgTKlzIsKHDhxAjSpzIMIDFixgzatx4kaLHjwI5ihyJ0aGAkyhTqlwJ8iDJlxwTrpxJs6aAlgBg6iwp06bPmThz7twJ8afKoEiTKl3KtKnHoUSdMoWq0yNQqSGpvlxotCtSrVsRdh17EidYkgzJ1sTKtq3bt3Djyp1LN+LZkXUp3hWZd+LemH3t/tVYlGzTwYS5qr0aFHFGhYt9NnbcUWxkyS0pVz54GTNIzRYVd075FbTJy0tBB7DKMrDr17Bjy55Nu7bt27hz646revfA3r6Fag4unDJx4L6RPzQqVblow6lNpx2t1LnB0UcnD++JnbRZ6Za7oz3Ubjy8+PGZwV8/7/2z+oLs23+0TjD+ze/bzYsn7/g59tL5QUZdUvTp51V0AZ7mGXEMNujggxBGKOGEEgYEADs=';
 const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPoeXYYAAQ3AjaAIZITAAAAAElFTkSuQmCC';
 
 const gate = (id, x, y, yaw = 0, dims = {}) => ({
@@ -109,21 +112,27 @@ export async function seedBoard(origin) {
     Tatu: createIdentity(memoryStorage()),
     Carpincho: createIdentity(memoryStorage()),
   };
-  const time = async (track, name, flown, craft) => {
+  const time = async (track, name, flown, craft, extra = {}) => {
     const auth = await pilots[name].signTime({ trackId: track.id, lapMs: flown.lapMs, ghost: flown.ghost, ...(craft ? { craft } : {}) });
-    return post(`/api/tracks/${track.id}/times`, { name, lapMs: flown.lapMs, ghost: flown.ghost, key: auth.key, sig: auth.sig, ...(craft ? { craft } : {}) });
+    return post(`/api/tracks/${track.id}/times`, {
+      name, lapMs: flown.lapMs, ghost: flown.ghost, key: auth.key, sig: auth.sig, ...(craft ? { craft } : {}), ...extra,
+    });
   };
 
   await post('/api/tracks', { author: 'Lapacho', document: costanera, tags: ['race', 'beginner'] });
   await post('/api/tracks', { author: 'Tatu', document: furniture, tags: ['technical'] });
-  await post('/api/tracks', { author: 'Carpincho', document: room });
+  /* The first publish hands back the edit key its browser would keep. */
+  const { editKey } = await post('/api/tracks', { author: 'Carpincho', document: room });
+  await post(`/api/tracks/${room.id}/gif`, { gif: ROOM_GIF, editKey });
   await post('/api/tracks', { author: 'Tatu', document: airfield, tags: ['big'] });
   await post('/api/tracks', { author: 'Lapacho', document: ring });
 
   await time(costanera, 'Lapacho', lap(costanera));
   await time(costanera, 'Tatu', lap(costanera, { speed: 15 }));
   await time(costanera, 'Carpincho', lap(costanera, { speed: 12 }));
-  await time(room, 'Carpincho', lap(room));
+  const roomLap = lap(room);
+  await time(room, 'Carpincho', roomLap, null, { threeMs: roomLap.lapMs * 3 + 250 });
+  await time(room, 'Tatu', lap(room, { speed: 2 }));
   await time(airfield, 'Tatu', lap(airfield, { speed: 20 }));
   await time(ring, 'Lapacho', lap(ring, { speed: 18 }), 'sky1800');
   await time(ring, 'Tatu', lap(ring, { speed: 24 }), 'timber1500f');

@@ -1,34 +1,34 @@
 <!doctype html>
 <!--
-  Tracks and Statistics. Two tabs. Every published track with the times
-  flown on it, and a page of counters for the site itself.
+  The board's page: two tabs, the published tracks with their times and a
+  page of the site's own counters, and three sheets over them (one track,
+  the admin panel, the credits).
 
-  THE STATISTICS TAB IS COUNTERS, NOT RECORDS. Nothing it reads describes
-  one visitor: the store holds a total per UTC day and a total per day per
-  dimension, and that is the finest grain there is. See schema.sql and
-  src/validate.js, which is where the promise is kept rather than made.
+  The markup holds what must exist before any script runs: both tabs, so a
+  pasted #stats link works on a board whose list failed to load; the
+  sentences on the statistics tab that say what is counted; and fallback
+  links to a checkout's simulator that app.js replaces with the real ones.
+  Everything else is painted by app.js, stats.js, plan.js and credits.js
+  into the ids below, and those ids are the contract with them.
 
-  Same chrome as the simulator: system fonts, cream for lit type, sakura
-  for chrome, mint for a record, amber for instruments, cool mist for
-  recessed type. A forest page, not a second landscape. The chequer stays
-  as a racing border.
+  The styles are inline so they never depend on a server's type table, and
+  the palette is the simulator's, so a visitor from the simulator is in the
+  same room.
 
-  Card art is the track plan on the field, and the builder's own animation
-  in a room. A plan is the flown line and the things that stand on the
-  field, drawn from the list payload in the track builder's blueprint
-  palette; waypoints pin the line and are not drawn. A room is five metres
-  across and its plan is a nearly empty rectangle, so a whoop track carries
-  a GIF instead, rendered once by the builder that published it and served
-  from this board as a picture. The simulator's own orbit camera is the
-  expensive and beautiful thing, so it plays once, large, in the track
-  sheet, rather than twelve times at once in the grid.
+  This file is part of the Paraguayan Drone Combat Simulator.
 
-  This file is part of WebFPVLeaderboard.
-
-  WebFPVLeaderboard is free software: you can redistribute it and/or modify
+  The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or (at
   your option) any later version.
+
+  The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY, without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
 -->
 <html lang="en">
   <head>
@@ -36,16 +36,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tracks and Statistics, Paraguayan Drone Combat Simulator</title>
     <meta name="description" content="Every published Paraguayan Drone Combat Simulator track, and the lap times flown on it." />
-    <!--
-      A link to this page posted anywhere renders a 1200 by 630 card, and
-      og.png is a frame of the real shell rather than a drawing of one, so it
-      cannot disagree with the thing it advertises. scripts/og.js in the
-      simulator's repository regenerates it, and the URL is absolute because a
-      crawler does not resolve a relative one.
 
-      No animated card. Facebook, Messenger, X, LinkedIn, WhatsApp and iMessage
-      all flatten a link preview to one still frame; Discord is the only place
-      that would animate it, which is not worth a second asset.
+    <!--
+      The card a shared link unfolds into, 1200 by 630. og.png is a frame of
+      the real simulator (its scripts/og.js makes it), and the addresses are
+      absolute because crawlers do not resolve relative ones. Every big
+      network shows one still frame, so there is no animated version.
     -->
     <link rel="canonical" href="https://129.151.39.48/board/" />
     <meta property="og:type" content="website" />
@@ -64,22 +60,22 @@
     <meta name="twitter:image" content="https://129.151.39.48/board/og.png" />
     <meta name="twitter:image:alt" content="The race field in the Paraguayan Drone Combat Simulator: a lit start gate on mown grass, a five inch quad parked beside it, flags and track markers running away under a low sun." />
 
-    <!--
-      Mint, which is what this page paints a record in, and the one accent of
-      the four that is not already spoken for by the simulator or the builder.
-      The mark itself is the family's, drawn by scripts/icons.js in the
-      simulator's repository.
-    -->
+    <!-- The family's mark, in mint, this page's record colour. Generated by
+         the simulator's scripts/icons.js; regenerate rather than edit. -->
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="icon" href="favicon.ico" sizes="32x32" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="theme-color" content="#141c16" />
+
     <style>
-      /* ---------------------------------------------------------------
-         Tokens. The simulator's palette, unchanged, plus one cool plate
-         for the plan drawings so a track plan reads as a drawing and
-         not as a second landscape.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Tokens
+
+         The simulator's palette as it is, so a pilot arriving from the
+         simulator or the builder is in the same room: cream lights type,
+         sakura is chrome, amber is an instrument, mint is a record, slate
+         and dim recede. The rest are the few surfaces this page stacks.
+         ================================================================ */
       :root {
         --cream: #f3ead4;
         --sakura: #e8a8b8;
@@ -97,226 +93,328 @@
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --page: min(1240px, 94vw);
         --radius: 4px;
+
+        /* Derived, named once so the components below say what they mean. */
+        --blueprint: #0b1219;
+        --night: rgba(11, 16, 12, 0.82);
+        --night-soft: rgba(11, 16, 12, 0.78);
+        --ring: inset 0 0 0 1px var(--line);
+        --warn: #ff8f8f;
+        --ease-quick: 120ms ease;
+        --ease-plate: 140ms ease;
       }
 
       * { box-sizing: border-box; }
 
-      html, body {
+      html,
+      body {
         margin: 0;
         min-height: 100%;
-        background: var(--deep);
         color: var(--cream);
+        background: var(--deep);
         font-family: var(--ui);
         font-variant-numeric: tabular-nums lining-nums;
         -webkit-font-smoothing: antialiased;
       }
 
+      /* A forest at dusk behind everything: lighter at the top centre where
+         the masthead sits. */
       body {
-        background: radial-gradient(120% 90% at 50% 6%, #1e2a20, #101610 60%) fixed;
         min-height: 100vh;
+        background: radial-gradient(120% 90% at 50% 6%, #1e2a20, #101610 60%) fixed;
       }
 
       body.locked { overflow: hidden; }
 
+      /* Element by element, so a component's own radius (a button's) still
+         wins over the ring's. */
       a:focus-visible,
       button:focus-visible,
       input:focus-visible,
       select:focus-visible,
       [tabindex]:focus-visible {
+        border-radius: 2px;
         outline: 2px solid var(--sakura);
         outline-offset: 3px;
-        border-radius: 2px;
       }
 
+      /* Off screen until a keyboard reaches it. */
       .skip {
         position: absolute;
-        left: 12px;
-        top: -48px;
         z-index: 60;
+        top: -48px;
+        left: 12px;
         padding: 8px 12px;
-        background: var(--mint);
+        border-radius: 3px;
         color: var(--deep);
+        background: var(--mint);
         font: 600 13px/1 var(--ui);
         text-decoration: none;
-        border-radius: 3px;
       }
       .skip:focus { top: 12px; }
 
+      /* The racing border, top of the page and of every sheet. */
       .chequer {
         height: 8px;
         background: repeating-linear-gradient(90deg, #23272f 0 14px, #eae6dd 14px 28px);
       }
 
-      /* ---------------------------------------------------------------
-         Shared chrome: kickers, rules, buttons, panels.
-         --------------------------------------------------------------- */
-      .kicker {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--sakura);
-      }
+      /* ================================================================
+         Atoms shared across the page
+         ================================================================ */
 
+      /* The small spaced capitals that label a thing rather than say it.
+         Size, tracking and colour vary by place; the rest never does. */
+      .kicker,
+      .stats dt,
+      .sort label,
+      .record-label,
+      .tile-chip,
+      .tile-craft,
+      .tile-flown,
+      .facts dt,
+      th,
+      .admin-field label,
+      .credit-kicker,
+      .switch-kicker,
+      .tile-stat .tile-label,
+      .rank-group h4,
+      .hero-label,
+      .admin-sponsors h3 {
+        font-size: var(--caps-size, 10px);
+        font-weight: var(--caps-weight, 700);
+        letter-spacing: var(--caps-track, 0.16em);
+        text-transform: uppercase;
+        color: var(--caps-color, var(--sakura));
+      }
+      .kicker { --caps-track: 0.18em; }
+
+      /* A short sakura rule under a heading. */
       .rule-after::after {
         content: "";
         display: block;
         width: 36px;
         height: 2px;
-        background: var(--sakura);
         margin-top: 10px;
+        background: var(--sakura);
       }
 
-      .panel {
-        background: var(--panel);
+      /* The plate: a dark board with a sakura edge along its top. Cards,
+         panels, tiles, credits and the start list are all one. */
+      .panel,
+      .card,
+      .credit,
+      .credit-row.pilots,
+      .tile-stat {
         border-radius: var(--radius);
         border-top: 2px solid var(--edge);
-        box-shadow: inset 0 0 0 1px var(--line);
+        background: var(--panel);
+        box-shadow: var(--ring);
       }
 
-      a.btn, button.btn {
+      /* A recessed well inside a plate. */
+      .podium,
+      .facts,
+      .admin-warn {
+        background: var(--sunk);
+        box-shadow: var(--ring);
+      }
+
+      :is(a, button).btn {
         appearance: none;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 9px 16px;
-        border-radius: 3px;
         border: 1px solid var(--line);
-        background: transparent;
+        border-radius: 3px;
         color: var(--slate);
+        background: transparent;
         font: 600 13px/1.2 var(--ui);
         letter-spacing: 0.04em;
         text-decoration: none;
         cursor: pointer;
-        transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+        transition: color var(--ease-quick), border-color var(--ease-quick), background-color var(--ease-quick);
       }
-      a.btn:hover, button.btn:hover {
+      :is(a, button).btn:hover {
         color: var(--cream);
         border-color: rgba(232, 168, 184, 0.55);
         background: rgba(232, 168, 184, 0.06);
       }
-      a.btn.primary, button.btn.primary {
-        background: var(--mint);
-        border-color: var(--mint);
+      :is(a, button).btn.primary {
         color: var(--deep);
+        border-color: var(--mint);
+        background: var(--mint);
         font-weight: 700;
       }
-      a.btn.primary:hover, button.btn.primary:hover {
-        filter: brightness(1.06);
+      :is(a, button).btn.primary:hover {
         color: var(--deep);
         background: var(--mint);
+        filter: brightness(1.06);
       }
-      a.btn.small, button.btn.small { padding: 7px 13px; font-size: 12px; }
+      :is(a, button).btn.small {
+        padding: 7px 13px;
+        font-size: 12px;
+      }
 
-      a.text, button.text {
+      /* A link or button that is just its words. */
+      :is(a, button).text {
         appearance: none;
-        background: none;
-        border: 0;
         padding: 0;
+        border: 0;
         color: var(--slate);
+        background: none;
         font: 600 13px/1.3 var(--ui);
         letter-spacing: 0.03em;
         text-decoration: none;
         cursor: pointer;
-        transition: color 120ms ease;
+        transition: color var(--ease-quick);
       }
-      a.text:hover, button.text:hover { color: var(--sakura); }
+      :is(a, button).text:hover { color: var(--sakura); }
 
+      /* Lap times are measurements: mono and tabular, the hundredths a
+         shade quieter than the seconds. */
+      .tm,
+      .record-time,
+      .rail-time { font-family: var(--mono); }
+      .frac {
+        font-size: 0.7em;
+        opacity: 0.8;
+      }
 
-      /* Times. Mono, tabular, with the hundredths a shade quieter so the
-         seconds are what the eye lands on. */
-      .tm, .record-time, .rail-time { font-family: var(--mono); }
-      .frac { font-size: 0.70em; opacity: 0.80; }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 16px;
+      }
 
-      /* ---------------------------------------------------------------
-         Masthead.
-         --------------------------------------------------------------- */
+      /* Rows of a list ruled apart from each other, not from the edges. */
+      .podium-row + .podium-row,
+      .standing + .standing,
+      .feed-row + .feed-row { border-top: 1px solid var(--line); }
+
+      /* One long name in a narrow column ends in an ellipsis. */
+      .podium-row .nm,
+      .standing .nm,
+      .feed-row .nm,
+      .feed-row .on,
+      .rank-name,
+      .sponsor-link {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ================================================================
+         Masthead
+         ================================================================ */
       .mast {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 22px 48px;
         width: var(--page);
         margin: 0 auto;
         padding: 30px 0 24px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 22px 48px;
-        align-items: end;
       }
 
       /*
-       * The name, as the simulator's title and loading screen set it (the
-       * .lockup rules in its index.html): PARAGUAYAN thin and spaced over a
-       * rule, DRONE COMBAT bold and condensed, SIMULATOR between two rules,
-       * and Paraguay's red, white and blue as one slash down the left. The
-       * simulator stacks DRONE over COMBAT; a masthead over a table keeps
-       * them on one line. Every part is in the heading's em.
+       * The name set the way the simulator's title screen sets it: a thin
+       * spaced PARAGUAYAN over a rule, a bold condensed DRONE COMBAT, and
+       * SIMULATOR between two rules, with Paraguay's flag as one slanted
+       * slash down the left. Everything is in the heading's em, so the
+       * lockup scales as one piece.
        */
-      .brand h1 { display: flex; margin: 0; font-size: clamp(34px, 5vw, 56px); }
+      .brand h1 {
+        display: flex;
+        margin: 0;
+        font-size: clamp(34px, 5vw, 56px);
+      }
       .brand h1 a.home {
-        position: relative; display: inline-flex; flex-direction: column;
-        padding-left: 0.62em; line-height: 1; color: #f7f2e6;
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        padding-left: 0.62em;
+        line-height: 1;
+        color: #f7f2e6;
       }
       .lockup-slash {
-        position: absolute; left: 0.2em; top: 0.02em; bottom: 0.02em;
+        position: absolute;
+        inset: 0.02em auto 0.02em 0.2em;
         width: 0.07em;
-        transform: skewX(-14deg);
         background: linear-gradient(180deg, #d52b1e 0 33.4%, #f4f1ea 33.4% 66.6%, #0038a8 66.6% 100%);
         box-shadow: 0 0 0.16em rgba(0, 0, 0, 0.45);
+        transform: skewX(-14deg);
       }
-      .lockup-over, .lockup-under {
-        display: flex; align-items: center; gap: 0.9em;
-        font-size: max(0.24em, 9px); font-weight: 500; line-height: 1;
-        letter-spacing: 0.42em; text-transform: uppercase; white-space: nowrap;
+      .lockup-over,
+      .lockup-under {
+        display: flex;
+        align-items: center;
+        gap: 0.9em;
         color: rgba(243, 234, 212, 0.9);
+        font-size: max(0.24em, 9px);
+        font-weight: 500;
+        line-height: 1;
+        letter-spacing: 0.42em;
+        text-transform: uppercase;
+        white-space: nowrap;
       }
-      .lockup-over::after, .lockup-under::before, .lockup-under::after {
-        content: ""; flex: 1; min-width: 1.5em; height: 1px;
+      .lockup-over::after,
+      .lockup-under::before,
+      .lockup-under::after {
+        content: "";
+        flex: 1;
+        min-width: 1.5em;
+        height: 1px;
         background: rgba(243, 234, 212, 0.42);
       }
       .lockup-under::before { margin-right: 0.42em; }
       .lockup-name {
         margin: 0.1em 0 0.09em;
         font-family: "Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow", "Roboto Condensed", sans-serif-condensed, var(--ui);
-        font-stretch: condensed; font-weight: 700;
-        line-height: 0.84; letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
+        font-stretch: condensed;
+        font-weight: 700;
+        line-height: 0.84;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        white-space: nowrap;
         text-shadow: 0 0.03em 0 rgba(8, 10, 9, 0.55), 0 0.08em 0.3em rgba(0, 0, 0, 0.5);
       }
 
-      /* The mark is a link and must not look like one until it is pointed
-         at: a masthead that arrives underlined is not a masthead. So it
-         inherits its colour and its shadow, and the hover is the one every
-         other link on this page uses, the whole word going sakura. The
-         focus ring is the page's own, from the block at the top, because a
-         keyboard has to be able to find the way home too. */
-      .brand h1 a.home, a.spine-mark {
+      /* Both marks lead home. They keep the masthead's own colour until
+         pointed at, then go sakura like every other link here. */
+      .brand h1 a.home,
+      a.spine-mark {
         color: inherit;
         text-decoration: none;
-        transition: color 120ms ease;
+        transition: color var(--ease-quick);
       }
-      .brand h1 a.home:hover, .brand h1 a.home:focus-visible,
-      a.spine-mark:hover, a.spine-mark:focus-visible { color: var(--sakura); }
+      :is(.brand h1 a.home, a.spine-mark):is(:hover, :focus-visible) { color: var(--sakura); }
 
       .eyebrow {
         display: flex;
         align-items: center;
         gap: 12px;
         margin: 14px 0 0;
+        color: #d8d2c0;
         font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.28em;
         text-transform: uppercase;
-        color: #d8d2c0;
       }
       .eyebrow::before {
         content: "";
+        flex: 0 0 auto;
         width: 36px;
         height: 2px;
         background: var(--sakura);
-        flex: 0 0 auto;
       }
 
       .invite {
-        margin: 12px 0 0;
         max-width: 34em;
+        margin: 12px 0 0;
         color: var(--slate);
         font-size: 15px;
         line-height: 1.6;
@@ -335,83 +433,83 @@
         margin: 0;
       }
       .stats div { text-align: right; }
-      .stats dt {
-        color: var(--sakura);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        margin-bottom: 6px;
-      }
+      .stats dt { margin-bottom: 6px; }
       .stats dd {
         margin: 0;
+        color: var(--cream);
         font-family: var(--mono);
         font-size: 28px;
         font-weight: 600;
         line-height: 1;
-        color: var(--cream);
-      }
-
-      .links {
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-        align-items: center;
       }
 
       @media (max-width: 860px) {
-        .mast { grid-template-columns: 1fr; padding: 18px 0 14px; gap: 16px; }
+        .mast {
+          grid-template-columns: 1fr;
+          gap: 16px;
+          padding: 18px 0 14px;
+        }
         .brand h1 { font-size: clamp(30px, 9vw, 44px); }
-        .invite { margin-top: 10px; font-size: 14px; }
-        .mast-side { align-items: flex-start; gap: 14px; }
+        .invite {
+          margin-top: 10px;
+          font-size: 14px;
+        }
+        .mast-side {
+          align-items: flex-start;
+          gap: 14px;
+        }
         .stats div { text-align: left; }
       }
 
-      /* ---------------------------------------------------------------
-         Sticky spine. Takes over from the masthead on scroll and carries
-         the search field with it, because finding a track is the thing
-         you want halfway down a long board.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         The spine: a slim bar that takes over from the masthead once it
+         has scrolled away.
+         ================================================================ */
       .spine {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
+        inset: 0 0 auto;
         z-index: 30;
+        border-bottom: 1px solid var(--line);
         background: rgba(14, 20, 15, 0.94);
         backdrop-filter: blur(8px);
-        border-bottom: 1px solid var(--line);
-        transform: translateY(-100%);
         opacity: 0;
         pointer-events: none;
+        transform: translateY(-100%);
         transition: transform 180ms ease, opacity 180ms ease;
       }
-      .spine.on { transform: none; opacity: 1; pointer-events: auto; }
+      .spine.on {
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+      }
       .spine-inner {
-        width: var(--page);
-        margin: 0 auto;
-        height: 52px;
         display: flex;
         align-items: center;
         gap: 20px;
+        width: var(--page);
+        height: 52px;
+        margin: 0 auto;
       }
-      /* The spine's mark is the name's middle and its slash: the whole
-         name is the masthead's, and the spine has a search field to fit. */
+      /* Only the middle of the name, and its slash: the spine also has to
+         hold the links. */
       .spine-mark {
         position: relative;
+        flex: 0 0 auto;
         padding-left: 14px;
         font-size: 14px;
         font-weight: 800;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        flex: 0 0 auto;
       }
-      .spine-mark .lockup-slash { left: 3px; width: 3px; }
+      .spine-mark .lockup-slash {
+        left: 3px;
+        width: 3px;
+      }
       .spine-stats {
+        color: var(--dim);
         font-family: var(--mono);
         font-size: 12px;
         letter-spacing: 0.04em;
-        color: var(--dim);
         white-space: nowrap;
       }
       .spine .links { margin-left: auto; }
@@ -419,10 +517,10 @@
         .spine-stats { display: none; }
       }
 
-      /* ---------------------------------------------------------------
-         Layout. Tracks on the left, standings on the right once there
-         is a screen wide enough and a time worth ranking.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Page layout: the tracks, and a standings rail beside them on a
+         screen wide enough to hold both.
+         ================================================================ */
       main {
         width: var(--page);
         margin: 8px auto 72px;
@@ -431,33 +529,167 @@
       .deck {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 26px;
         align-items: start;
+        gap: 26px;
       }
       @media (min-width: 1080px) {
-        .deck.has-rail { grid-template-columns: minmax(0, 1fr) 296px; gap: 30px; }
+        .deck.has-rail {
+          grid-template-columns: minmax(0, 1fr) 296px;
+          gap: 30px;
+        }
       }
 
-      /* ---------------------------------------------------------------
-         Toolbar. Search, sort, and an honest count.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         The two tabs and the aircraft switch: plates side by side, one
+         always chosen and lit in mint, because a chosen plate is a
+         choice and not chrome.
+         ================================================================ */
+      .tabs,
+      .switch {
+        display: grid;
+        gap: 10px;
+      }
+      .tabs {
+        grid-template-columns: 1fr 1fr;
+        margin: 4px 0 20px;
+      }
+      .switch {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin: 4px 0 26px;
+      }
+
+      .tab,
+      .switch-btn {
+        border: 0;
+        border-top: 2px solid rgba(157, 179, 200, 0.22);
+        border-radius: var(--radius);
+        color: var(--slate);
+        background: var(--sunk);
+        box-shadow: var(--ring);
+      }
+      :is(.tab, .switch-btn):hover { color: var(--cream); }
+
+      .tab {
+        display: block;
+        padding: 12px 16px 13px;
+        text-decoration: none;
+        transition: color var(--ease-plate), background-color var(--ease-plate), border-top-color var(--ease-plate);
+      }
+      .tab.is-on {
+        border-top-color: var(--mint);
+        color: var(--cream);
+        background: var(--panel);
+      }
+      .tab-name {
+        display: block;
+        color: var(--cream);
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .tab-note {
+        display: block;
+        margin-top: 3px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .tab.is-on .tab-note { color: var(--slate); }
+
+      .switch-btn {
+        appearance: none;
+        display: grid;
+        grid-template: auto auto / minmax(0, 1fr) auto;
+        align-items: baseline;
+        gap: 2px 14px;
+        padding: 13px 16px 14px;
+        font-family: var(--ui);
+        text-align: left;
+        cursor: pointer;
+        transition: color var(--ease-plate), background-color var(--ease-plate), border-top-color var(--ease-plate), box-shadow var(--ease-plate);
+      }
+      .switch-craft[hidden] { display: none; }
+      .switch-kicker {
+        --caps-track: 0.18em;
+        grid-column: 1;
+        color: inherit;
+        opacity: 0.72;
+      }
+      .switch-name {
+        grid-column: 1;
+        color: var(--cream);
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .switch-count {
+        grid-area: 1 / 2 / span 2;
+        align-self: center;
+        color: var(--dim);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .switch-btn.is-on {
+        border-top-color: var(--mint);
+        background: rgba(125, 255, 180, 0.05);
+        box-shadow: inset 0 0 0 1px rgba(125, 255, 180, 0.2);
+      }
+      .switch-btn.is-on .switch-kicker {
+        color: var(--mint);
+        opacity: 1;
+      }
+      .switch-btn.is-on .switch-count { color: var(--cream); }
+
+      /* Under "Nothing matches that": the one thing in that box the Clear
+         button will not undo. */
+      .empty-craft {
+        margin: 6px 0 0;
+        color: var(--sakura);
+        font-size: 13px;
+      }
+
+      @media (max-width: 719px) {
+        .tabs {
+          gap: 8px;
+          margin-bottom: 16px;
+        }
+        .tab { padding: 10px 12px 11px; }
+        .tab-name { font-size: 15px; }
+        .tab-note { display: none; }
+      }
+      /* Three plates across a phone are three columns of wrapped words. */
+      @media (max-width: 560px) {
+        .switch {
+          grid-template-columns: 1fr;
+          gap: 8px;
+          margin-bottom: 20px;
+        }
+        .switch-btn { padding: 11px 13px 12px; }
+        .switch-name { font-size: 16px; }
+        .switch-count { display: none; }
+      }
+
+      /* ================================================================
+         The toolbar: find, two selects, a count, and the tags under them.
+         ================================================================ */
       .toolbar {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 12px 16px;
-        padding: 0 0 16px;
         margin-bottom: 18px;
+        padding: 0 0 16px;
         border-bottom: 1px solid var(--line);
       }
       .toolbar[hidden] { display: none; }
 
       .find {
         position: relative;
-        flex: 1 1 220px;
-        max-width: 340px;
         display: flex;
         align-items: center;
+        flex: 1 1 220px;
+        max-width: 340px;
       }
       .find svg {
         position: absolute;
@@ -467,69 +699,140 @@
         color: var(--dim);
         pointer-events: none;
       }
-      .find input {
-        width: 100%;
-        padding: 9px 11px 9px 34px;
-        background: var(--field);
-        border: 1px solid var(--line);
-        border-radius: 3px;
-        color: var(--cream);
-        font: 400 14px/1.2 var(--ui);
-      }
-      .find input::placeholder { color: var(--dim); }
-      .find input:focus { outline: none; border-color: var(--sakura); }
       .find kbd {
         position: absolute;
         right: 9px;
         padding: 2px 6px;
-        border-radius: 3px;
         border: 1px solid rgba(235, 230, 215, 0.24);
-        background: rgba(20, 28, 22, 0.6);
+        border-radius: 3px;
         color: var(--dim);
+        background: rgba(20, 28, 22, 0.6);
         font: 650 10px/1.2 var(--ui);
         pointer-events: none;
       }
-      .find input:focus ~ kbd, .find input:not(:placeholder-shown) ~ kbd { opacity: 0; }
+      /* The hint goes once the field is in use. */
+      .find input:is(:focus, :not(:placeholder-shown)) ~ kbd { opacity: 0; }
+
+      .find input,
+      .sort select,
+      .admin-field input {
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        background-color: var(--field);
+      }
+      :is(.find input, .sort select, .admin-field input):focus {
+        border-color: var(--sakura);
+        outline: none;
+      }
+      .find input {
+        width: 100%;
+        padding: 9px 11px 9px 34px;
+        color: var(--cream);
+        font: 400 14px/1.2 var(--ui);
+      }
+      .find input::placeholder { color: var(--dim); }
 
       .sort {
         display: flex;
         align-items: center;
         gap: 9px;
       }
-      .sort label {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--dim);
-      }
+      .sort label { --caps-color: var(--dim); }
       .sort select {
         appearance: none;
         padding: 8px 30px 8px 11px;
-        background-color: var(--field);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23e8a8b8'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 11px center;
-        background-size: 9px 6px;
-        border: 1px solid var(--line);
-        border-radius: 3px;
         color: var(--sakura);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23e8a8b8'/%3E%3C/svg%3E");
+        background-position: right 11px center;
+        background-repeat: no-repeat;
+        background-size: 9px 6px;
         font: 600 13px/1.2 var(--ui);
         cursor: pointer;
       }
-      .sort select:focus { outline: none; border-color: var(--sakura); }
-      .sort select option { background: #101610; color: var(--cream); }
+      .sort select option {
+        color: var(--cream);
+        background: #101610;
+      }
 
       .count {
         margin-left: auto;
+        color: var(--dim);
         font-size: 12px;
         letter-spacing: 0.06em;
-        color: var(--dim);
       }
 
-      /* ---------------------------------------------------------------
-         The grid of tracks.
-         --------------------------------------------------------------- */
+      /* A closed list of tags, so the filter is the whole list rather
+         than a search that guesses. Pressed tags fill in sakura, the same
+         thing aria-pressed tells a screen reader. */
+      .tagbar {
+        display: flex;
+        flex: 1 0 100%;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 2px;
+      }
+      .tagbar[hidden] { display: none; }
+
+      .tag {
+        appearance: none;
+        padding: 5px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--slate);
+        background: transparent;
+        font: 600 11px/1.2 var(--ui);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: color var(--ease-quick), border-color var(--ease-quick), background-color var(--ease-quick);
+      }
+      .tag:hover {
+        border-color: rgba(232, 168, 184, 0.5);
+        color: var(--cream);
+      }
+      .tag[aria-pressed="true"] {
+        border-color: var(--sakura);
+        color: var(--deep);
+        background: var(--sakura);
+      }
+      /* How many tracks wear it, so an unused tag says so. */
+      .tag .n {
+        margin-left: 6px;
+        font-weight: 500;
+        opacity: 0.62;
+      }
+      .tag[aria-pressed="true"] .n { opacity: 0.7; }
+      .tag:disabled {
+        cursor: default;
+        opacity: 0.34;
+      }
+      .tag:disabled:hover {
+        border-color: var(--line);
+        color: var(--slate);
+      }
+
+      /* On a card a tag is a label, not a control. */
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .tags:empty { display: none; }
+      .tags span {
+        padding: 2px 7px;
+        border-radius: 999px;
+        color: var(--sakura);
+        background: rgba(232, 168, 184, 0.1);
+        box-shadow: inset 0 0 0 1px rgba(232, 168, 184, 0.24);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      /* ================================================================
+         The cards
+         ================================================================ */
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
@@ -539,122 +842,80 @@
       .card {
         display: flex;
         flex-direction: column;
-        background: var(--panel);
-        border-radius: var(--radius);
         overflow: hidden;
-        border-top: 2px solid var(--edge);
-        box-shadow: inset 0 0 0 1px var(--line), 0 14px 30px rgba(0, 0, 0, 0.34);
-        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+        box-shadow: var(--ring), 0 14px 30px rgba(0, 0, 0, 0.34);
+        transition: transform var(--ease-plate), box-shadow var(--ease-plate), border-color var(--ease-plate);
       }
-      .card:hover, .card:focus-within {
-        transform: translateY(-3px);
+      .card:is(:hover, :focus-within) {
         border-top-color: var(--sakura);
         box-shadow: inset 0 0 0 1px rgba(232, 168, 184, 0.32), 0 18px 36px rgba(0, 0, 0, 0.48);
+        transform: translateY(-3px);
       }
 
+      /* The card's art, always 16 by 10: a plan drawn on a canvas, or a
+         room's animation. */
       .tile {
         position: relative;
         display: block;
         aspect-ratio: 16 / 10;
-        background: #0b1219;
         border-bottom: 1px solid var(--line);
+        background: var(--blueprint);
       }
       .tile canvas.plan {
         display: block;
         width: 100%;
         height: 100%;
       }
-      /*
-         THE ROOM CARD IS A PICTURE, NOT A DRAWING.
-
-         A sixty metre field has a plan worth drawing: a line through twenty
-         gates, read at a glance. A RaceGOW room is five metres across with
-         three gates in it, and its plan is an almost empty rectangle with a
-         dot in it, which says nothing about a track whose whole difficulty
-         is vertical. So a whoop track carries the builder's own animation
-         instead, rendered once when it was published and stored on this
-         board as a file. It is an <img>, so it costs a request and no
-         WebGL, which is the whole reason it can sit in a grid.
-
-         contain rather than cover, because the animation is rendered at
-         this tile's own 16 by 10 and a square one from an older export
-         should letterbox rather than lose the track off the top. The tile
-         has its size from the stylesheet either way, so nothing reflows as
-         the bytes land.
-      */
+      /* Out of flow, so the tile is sized by its ratio alone: an in flow
+         image with a percentage height would size the tile instead, and a
+         square animation would make a square card. Contained, so an older
+         square export letterboxes rather than losing the top of the room. */
       .tile img.gif-art {
-        /* ABSOLUTE, so the tile keeps its own 16 by 10.
-           A percentage height on an in flow replaced element resolves
-           against a parent whose height is indefinite, which an aspect
-           ratio does not make definite, so height: 100% came out as auto
-           and a square animation made a square card. Taken out of flow the
-           tile has no content to be sized by and the ratio holds, which is
-           what keeps a grid of rooms and a grid of fields the same shape. */
         position: absolute;
         inset: 0;
         display: block;
         width: 100%;
         height: 100%;
+        background: var(--blueprint);
         object-fit: contain;
-        background: #0b1219;
+      }
+
+      /* The chips over a tile's corners: gates bottom right, the aircraft
+         top right (only on a whoop, the exception worth marking), and
+         "flown" top left in mint because it is about a record. */
+      .tile-chip,
+      .tile-craft,
+      .tile-flown {
+        --caps-track: 0.12em;
+        position: absolute;
+        padding: 3px 8px;
+        border-radius: 3px;
+        background: var(--night-soft);
       }
       .tile-chip {
-        position: absolute;
+        --caps-weight: 600;
+        --caps-color: var(--slate);
         right: 9px;
         bottom: 9px;
-        padding: 3px 8px;
-        border-radius: 3px;
-        background: rgba(11, 16, 12, 0.78);
         box-shadow: inset 0 0 0 1px rgba(157, 179, 200, 0.28);
-        color: var(--slate);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
       }
-      /*
-         THE WHOOP CHIP, and only the whoop gets one.
-
-         Every track on this board is a sixty metre field until somebody
-         publishes a room, so a chip on all of them would be a word repeated
-         on every card and read as decoration. Marking the exception is what
-         a chip is for. Sakura, because it is this page's chrome and the
-         aircraft is a property of the track rather than a record: mint is
-         reserved for a time.
-      */
       .tile-craft {
-        position: absolute;
-        right: 9px;
         top: 9px;
-        padding: 3px 8px;
-        border-radius: 3px;
-        background: rgba(11, 16, 12, 0.82);
+        right: 9px;
+        background: var(--night);
         box-shadow: inset 0 0 0 1px rgba(232, 168, 184, 0.55);
-        color: var(--sakura);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
       }
       .tile-flown {
-        position: absolute;
-        left: 9px;
+        --caps-color: var(--mint);
         top: 9px;
-        padding: 3px 8px;
-        border-radius: 3px;
-        background: rgba(11, 16, 12, 0.78);
+        left: 9px;
         box-shadow: inset 0 0 0 1px rgba(125, 255, 180, 0.4);
-        color: var(--mint);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
       }
 
       .body {
         display: flex;
-        flex-direction: column;
         flex: 1 1 auto;
+        flex-direction: column;
         gap: 12px;
         padding: 15px 16px 16px;
       }
@@ -662,16 +923,16 @@
       .head {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 4px 14px;
         align-items: baseline;
+        gap: 4px 14px;
       }
       .head h2 {
         grid-column: 1;
         margin: 0;
         font-size: 18px;
         font-weight: 700;
-        letter-spacing: 0.01em;
         line-height: 1.2;
+        letter-spacing: 0.01em;
         overflow-wrap: anywhere;
       }
       .by {
@@ -681,32 +942,30 @@
         font-size: 12px;
         letter-spacing: 0.02em;
       }
-      .by b { color: var(--sakura); font-weight: 600; }
+      :is(.by, .sheet-by) b {
+        color: var(--sakura);
+        font-weight: 600;
+      }
 
+      /* The record in a card's corner. */
       .record {
-        grid-column: 2;
-        grid-row: 1 / span 2;
-        text-align: right;
+        grid-area: 1 / 2 / span 2;
         align-self: start;
+        text-align: right;
       }
       .record[hidden] { display: none; }
       .record-label {
+        --caps-size: 9px;
         display: block;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
         margin-bottom: 3px;
       }
       .record-time {
         display: block;
+        color: var(--mint);
         font-size: 24px;
         font-weight: 700;
-        color: var(--mint);
         line-height: 1;
       }
-      .record-time.empty { color: #55654f; font-weight: 500; font-size: 19px; }
       .record-holder {
         margin-top: 4px;
         color: var(--slate);
@@ -714,53 +973,56 @@
       }
       .record-holder:empty { display: none; }
 
-      /* Top three, once a track has been flown. */
+      /* The top three of a track that has been flown. */
       .podium {
         margin: 0;
         padding: 4px 10px;
-        list-style: none;
-        background: var(--sunk);
         border-radius: 3px;
-        box-shadow: inset 0 0 0 1px var(--line);
+        list-style: none;
       }
       .podium[hidden] { display: none; }
       .podium-row {
         display: grid;
         grid-template-columns: 1.5em minmax(0, 1fr) auto;
-        gap: 10px;
         align-items: baseline;
+        gap: 10px;
         padding: 6px 0;
         font-size: 14px;
       }
-      .podium-row + .podium-row { border-top: 1px solid var(--line); }
+      /* A fourth column for the chase link, only on rows with a ghost, so
+         the times keep one right edge either way. */
+      .podium-row.has-chase { grid-template-columns: 1.5em minmax(0, 1fr) auto auto; }
       .podium-row .rk {
+        color: var(--dim);
         font-family: var(--mono);
         font-size: 11px;
         font-weight: 700;
-        color: var(--dim);
       }
-      .podium-row .nm {
+      .podium-row .nm { color: var(--cream); }
+      .podium-row .tm {
         color: var(--cream);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-size: 13px;
       }
-      .podium-row .tm { color: var(--cream); font-size: 13px; }
-      .podium-row.r1 .rk, .podium-row.r1 .tm { color: var(--mint); }
-      .podium-row.r2 .rk, .podium-row.r3 .rk { color: var(--sakura); }
-      /* The chase link, on rows whose time carries a recorded lap. Mint,
-         because a ghost is a record flying. Rows without one keep the three
-         column grid, so the times stay on one right edge. */
-      .podium-row.has-chase { grid-template-columns: 1.5em minmax(0, 1fr) auto auto; }
-      .podium-row .chase, td.chase a {
+
+      /* First place in mint, second and third in sakura, here, in the
+         standings and in the sheet's table alike. */
+      .podium-row.r1 :is(.rk, .tm),
+      .standing.p1 .rk,
+      tr.r1 :is(td.rank, td.time) { color: var(--mint); }
+      :is(.podium-row.r2, .podium-row.r3, .standing.p2, .standing.p3) .rk,
+      :is(tr.r2, tr.r3) td.rank { color: var(--sakura); }
+
+      /* Chase the ghost: mint, because a ghost is a record flying. */
+      .podium-row .chase,
+      td.chase a {
+        color: var(--mint);
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--mint);
         text-decoration: none;
+        text-transform: uppercase;
       }
-      .podium-row .chase:hover, td.chase a:hover { color: var(--cream); }
+      :is(.podium-row .chase, td.chase a):hover { color: var(--cream); }
 
       .none {
         margin: 0;
@@ -773,21 +1035,21 @@
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px 16px;
         align-items: center;
+        gap: 10px 16px;
         margin-top: auto;
         padding-top: 2px;
       }
 
-      /* ---------------------------------------------------------------
-         The standings rail. Who is fast, and what happened lately.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         The standings rail: who is fast, and what was flown lately.
+         ================================================================ */
       .rail {
+        position: sticky;
+        top: 68px;
         display: flex;
         flex-direction: column;
         gap: 20px;
-        position: sticky;
-        top: 68px;
       }
       .rail[hidden] { display: none; }
       @media (max-width: 1079px) {
@@ -811,110 +1073,118 @@
       .standing {
         display: grid;
         grid-template-columns: 1.6em minmax(0, 1fr) auto;
-        gap: 4px 10px;
         align-items: baseline;
+        gap: 4px 10px;
         padding: 9px 0;
       }
-      .standing + .standing { border-top: 1px solid var(--line); }
       .standing .rk {
         grid-row: 1 / span 2;
+        color: var(--dim);
         font-family: var(--mono);
         font-size: 12px;
         font-weight: 700;
-        color: var(--dim);
       }
-      .standing.p1 .rk { color: var(--mint); }
-      .standing.p2 .rk, .standing.p3 .rk { color: var(--sakura); }
       .standing .nm {
-        font-size: 14px;
         color: var(--cream);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-size: 14px;
       }
       .standing .sc {
+        color: var(--mint);
         font-family: var(--mono);
         font-size: 13px;
         font-weight: 600;
-        color: var(--mint);
       }
       .standing .mt {
         grid-column: 2 / span 2;
+        color: var(--dim);
         font-size: 11px;
         letter-spacing: 0.04em;
-        color: var(--dim);
       }
 
-      .feed { display: flex; flex-direction: column; }
+      .feed {
+        display: flex;
+        flex-direction: column;
+      }
       .feed-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 2px 10px;
         padding: 9px 0;
       }
-      .feed-row + .feed-row { border-top: 1px solid var(--line); }
       .feed-row .nm {
-        font-size: 13px;
         color: var(--cream);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-size: 13px;
       }
       .rail-time {
+        color: var(--cream);
         font-size: 13px;
         font-weight: 600;
-        color: var(--cream);
         text-align: right;
       }
       .rail-time.best { color: var(--mint); }
       .feed-row .on {
         grid-column: 1;
-        font-size: 11px;
         color: var(--slate);
+        font-size: 11px;
         text-decoration: none;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
       .feed-row .on:hover { color: var(--sakura); }
       .feed-row .ago {
         grid-column: 2;
-        font-size: 11px;
         color: var(--dim);
+        font-size: 11px;
         text-align: right;
       }
 
-      /* ---------------------------------------------------------------
-         Empty, loading and error states.
-         --------------------------------------------------------------- */
-      .empty, .status {
+      /* ================================================================
+         Empty, waiting and failed states. `.empty` also lands on a card's
+         record when it has none, which is why that time carries this
+         padding and leading under its own rule below.
+         ================================================================ */
+      .empty,
+      .status {
         padding: 30px 26px;
         color: var(--slate);
-        line-height: 1.6;
         font-size: 15px;
+        line-height: 1.6;
+      }
+      .status {
+        color: var(--dim);
+        text-align: center;
+      }
+      .record-time.empty {
+        color: #55654f;
+        font-size: 19px;
+        font-weight: 500;
       }
       .empty h2 {
         margin: 0 0 8px;
-        font-size: 20px;
         color: var(--cream);
+        font-size: 20px;
       }
-      .empty p { margin: 0 0 16px; max-width: 46em; }
+      .empty p {
+        max-width: 46em;
+        margin: 0 0 16px;
+      }
       .empty p:last-child { margin-bottom: 0; }
-      .status { text-align: center; color: var(--dim); }
 
+      /* The grey card shapes shown while the list loads. */
       .skeleton .tile { background: #0e1219; }
       .skeleton .bone {
         height: 11px;
         border-radius: 2px;
-        background: rgba(157, 179, 200, 0.10);
+        background: rgba(157, 179, 200, 0.1);
       }
-      .skeleton .bone.wide { width: 68%; height: 15px; }
+      .skeleton .bone.wide {
+        width: 68%;
+        height: 15px;
+      }
       .skeleton .bone.thin { width: 40%; }
 
-      /* ---------------------------------------------------------------
-         The track sheet. One track, full width: the simulator's own
-         orbit camera, the plan, the facts, and every time posted.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Sheets: a full screen layer over the page for one track, the
+         admin panel, or the credits.
+         ================================================================ */
       .sheet {
         position: fixed;
         inset: 0;
@@ -934,16 +1204,16 @@
         align-items: flex-start;
         justify-content: space-between;
         gap: 20px;
-        padding-bottom: 20px;
         margin-bottom: 24px;
+        padding-bottom: 20px;
         border-bottom: 1px solid var(--line);
       }
       .sheet-top h2 {
         margin: 8px 0 0;
         font-size: clamp(26px, 3.6vw, 42px);
         font-weight: 700;
-        letter-spacing: 0.03em;
         line-height: 1.05;
+        letter-spacing: 0.03em;
         overflow-wrap: anywhere;
       }
       .sheet-by {
@@ -951,34 +1221,38 @@
         color: var(--slate);
         font-size: 14px;
       }
-      .sheet-by b { color: var(--sakura); font-weight: 600; }
 
       .sheet-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 26px;
         align-items: start;
+        gap: 26px;
       }
       @media (min-width: 900px) {
-        .sheet-grid { grid-template-columns: minmax(0, 1.25fr) minmax(21em, 1fr); gap: 32px; }
+        .sheet-grid {
+          grid-template-columns: minmax(0, 1.25fr) minmax(21em, 1fr);
+          gap: 32px;
+        }
       }
 
+      /* The big picture: the simulator's orbit camera fading in over the
+         plan once it says it is ready. */
       .shot {
         position: relative;
         display: block;
+        overflow: hidden;
         width: 100%;
         aspect-ratio: 16 / 9;
-        overflow: hidden;
         border-radius: var(--radius);
-        background: #0b1219;
-        box-shadow: inset 0 0 0 1px var(--line), 0 16px 34px rgba(0, 0, 0, 0.4);
+        background: var(--blueprint);
+        box-shadow: var(--ring), 0 16px 34px rgba(0, 0, 0, 0.4);
       }
-      .shot canvas.plan, .shot iframe.orbit {
+      .shot :is(canvas.plan, iframe.orbit) {
         position: absolute;
         inset: 0;
+        display: block;
         width: 100%;
         height: 100%;
-        display: block;
         border: 0;
         object-fit: cover;
       }
@@ -989,17 +1263,17 @@
       .shot iframe.orbit.ready { opacity: 1; }
       .shot-wait {
         position: absolute;
-        left: 12px;
         bottom: 12px;
+        left: 12px;
         z-index: 2;
         display: flex;
         align-items: center;
         gap: 9px;
         padding: 6px 11px;
         border-radius: 3px;
-        background: rgba(11, 16, 12, 0.82);
-        box-shadow: inset 0 0 0 1px var(--line);
         color: var(--slate);
+        background: var(--night);
+        box-shadow: var(--ring);
         font-size: 11px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -1014,43 +1288,62 @@
         background: var(--amber);
         animation: pulse 1.6s ease-in-out infinite;
       }
-      @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
 
+      /* Facts: under the sheet's picture and in the statistics tab's all
+         time plate, one look for both, four to a row. */
       .facts {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
-        gap: 16px 20px;
+        flex: 1 1 420px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 20px 24px;
         margin: 20px 0 0;
         padding: 16px 18px;
-        background: var(--sunk);
         border-radius: var(--radius);
-        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      @media (max-width: 719px) {
+        .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       .facts dt {
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
+        --caps-size: 9px;
         margin-bottom: 5px;
       }
       .facts dd {
         margin: 0;
-        font-size: 14px;
         color: var(--cream);
+        font-size: 14px;
       }
 
       .sheet .actions { margin-top: 20px; }
-
       .sheet-times { min-width: 0; }
+
+      /* The one big number: the sheet's record, and the all time total in
+         statistics. Proportional figures, which read tighter than mono at
+         display size. */
       .hero {
-        padding: 18px 20px 20px;
         margin-bottom: 18px;
+        padding: 18px 20px 20px;
+        color: var(--mint);
+        font-family: var(--ui);
+        font-size: 52px;
+        font-variant-numeric: proportional-nums lining-nums;
+        font-weight: 650;
+        line-height: 0.95;
       }
       .hero[hidden] { display: none; }
-      .hero .record-label { font-size: 10px; margin-bottom: 6px; }
+      .hero .record-label {
+        margin-bottom: 6px;
+        font-size: 10px;
+      }
       .hero .record-time { font-size: clamp(40px, 6vw, 58px); }
-      .hero .record-holder { margin-top: 8px; font-size: 15px; color: var(--cream); }
+      .hero .record-holder {
+        margin-top: 8px;
+        color: var(--cream);
+        font-size: 15px;
+      }
 
       .board-head {
         display: flex;
@@ -1066,54 +1359,63 @@
         letter-spacing: 0.02em;
       }
 
+      /* Every time on a track. */
       table {
         width: 100%;
         border-collapse: collapse;
       }
-      th, td {
-        text-align: left;
+      th,
+      td {
         padding: 9px 8px;
         border-bottom: 1px solid var(--line);
-        font-size: 14px;
+        text-align: left;
       }
+      td { font-size: 14px; }
       th {
-        color: var(--sakura);
-        font-size: 9px;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        font-weight: 700;
+        --caps-size: 9px;
         border-bottom-color: rgba(232, 168, 184, 0.3);
       }
-      th:first-child, td:first-child { padding-left: 0; }
-      th:last-child, td:last-child { padding-right: 0; }
-      th.time, th.gap, th.when, th.chase,
-      td.time, td.gap, td.when, td.chase { text-align: right; }
+      :is(th, td):first-child { padding-left: 0; }
+      :is(th, td):last-child { padding-right: 0; }
+      :is(th, td):is(.time, .gap, .when, .chase) { text-align: right; }
       td.chase { width: 4.5em; }
       td.rank {
+        width: 2.8em;
+        color: var(--dim);
         font-family: var(--mono);
         font-weight: 700;
-        color: var(--dim);
-        width: 2.8em;
       }
       td.nm { color: var(--cream); }
-      td.time { font-family: var(--mono); font-weight: 600; color: var(--cream); width: 6em; }
-      td.gap { font-family: var(--mono); color: var(--sakura); font-size: 12px; width: 5em; }
-      td.when { color: var(--dim); font-size: 11px; white-space: nowrap; }
-      tr.r1 td.rank, tr.r1 td.time { color: var(--mint); }
-      tr.r2 td.rank, tr.r3 td.rank { color: var(--sakura); }
+      td.time {
+        width: 6em;
+        color: var(--cream);
+        font-family: var(--mono);
+        font-weight: 600;
+      }
+      td.gap {
+        width: 5em;
+        color: var(--sakura);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      td.when {
+        color: var(--dim);
+        font-size: 11px;
+        white-space: nowrap;
+      }
       @media (max-width: 560px) {
-        th.gap, td.gap { display: none; }
+        :is(th, td).gap { display: none; }
       }
 
-      /* The gap bar, the same idiom the simulator's finish screen uses to
-         show one lap against another. */
+      /* How far behind first, as the simulator's finish screen draws one
+         lap against another. */
       .gap-bar {
+        overflow: hidden;
         height: 3px;
         margin-top: 6px;
         border-radius: 2px;
         background: rgba(11, 16, 12, 0.6);
         box-shadow: inset 0 0 0 1px rgba(157, 179, 200, 0.2);
-        overflow: hidden;
       }
       .gap-bar span {
         display: block;
@@ -1122,24 +1424,21 @@
       }
       tr.r1 .gap-bar span { background: var(--mint); }
 
-      /* ---------------------------------------------------------------
-         Admin. The button in the masthead, the sign in panel behind it,
-         and the one destructive control it puts in the track sheet.
-
-         Amber throughout, which on this page is the instrument colour:
-         not mint, which means a record, and not sakura, which is chrome.
-         An admin control is an instrument. The one exception is the
-         removal button, which goes red on the second press, because at
-         that point it is the only red thing on the board and it is about
-         to destroy somebody's track.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Admin, in amber, the instrument colour: an admin control is an
+         instrument, not a record and not chrome. The one red thing on the
+         page is the second press of Remove.
+         ================================================================ */
       .admin-open.is-on {
-        color: var(--amber);
         display: inline-flex;
         align-items: center;
         gap: 7px;
+        color: var(--amber);
       }
-      .admin-open.is-on:hover { color: var(--amber); filter: brightness(1.12); }
+      .admin-open.is-on:hover {
+        color: var(--amber);
+        filter: brightness(1.12);
+      }
       .admin-open.is-on::before {
         content: "";
         width: 6px;
@@ -1150,15 +1449,12 @@
 
       .admin-inner { max-width: 640px; }
       .admin-panel {
-        padding: 20px 22px 22px;
         display: grid;
         gap: 14px;
+        padding: 20px 22px 22px;
       }
-      /* The panel sets `display`, and a class that sets display beats the
-         browser's own `[hidden] { display: none }`. Without this line both
-         faces of the panel are drawn at once, which is exactly what the
-         first look at this screen showed: a sign in form with a "signed in
-         as" block under it. */
+      /* The panel's own display would otherwise beat [hidden] and show the
+         signed in face under the sign in form. */
       .admin-panel[hidden] { display: none; }
       .admin-lede {
         margin: 0;
@@ -1166,25 +1462,20 @@
         font-size: 14px;
         line-height: 1.55;
       }
-      .admin-field { display: grid; gap: 6px; }
-      .admin-field label {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
+      .admin-field {
+        display: grid;
+        gap: 6px;
       }
       .admin-field input {
-        background: var(--field);
-        border: 1px solid var(--line);
-        border-radius: 3px;
+        width: 100%;
+        padding: 10px 12px;
         color: var(--cream);
         font: 15px/1.3 var(--ui);
-        padding: 10px 12px;
-        width: 100%;
       }
-      .admin-field input:focus { outline: none; border-color: var(--sakura); }
-      .admin-field input:focus-visible { outline: 2px solid var(--sakura); outline-offset: 2px; }
+      .admin-field input:focus-visible {
+        outline: 2px solid var(--sakura);
+        outline-offset: 2px;
+      }
       .admin-actions {
         display: flex;
         flex-wrap: wrap;
@@ -1192,23 +1483,28 @@
         gap: 12px;
       }
       .admin-busy {
+        color: var(--slate);
         font-size: 11px;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--slate);
       }
       .admin-busy[hidden] { display: none; }
-      /* Empty until there is something to say, and no reserved line: a
-         panel with a blank row under the button looks broken. */
+      /* No blank row is kept for an error that has not happened. */
       .admin-error {
         margin: 0;
-        color: #ff8f8f;
+        color: var(--warn);
         font-size: 14px;
         line-height: 1.5;
       }
       .admin-error:empty { display: none; }
-      .admin-who { margin: 0; font-size: 15px; }
-      .admin-who b { color: var(--amber); font-weight: 600; }
+      .admin-who {
+        margin: 0;
+        font-size: 15px;
+      }
+      .admin-who b {
+        color: var(--amber);
+        font-weight: 600;
+      }
       .admin-can {
         margin: 0;
         padding-left: 18px;
@@ -1221,23 +1517,50 @@
         margin: 0;
         padding: 10px 12px;
         border-radius: 3px;
-        background: var(--sunk);
-        box-shadow: inset 0 0 0 1px var(--line);
         color: var(--amber);
         font-size: 13px;
         line-height: 1.5;
       }
 
-      /* The strip inside the track sheet. Ruled off from the Fly row above
-         it, because the two are not the same kind of thing and a reader
-         reaching for Fly should not find a delete. */
+      /* The sponsors and the link each is handed. */
+      .admin-sponsors { margin-top: 18px; }
+      .admin-sponsors[hidden] { display: none; }
+      .admin-sponsors h3 { margin: 0 0 4px; }
+      .admin-sponsors p {
+        margin: 0 0 12px;
+        color: var(--slate);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .sponsor-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+      }
+      .sponsor-name {
+        min-width: 110px;
+        color: var(--cream);
+        font-size: 13px;
+      }
+      .sponsor-link {
+        flex: 1;
+        min-width: 0;
+        color: var(--slate);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      /* In the track sheet, ruled away from Fly so a reader reaching for
+         Fly does not land on Remove. */
       .admin-tools {
+        display: grid;
+        justify-items: start;
+        gap: 10px;
         margin-top: 22px;
         padding-top: 18px;
         border-top: 1px solid var(--line);
-        display: grid;
-        gap: 10px;
-        justify-items: start;
       }
       .admin-tools[hidden] { display: none; }
       .admin-tools .kicker { color: var(--amber); }
@@ -1249,35 +1572,29 @@
       }
       button.btn.danger {
         border-color: rgba(255, 143, 143, 0.55);
-        color: #ff8f8f;
+        color: var(--warn);
       }
       button.btn.danger:hover {
+        border-color: var(--warn);
+        color: var(--warn);
         background: rgba(255, 143, 143, 0.1);
-        border-color: #ff8f8f;
-        color: #ff8f8f;
       }
       button.btn.danger.armed {
-        background: #ff8f8f;
-        border-color: #ff8f8f;
+        border-color: var(--warn);
         color: var(--deep);
+        background: var(--warn);
         font-weight: 700;
       }
-      button.btn.danger.armed:hover { background: #ff8f8f; color: var(--deep); }
+      button.btn.danger.armed:hover {
+        color: var(--deep);
+        background: var(--warn);
+      }
 
-      /* ---------------------------------------------------------------
-         Credits sheet. Same shell as the track sheet, and the same roll
-         the simulator serves at #credits: sections ruled like a printed
-         page, the beta roll a start list with a slot number under each
-         face, and every card that names a person opening that person's
-         channel.
-
-         WHY THE CARD CARRIES THE HOVER AND NOT THE HEADING. credits.js
-         stretches the heading anchor's ::after over the whole card, so
-         the pointer is over a live target anywhere on it. If only the
-         heading lit up, most of that target would look dead. Hover is
-         therefore a card state, and :focus-within is the same state
-         arriving by keyboard.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Credits, the same roll the simulator serves at #credits. A card
+         that names a person is one big link (credits.js stretches the
+         heading's anchor over it), so hover and focus belong to the card.
+         ================================================================ */
       .credits-inner {
         width: min(760px, 94vw);
         margin: 0 auto;
@@ -1304,18 +1621,14 @@
         line-height: 1.65;
       }
       .credit-block { margin: 0 0 26px; }
-      /* The kicker's rule runs out to the margin and fades there, so a
-         section reads as a band across the page rather than a label
-         floating above a box. */
+      /* A section is a band across the page: its kicker's rule fades out
+         toward the margin. */
       .credit-kicker {
+        --caps-size: 11px;
+        --caps-track: 0.18em;
         display: flex;
         align-items: center;
         gap: 12px;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--sakura);
         margin-bottom: 10px;
       }
       .credit-kicker::after {
@@ -1326,76 +1639,73 @@
       }
       .credit-block h3 {
         margin: 0 0 14px;
+        color: var(--cream);
         font-size: 17px;
         font-weight: 600;
         letter-spacing: 0.01em;
-        color: var(--cream);
       }
-      /* The RaceGOW rooms: one line per builder, the tracks they built
-         beside the name, and the series underneath. A list rather than a
-         card each, because six names on cards reads as an advert and the
-         point here is the credit. */
+
+      /* The rooms' builders, one line each: a list reads as a credit where
+         six cards would read as an advert. */
       .credit-rooms {
-        background: rgba(16, 22, 17, 0.72);
+        padding: 14px 16px 16px;
         border-radius: 4px;
         border-top: 2px solid rgba(232, 168, 184, 0.28);
-        box-shadow: inset 0 0 0 1px rgba(244, 236, 214, 0.10);
-        padding: 14px 16px 16px;
+        background: rgba(16, 22, 17, 0.72);
+        box-shadow: inset 0 0 0 1px rgba(244, 236, 214, 0.1);
       }
-      .credit-room { margin: 0 0 6px; color: var(--cream); }
-      .credit-room b { color: var(--cream); font-weight: 600; }
-      .credit-room-note { margin: 12px 0 0; color: var(--slate); font-size: 14px; }
+      .credit-room {
+        margin: 0 0 6px;
+        color: var(--cream);
+      }
+      .credit-room b {
+        color: var(--cream);
+        font-weight: 600;
+      }
+      .credit-room-note {
+        margin: 12px 0 0;
+        color: var(--slate);
+        font-size: 14px;
+      }
+
       .credit {
         position: relative;
         display: flex;
         flex-direction: column;
         gap: 10px;
-        padding: 14px 16px 16px;
         margin-bottom: 10px;
-        background: var(--panel);
-        border-radius: var(--radius);
-        border-top: 2px solid var(--edge);
-        box-shadow: inset 0 0 0 1px var(--line);
+        padding: 14px 16px 16px;
       }
-      /* A person card puts the face and the slot number in a left rail
-         with the copy beside it. A project card keeps its mark across
-         the top, because a wordmark wants the width. */
+      .credit.project { gap: 14px; }
+      /* A person: face and start number in a rail, words beside them. */
       .credit.person {
         display: grid;
         grid-template-columns: 64px 1fr;
-        gap: 16px;
         align-items: start;
+        gap: 16px;
         padding: 16px;
       }
-      /* The maker card is the one hero on the page, so it takes the
-         brighter edge and the wider rail. */
+      /* The maker is the one hero card, wider rail and brighter edge. */
       .credit.maker {
         grid-template-columns: 84px 1fr;
         padding: 20px;
         border-top-color: rgba(232, 168, 184, 0.55);
       }
-      .credit.is-link {
-        transition:
-          transform 0.16s ease,
-          border-top-color 0.16s ease,
-          box-shadow 0.16s ease;
-      }
-      .credit.is-link:hover,
-      .credit.is-link:focus-within {
-        transform: translateY(-2px);
+      .credit.is-link { transition: transform 0.16s ease, border-top-color 0.16s ease, box-shadow 0.16s ease; }
+      .credit.is-link:is(:hover, :focus-within) {
         border-top-color: var(--sakura);
-        box-shadow:
-          inset 0 0 0 1px rgba(244, 236, 214, 0.20),
-          0 8px 20px rgba(6, 10, 7, 0.55);
+        box-shadow: inset 0 0 0 1px rgba(244, 236, 214, 0.2), 0 8px 20px rgba(6, 10, 7, 0.55);
+        transform: translateY(-2px);
       }
       .credit.is-link:focus-within {
         outline: 1px solid var(--sakura);
         outline-offset: 3px;
       }
-      .credit.is-link h4 a { color: var(--cream); text-decoration: none; }
-      /* The stretched anchor. Everything it covers is text, so nothing
-         is buried that wanted a click of its own. The ring is on the
-         card above, which is why the anchor drops its own. */
+      .credit.is-link h4 a {
+        color: var(--cream);
+        text-decoration: none;
+      }
+      /* The anchor stretched over the card; the card draws the ring. */
       .credit.is-link h4 a::after {
         content: "";
         position: absolute;
@@ -1403,6 +1713,7 @@
         border-radius: var(--radius);
       }
       .credit.is-link h4 a:focus-visible { outline: none; }
+
       .credit-stack {
         display: grid;
         justify-items: center;
@@ -1410,16 +1721,24 @@
       }
       .credit-face {
         display: block;
+        overflow: hidden;
         width: 64px;
         height: 64px;
         border-radius: var(--radius);
-        overflow: hidden;
         background: var(--sunk);
         box-shadow: 0 0 0 1px rgba(244, 236, 214, 0.16);
         transition: box-shadow 0.16s ease;
       }
-      .credit.maker .credit-face { width: 84px; height: 84px; }
-      .credit-face img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      .credit.maker .credit-face {
+        width: 84px;
+        height: 84px;
+      }
+      .credit-face img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
       .credit-face.is-blank {
         display: grid;
         place-items: center;
@@ -1431,107 +1750,93 @@
         font-weight: 800;
         letter-spacing: 0.08em;
       }
-      .credit.is-link:hover .credit-face,
-      .credit.is-link:focus-within .credit-face {
-        box-shadow: 0 0 0 1px var(--sakura);
-      }
-      /* The slot number is a start list's: the order they turned up, not
-         a ranking. Amber because it is a reading off the page rather
-         than a piece of chrome. */
+      .credit.is-link:is(:hover, :focus-within) .credit-face { box-shadow: 0 0 0 1px var(--sakura); }
+      /* The order they turned up, not a ranking; amber as a reading. */
       .credit-slot {
+        color: var(--amber);
         font: 700 11px/1 var(--mono);
         letter-spacing: 0.14em;
-        color: var(--amber);
       }
-      .credit-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+
+      .credit-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
       @media (min-width: 640px) {
         .credit-row.pair { grid-template-columns: 1fr 1fr; }
       }
-      /* The beta roll is one panel of ruled rows rather than four
-         floating cards, because a start list is a list. Four identical
-         boxes down a page say nothing about what they hold; four rows
-         under one edge say these are the same kind of thing. */
+      /* The beta pilots: one plate of ruled rows, because a start list is
+         a list. A row lights a bar down its edge rather than lifting,
+         since a row has nowhere to lift to. */
       .credit-row.pilots {
-        gap: 0;
-        background: var(--panel);
-        border-radius: var(--radius);
-        border-top: 2px solid var(--edge);
-        box-shadow: inset 0 0 0 1px var(--line);
         overflow: hidden;
+        gap: 0;
       }
-      /* A pilot row is a name, a number and a link out. Nothing is
-         written under the name, so the copy sits against the middle of
-         the face rather than starting level with the top of it. */
       .credit.pilot {
+        align-items: center;
         margin: 0;
         padding: 14px 18px 14px 16px;
-        align-items: center;
-        background: none;
         border-top: 0;
         border-radius: 0;
+        background: none;
         box-shadow: none;
       }
       .credit.pilot .credit-copy h4 { margin-bottom: 0; }
       .credit.pilot .credit-handle { margin-top: 7px; }
       .credit.pilot + .credit.pilot { border-top: 1px solid rgba(244, 236, 214, 0.09); }
-      /* A row's affordance is a bar down its leading edge, not a lift: a
-         row in a list has nowhere to lift to without breaking the rules
-         above and below it. */
       .credit.pilot::before {
         content: "";
         position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
+        inset: 0 auto 0 0;
         width: 2px;
         background: var(--sakura);
         transform: scaleY(0);
         transform-origin: 50% 0;
         transition: transform 0.16s ease;
       }
-      .credit.pilot.is-link:hover,
-      .credit.pilot.is-link:focus-within {
-        transform: none;
-        background: rgba(232, 168, 184, 0.055);
+      .credit.pilot.is-link:is(:hover, :focus-within) {
         border-top-color: rgba(244, 236, 214, 0.09);
+        background: rgba(232, 168, 184, 0.055);
         box-shadow: none;
+        transform: none;
       }
-      .credit.pilot.is-link:hover::before,
-      .credit.pilot.is-link:focus-within::before { transform: scaleY(1); }
-      /* The panel clips, so the focus ring has to be drawn inside it. */
+      .credit.pilot.is-link:is(:hover, :focus-within)::before { transform: scaleY(1); }
+      /* The plate clips, so the ring is drawn inside it. */
       .credit.pilot.is-link:focus-within { outline-offset: -3px; }
+
+      /* Project marks. credits.js inlines an svg without its own size, so
+         the size is set here or a wordmark fills the column. */
       .credit-logo {
         display: flex;
         align-items: center;
         justify-content: flex-start;
         min-height: 44px;
       }
-      /* credits.js inlines each mark as an <svg> with its width and height
-         attributes stripped, so the size has to come from here. Without a
-         rule an inline svg fills the column and a wordmark ends up four
-         times the height of the card it labels. */
-      .credit-logo img, .credit-logo > svg {
+      .credit-logo img,
+      .credit-logo > svg {
         display: block;
-        height: 40px;
         width: auto;
+        height: 40px;
         max-width: min(100%, 260px);
         object-fit: contain;
       }
       .credit-logo.light {
-        background: var(--cream);
-        border-radius: var(--radius);
-        padding: 10px 14px;
-        min-height: 0;
         align-self: flex-start;
+        min-height: 0;
+        padding: 10px 14px;
+        border-radius: var(--radius);
+        background: var(--cream);
       }
-      .credit-logo.light img, .credit-logo.light > svg { height: 30px; }
-      /* The mark is the card's title, so when the fetch fails the words
-         that replace it have to carry a title's weight. */
+      .credit-logo.light img,
+      .credit-logo.light > svg { height: 30px; }
+      /* Words standing in for a mark that failed to load carry a title's
+         weight. */
       .credit-logo-fallback {
+        color: var(--cream);
         font-size: 18px;
         font-weight: 700;
         letter-spacing: 0.02em;
-        color: var(--cream);
       }
       .credit-title {
         display: flex;
@@ -1541,47 +1846,46 @@
         font-size: inherit;
         font-weight: inherit;
       }
-      .credit.project { gap: 14px; }
       .credit-title a {
         display: inline-flex;
         align-items: center;
         gap: 14px;
-        text-decoration: none;
         border-radius: var(--radius);
+        text-decoration: none;
       }
-      /* Only for a mark that is a symbol rather than a name. Claude's
-         starburst does not spell anything, so the word sits beside it. */
+      .credit-title a:focus-visible {
+        outline: 1px solid var(--sakura);
+        outline-offset: 4px;
+      }
+      /* A mark that is a symbol rather than a name gets its word beside it. */
       .credit-title-text {
+        color: var(--cream);
         font-size: 20px;
         font-weight: 700;
         letter-spacing: 0.02em;
-        color: var(--cream);
       }
       .credit-title .credit-logo {
         opacity: 0.92;
         transition: opacity 0.16s ease;
       }
-      .credit-title a:hover .credit-logo,
-      .credit-title a:focus-visible .credit-logo { opacity: 1; }
-      .credit-title a:focus-visible {
-        outline: 1px solid var(--sakura);
-        outline-offset: 4px;
-      }
+      .credit-title a:is(:hover, :focus-visible) .credit-logo { opacity: 1; }
+
       .maker-mark {
+        color: var(--cream);
         font-size: 30px;
         font-weight: 800;
-        letter-spacing: 0.06em;
-        color: var(--cream);
         line-height: 1;
+        letter-spacing: 0.06em;
         text-shadow: 2px 2px 0 rgba(20, 28, 20, 0.82);
       }
       .maker-mark .fpv { color: var(--sakura); }
+
       .credit-copy h4 {
         margin: 0 0 7px;
+        color: var(--cream);
         font-size: 18px;
         font-weight: 700;
         letter-spacing: 0.02em;
-        color: var(--cream);
       }
       .credit.maker .credit-copy h4 { margin-bottom: 10px; }
       .credit-copy p {
@@ -1590,50 +1894,47 @@
         font-size: 14px;
         line-height: 1.55;
       }
-      /* Where the card goes. The play triangle is drawn here rather than
-         fetched, so the line can say video without borrowing anybody's
-         mark to do it. */
+      /* Where the card leads, with a play triangle drawn rather than
+         anybody's logo borrowed. */
       .credit-handle {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         margin-top: 12px;
-        font: 600 12px/1 var(--mono);
         color: var(--slate);
+        font: 600 12px/1 var(--mono);
         transition: color 0.16s ease;
       }
       .credit-handle::before {
         content: "";
         width: 0;
         height: 0;
-        border-left: 8px solid currentColor;
         border-top: 5px solid transparent;
         border-bottom: 5px solid transparent;
+        border-left: 8px solid currentColor;
       }
-      .credit.is-link:hover .credit-handle,
-      .credit.is-link:focus-within .credit-handle { color: var(--sakura); }
-      .credit-copy a, .credits-legal a, .credits-lede a { color: var(--sakura); text-decoration: none; }
-      .credit-copy a:hover, .credits-legal a:hover, .credits-lede a:hover { color: var(--cream); }
+      .credit.is-link:is(:hover, :focus-within) .credit-handle { color: var(--sakura); }
+      :is(.credit-copy, .credits-legal, .credits-lede) a {
+        color: var(--sakura);
+        text-decoration: none;
+      }
+      :is(.credit-copy, .credits-legal, .credits-lede) a:hover { color: var(--cream); }
       .credits-legal {
         margin: 14px 0 6px;
         color: var(--dim);
         font-size: 12px;
         line-height: 1.55;
       }
-      /* Reduced motion drops the travel, never the state: the lift, the
-         bar and the ring all still say the card is live, they just
-         arrive without moving. */
+      /* Without motion the states still show; they just do not travel. */
       @media (prefers-reduced-motion: reduce) {
         .credit.is-link,
-        .credit.is-link:hover,
-        .credit.is-link:focus-within {
-          transition: none;
+        .credit.is-link:is(:hover, :focus-within) {
           transform: none;
+          transition: none;
         }
         .credit.pilot::before { transition: none; }
       }
-      /* Under about 560 the left rail costs more than the face is worth,
-         so both shrink rather than the copy going to four words a line. */
+      /* On a phone the rail shrinks rather than squeezing the words. */
       @media (max-width: 560px) {
         .credit.person {
           grid-template-columns: 52px 1fr;
@@ -1641,261 +1942,70 @@
           padding: 14px;
         }
         .credit.maker { grid-template-columns: 64px 1fr; }
-        .credit-face { width: 52px; height: 52px; }
-        .credit.maker .credit-face { width: 64px; height: 64px; }
+        .credit-face {
+          width: 52px;
+          height: 52px;
+        }
+        .credit.maker .credit-face {
+          width: 64px;
+          height: 64px;
+        }
         .credit-face-mark { font-size: 15px; }
         .maker-mark { font-size: 24px; }
         .credit-copy h4 { font-size: 17px; }
       }
 
-      /* ---------------------------------------------------------------
-         The switch. Which aircraft, and which one you are on.
-
-         Not tabs. A tab strip says "these are views of one thing" and
-         these are three aircraft: a five inch on sixty metres, a whoop in
-         a room and a wing on an airfield share a pilot and nothing else. So
-         it is three plates side by side and the one you are on is lit while
-         the others are doors. Mint
-         is the lit accent because mint is what this page paints a record
-         in, and that holds everywhere below.
-         --------------------------------------------------------------- */
-      .switch {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin: 4px 0 26px;
-      }
-
-      .switch-btn {
-        appearance: none;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-rows: auto auto;
-        align-items: baseline;
-        gap: 2px 14px;
-        padding: 13px 16px 14px;
-        text-align: left;
-        background: var(--sunk);
-        border: 0;
-        border-top: 2px solid rgba(157, 179, 200, 0.22);
-        border-radius: var(--radius);
-        box-shadow: inset 0 0 0 1px var(--line);
-        color: var(--slate);
-        font-family: var(--ui);
-        cursor: pointer;
-        transition: color 140ms ease, background-color 140ms ease,
-          border-top-color 140ms ease, box-shadow 140ms ease;
-      }
-      .switch-btn:hover { color: var(--cream); }
-
-      /* It carried a second rank while a board switch stood above it, and
-         it is now the only switch on the page, so it carries the full one.
-         It is a choice rather than a filter, which is why it is this
-         control and not a select in the toolbar. */
-      .switch-craft[hidden] { display: none; }
-
-      /* Under "Nothing matches that", saying which aircraft the reader is
-         on. Sakura because it is the one line in that box naming something
-         the Clear button will NOT undo. */
-      .empty-craft { color: var(--sakura); font-size: 13px; margin: 6px 0 0; }
-
-      .switch-kicker {
-        grid-column: 1;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: inherit;
-        opacity: 0.72;
-      }
-      .switch-name {
-        grid-column: 1;
-        font-size: 19px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        color: var(--cream);
-      }
-      .switch-count {
-        grid-column: 2;
-        grid-row: 1 / span 2;
-        align-self: center;
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 0.04em;
-        color: var(--dim);
-        white-space: nowrap;
-      }
-
-      /* The lit plate, in the colour this page paints a record in. */
-      .switch-btn.is-on {
-        background: rgba(125, 255, 180, 0.05);
-        border-top-color: var(--mint);
-        box-shadow: inset 0 0 0 1px rgba(125, 255, 180, 0.20);
-      }
-      .switch-btn.is-on .switch-kicker { color: var(--mint); opacity: 1; }
-      .switch-btn.is-on .switch-count { color: var(--cream); }
-
-      @media (max-width: 560px) {
-        /* Three plates across a phone are three columns of wrapped words,
-           so they stack, and the lit one still reads as the one you are on. */
-        .switch { grid-template-columns: 1fr; gap: 8px; margin-bottom: 20px; }
-        .switch-btn { padding: 11px 13px 12px; }
-        .switch-name { font-size: 16px; }
-        .switch-count { display: none; }
-      }
-
-      /* ---------------------------------------------------------------
-         Tags. A closed vocabulary, so the filter can be the whole list
-         rather than a search box that guesses.
-         --------------------------------------------------------------- */
-      .tagbar {
-        flex: 1 0 100%;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        margin-top: 2px;
-      }
-      .tagbar[hidden] { display: none; }
-
-      .tag {
-        appearance: none;
-        padding: 5px 11px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: transparent;
-        color: var(--slate);
-        font: 600 11px/1.2 var(--ui);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        cursor: pointer;
-        transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
-      }
-      .tag:hover { color: var(--cream); border-color: rgba(232, 168, 184, 0.5); }
-      .tag[aria-pressed="true"] {
-        color: var(--deep);
-        background: var(--sakura);
-        border-color: var(--sakura);
-      }
-      /* The count is the honest part: a tag nobody has used says so rather
-         than offering an empty list. */
-      .tag .n { opacity: 0.62; font-weight: 500; margin-left: 6px; }
-      .tag[aria-pressed="true"] .n { opacity: 0.7; }
-      .tag:disabled { opacity: 0.34; cursor: default; }
-      .tag:disabled:hover { color: var(--slate); border-color: var(--line); }
-
-      /* On a card, a tag is a label rather than a control. */
-      .tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-      }
-      .tags:empty { display: none; }
-      .tags span {
-        padding: 2px 7px;
-        border-radius: 999px;
-        background: rgba(232, 168, 184, 0.10);
-        box-shadow: inset 0 0 0 1px rgba(232, 168, 184, 0.24);
-        color: var(--sakura);
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      /* ---------------------------------------------------------------
-         Footer.
-         --------------------------------------------------------------- */
+      /* ================================================================
+         Footer
+         ================================================================ */
       footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 20px;
         width: var(--page);
         margin: 0 auto;
         padding: 22px 0 40px;
         border-top: 1px solid var(--line);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 20px;
-        align-items: baseline;
         color: var(--dim);
         font-size: 12px;
         line-height: 1.6;
       }
-      footer p { margin: 0; max-width: 52em; }
-      footer nav { display: flex; gap: 18px; margin-left: auto; }
-      footer a { color: var(--slate); text-decoration: none; }
-      footer a:hover { color: var(--sakura); }
-
-
-      /* ---------------------------------------------------------------
-         The two tabs.
-
-         Shaped like the aircraft switch below them, because they are the
-         same gesture at a different altitude: two plates, one always
-         chosen, and the chosen one lit rather than outlined. The mint top
-         rule is the difference, and it is deliberate that it is not sakura:
-         sakura is this page's chrome, and a chosen tab is not chrome.
-         --------------------------------------------------------------- */
-      .tabs {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin: 4px 0 20px;
+      footer p {
+        max-width: 52em;
+        margin: 0;
       }
-      .tab {
-        display: block;
-        padding: 12px 16px 13px;
-        background: var(--sunk);
-        border-top: 2px solid rgba(157, 179, 200, 0.22);
-        border-radius: var(--radius);
-        box-shadow: inset 0 0 0 1px var(--line);
+      footer nav {
+        display: flex;
+        gap: 18px;
+        margin-left: auto;
+      }
+      footer a {
         color: var(--slate);
         text-decoration: none;
-        transition: color 140ms ease, background-color 140ms ease,
-          border-top-color 140ms ease;
       }
-      .tab:hover { color: var(--cream); }
-      .tab.is-on {
-        background: var(--panel);
-        border-top-color: var(--mint);
-        color: var(--cream);
-      }
-      .tab-name {
-        display: block;
-        font-size: 17px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        color: var(--cream);
-      }
-      .tab-note {
-        display: block;
-        margin-top: 3px;
-        font-size: 12px;
-        color: var(--dim);
-      }
-      .tab.is-on .tab-note { color: var(--slate); }
-      @media (max-width: 719px) {
-        .tabs { gap: 8px; margin-bottom: 16px; }
-        .tab { padding: 10px 12px 11px; }
-        .tab-name { font-size: 15px; }
-        .tab-note { display: none; }
-      }
+      footer a:hover { color: var(--sakura); }
 
-      /* ---------------------------------------------------------------
-         The statistics tab.
-         --------------------------------------------------------------- */
-      #view-stats[hidden] { display: none; }
-      #view-tracks[hidden] { display: none; }
+      /* ================================================================
+         The statistics tab
+         ================================================================ */
+      :is(#view-stats, #view-tracks)[hidden] { display: none; }
 
       .stats-head {
         display: flex;
+        flex-wrap: wrap;
         align-items: flex-end;
         justify-content: space-between;
-        flex-wrap: wrap;
         gap: 14px;
         margin-bottom: 20px;
       }
-      .stats-head h2 { margin: 8px 0 0; font-size: 22px; }
+      .stats-head h2 {
+        margin: 8px 0 0;
+        font-size: 22px;
+      }
       .stats-lede {
-        margin: 12px 0 0;
         max-width: 46em;
+        margin: 12px 0 0;
         color: var(--slate);
         font-size: 14px;
         line-height: 1.6;
@@ -1908,21 +2018,20 @@
         text-align: right;
       }
       .stats-fresh.stale { color: var(--amber); }
+      /* A failed poll keeps the last good numbers, dimmed, with the line
+         above saying how old they are. */
+      #view-stats.stale :is(.tiles, .stats-plate:not(.stats-privacy)) { opacity: 0.55; }
 
-      /* A failed poll holds the last good render rather than throwing it
-         away for a skeleton: one missed request should not empty a page of
-         numbers that were right thirty seconds ago. Dimmed, so nobody reads
-         a stale figure as a live one, with the line above saying how old. */
-      #view-stats.stale .tiles,
-      #view-stats.stale .stats-plate:not(.stats-privacy) { opacity: 0.55; }
-
-      .stats-plate { padding: 18px 20px 20px; margin-bottom: 18px; }
+      .stats-plate {
+        margin-bottom: 18px;
+        padding: 18px 20px 20px;
+      }
       .stats-plate[hidden] { display: none; }
       .stats-plate h3 {
         margin: 8px 0 2px;
+        color: var(--cream);
         font-size: 17px;
         font-weight: 700;
-        color: var(--cream);
       }
       .stats-plate .plate-note {
         margin: 6px 0 16px;
@@ -1934,20 +2043,20 @@
       .stats-row {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 18px;
         align-items: start;
+        gap: 18px;
       }
       .stats-row[hidden] { display: none; }
       .stats-row .stats-plate { margin-bottom: 18px; }
       @media (max-width: 1079px) {
-        .stats-row { grid-template-columns: 1fr; gap: 0; }
+        .stats-row {
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
       }
 
-      /* The four tiles. PROPORTIONAL figures, not the tabular mono the rest
-         of this page sets numbers in, and that is not an oversight: mono
-         tabular gives every digit the width of a nought, which reads loose
-         at display size. A lap time is a measurement and wears mono; a
-         count is not and does not. */
+      /* The tiles. A count is not a measurement, so its digits are
+         proportional, not the mono a lap time wears. */
       .tiles {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1957,36 +2066,21 @@
       @media (max-width: 899px) {
         .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
-      .tile-stat {
-        padding: 14px 16px 16px;
-        background: var(--panel);
-        border-top: 2px solid var(--edge);
-        border-radius: var(--radius);
-        box-shadow: inset 0 0 0 1px var(--line);
-      }
-      .tile-stat .tile-label {
-        display: block;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
-      }
+      .tile-stat { padding: 14px 16px 16px; }
+      .tile-stat .tile-label { display: block; }
       .tile-stat .tile-value {
         display: block;
         margin-top: 10px;
+        color: var(--cream);
         font-family: var(--ui);
-        font-variant-numeric: proportional-nums lining-nums;
         font-size: 32px;
+        font-variant-numeric: proportional-nums lining-nums;
         font-weight: 650;
         line-height: 1;
-        color: var(--cream);
       }
-      /* Flying now is an instrument reading rather than a total, and amber
-         is what this product paints an instrument in. */
+      /* Flying now is an instrument reading, in amber. */
       .tile-stat.live { border-top-color: var(--amber); }
-      .tile-stat.live .tile-label { color: var(--amber); }
-      .tile-stat.live .tile-value { color: var(--amber); }
+      .tile-stat.live :is(.tile-label, .tile-value) { color: var(--amber); }
       .tile-stat .tile-note {
         display: block;
         margin-top: 8px;
@@ -1996,81 +2090,113 @@
       }
       .tile-stat .tile-note:empty { display: none; }
 
-      /* The charts. Measured and drawn at real pixels rather than scaled
-         from a fixed viewBox, so a ten pixel axis label is ten pixels on a
-         phone as well as on a desktop. paintStats redraws on resize. */
-      .chart-wrap { position: relative; margin-bottom: 6px; }
+      /* Charts are drawn at real pixels and redrawn on resize, so a ten
+         pixel label is ten pixels on a phone too. */
+      .chart-wrap {
+        position: relative;
+        margin-bottom: 6px;
+      }
       .chart-wrap:last-of-type { margin-bottom: 0; }
       .chart-title {
         margin: 0 0 6px;
+        color: var(--cream);
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0.02em;
-        color: var(--cream);
       }
-      .chart-wrap svg { display: block; width: 100%; }
-      .chart-wrap svg .bar-hit { fill: transparent; outline: none; }
+      .chart-wrap svg {
+        display: block;
+        width: 100%;
+      }
+      .chart-wrap svg .bar-hit {
+        fill: transparent;
+        outline: none;
+      }
       .chart-wrap svg .bar-hit:focus-visible { fill: rgba(232, 168, 184, 0.16); }
       .chart-tip {
         position: absolute;
         z-index: 3;
         min-width: 150px;
         padding: 9px 11px;
-        background: #0c120d;
         border: 1px solid var(--edge);
         border-radius: 3px;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
         color: var(--cream);
+        background: #0c120d;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
         font-size: 12px;
         line-height: 1.45;
-        pointer-events: none;
         opacity: 0;
+        pointer-events: none;
         transition: opacity 90ms ease;
       }
       .chart-tip.on { opacity: 1; }
-      .chart-tip b { display: block; margin-bottom: 4px; color: var(--cream); }
-      .chart-tip span { color: var(--slate); }
-      .chart-tip i {
-        font-style: normal;
-        float: right;
-        margin-left: 14px;
-        font-family: var(--mono);
+      .chart-tip b {
+        display: block;
+        margin-bottom: 4px;
         color: var(--cream);
       }
+      .chart-tip span { color: var(--slate); }
+      .chart-tip i {
+        float: right;
+        margin-left: 14px;
+        color: var(--cream);
+        font-family: var(--mono);
+        font-style: normal;
+      }
 
-      /* The table twin. Every chart has one, and it is where a value goes
-         when a tooltip is not available: print, a screen reader, or
-         somebody who simply wants the numbers. */
+      /* Every chart's numbers as a table too, for print, a screen reader,
+         or whoever wants the figures. */
       .chart-table {
         margin-top: 12px;
-        border-top: 1px solid var(--line);
         padding-top: 10px;
+        border-top: 1px solid var(--line);
       }
       .chart-table summary {
-        cursor: pointer;
         color: var(--slate);
         font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.03em;
+        cursor: pointer;
       }
       .chart-table summary:hover { color: var(--sakura); }
-      .chart-table .scroll { max-height: 280px; overflow: auto; margin-top: 10px; }
-      .chart-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      .chart-table th, .chart-table td {
+      .chart-table .scroll {
+        overflow: auto;
+        max-height: 280px;
+        margin-top: 10px;
+      }
+      .chart-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .chart-table :is(th, td) {
         padding: 5px 8px;
-        text-align: right;
         border-bottom: 1px solid var(--line);
         font-variant-numeric: tabular-nums lining-nums;
+        text-align: right;
       }
-      .chart-table th { color: var(--sakura); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
-      .chart-table th:first-child, .chart-table td:first-child { text-align: left; }
-      .chart-table td { color: var(--slate); font-family: var(--mono); }
-      .chart-table td:first-child { font-family: var(--ui); color: var(--cream); }
+      .chart-table th {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+      }
+      .chart-table :is(th, td):first-child { text-align: left; }
+      .chart-table td {
+        color: var(--slate);
+        font-family: var(--mono);
+      }
+      .chart-table td:first-child {
+        color: var(--cream);
+        font-family: var(--ui);
+      }
 
-      /* A ranked list: a name, a bar and the numbers. One hue, because the
-         rows are one series measured one way, and length already says which
-         is bigger. */
-      .rank { margin: 0; padding: 0; list-style: none; }
+      /* A ranked list: name, bar, numbers. One hue, since the bar's length
+         already says which is bigger. `.rank` is also a table cell's
+         class in the track sheet, and this rule reaches it too. */
+      .rank {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
       .rank li { margin-bottom: 9px; }
       .rank li:last-child { margin-bottom: 0; }
       .rank-top {
@@ -2081,99 +2207,69 @@
         margin-bottom: 4px;
       }
       .rank-name {
-        font-size: 13px;
         color: var(--cream);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-size: 13px;
       }
       .rank-value {
+        color: var(--slate);
         font-family: var(--mono);
         font-size: 12px;
-        color: var(--slate);
         white-space: nowrap;
       }
       .rank-track {
+        overflow: hidden;
         height: 6px;
         border-radius: 3px;
         background: rgba(157, 179, 200, 0.12);
-        overflow: hidden;
       }
       .rank-fill {
         height: 100%;
         border-radius: 3px;
         background: var(--slate);
       }
-      /* Unknown is not a place that did worse than Australia: it is the rows
-         the edge could not name. It sits under a rule, unranked and quiet. */
-      .rank li.unknown { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+      /* Unknown is not a place that came last: it sits apart, unranked. */
+      .rank li.unknown {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
       .rank li.unknown .rank-name { color: var(--dim); }
       .rank li.unknown .rank-fill { background: var(--dim); }
-      .rank-more { margin: 12px 0 0; color: var(--dim); font-size: 12px; }
-      /* The countries that did not make the ranking, sitting where they
-         belong: after the ranked ones and before the unranked Unknown. */
-      .rank-rest { color: var(--dim); font-size: 12px; margin-bottom: 9px; }
+      .rank-more {
+        margin: 12px 0 0;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .rank-rest {
+        margin-bottom: 9px;
+        color: var(--dim);
+        font-size: 12px;
+      }
       .rank-group { margin-bottom: 18px; }
       .rank-group:last-child { margin-bottom: 0; }
-      .rank-group h4 {
-        margin: 0 0 9px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
-      }
+      .rank-group h4 { margin: 0 0 9px; }
 
-      /* All time. One hero figure on this tab and this is it. Sans, for the
-         same reason the tiles are: a display sized number with every digit
-         a nought wide reads loose. */
+      /* All time: the one hero figure, then the facts in a grid of their
+         own so eight of them wrap into two clean rows. */
       .alltime {
         display: flex;
         flex-wrap: wrap;
         align-items: flex-end;
         gap: 26px 40px;
       }
-      /* The facts are their own grid rather than more flex children, so a
-         row that does not divide evenly wraps into a tidy second row
-         instead of orphaning one number under the hero. */
-      /* FOUR columns, not auto-fit. There are eight of these and auto-fit
-         fitted seven across, which left the eighth on a row of its own
-         under the hero looking like a mistake. Four is two clean rows. */
-      .facts {
-        flex: 1 1 420px;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 20px 24px;
-      }
-      @media (max-width: 719px) {
-        .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      }
       .hero-box { flex: 0 0 auto; }
-      .hero {
-        font-family: var(--ui);
-        font-variant-numeric: proportional-nums lining-nums;
-        font-size: 52px;
-        font-weight: 650;
-        line-height: 0.95;
-        color: var(--mint);
-      }
       .hero-label {
         display: block;
         margin-top: 8px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
       }
       .fact { min-width: 84px; }
       .fact-value {
         display: block;
-        font-family: var(--ui);
-        font-variant-numeric: proportional-nums lining-nums;
-        font-size: 22px;
-        font-weight: 650;
         color: var(--cream);
+        font-family: var(--ui);
+        font-size: 22px;
+        font-variant-numeric: proportional-nums lining-nums;
+        font-weight: 650;
         line-height: 1;
       }
       .fact-label {
@@ -2183,10 +2279,10 @@
         font-size: 11px;
       }
 
-      /* What this counts. */
+      /* What this counts, and the switch that stops it. */
       .stats-privacy p {
-        margin: 0 0 12px;
         max-width: 54em;
+        margin: 0 0 12px;
         color: var(--slate);
         font-size: 13px;
         line-height: 1.65;
@@ -2194,55 +2290,45 @@
       .stats-optout { margin-top: 16px; }
       .optout-row {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 12px;
-        flex-wrap: wrap;
       }
-      .optout-row input { width: 16px; height: 16px; accent-color: var(--mint); margin: 0; }
-      .optout-row label { color: var(--cream); font-size: 13px; font-weight: 600; cursor: pointer; }
-      .optout-said { margin: 0; color: var(--mint); font-size: 13px; line-height: 1.6; }
-      .optout-note { margin: 8px 0 0; color: var(--dim); font-size: 12px; line-height: 1.55; }
-
-      /* The sponsors, in the admin panel. */
-      .admin-sponsors { margin-top: 18px; }
-      .admin-sponsors[hidden] { display: none; }
-      .admin-sponsors h3 {
-        margin: 0 0 4px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--sakura);
+      .optout-row input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--mint);
       }
-      .admin-sponsors p { margin: 0 0 12px; color: var(--slate); font-size: 12px; line-height: 1.55; }
-      .sponsor-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-top: 1px solid var(--line);
+      .optout-row label {
+        color: var(--cream);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
       }
-      .sponsor-name { font-size: 13px; color: var(--cream); min-width: 110px; }
-      .sponsor-link {
-        flex: 1;
-        min-width: 0;
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--slate);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+      .optout-said {
+        margin: 0;
+        color: var(--mint);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .optout-note {
+        margin: 8px 0 0;
+        color: var(--dim);
+        font-size: 12px;
+        line-height: 1.55;
       }
 
-      /* The global half of the reduced motion contract. The one animation
-         it cannot reach is a GIF, which no stylesheet can stop, so a card
-         that would carry one draws its plan instead. See paintTile. */
+      /* The page-wide half of reduced motion. A GIF is the one thing no
+         stylesheet can stop, so app.js draws the plan instead of one. */
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
+        *,
+        *::before,
+        *::after {
           animation: none !important;
           transition: none !important;
         }
-        .card:hover, .card:focus-within { transform: none; }
+        .card:is(:hover, :focus-within) { transform: none; }
       }
     </style>
   </head>
@@ -2253,62 +2339,39 @@
     <header class="mast">
       <div class="brand">
         <!--
-          THE MARK IS THE WAY HOME, IN BOTH PLACES IT APPEARS.
-
-          A visitor who arrives here from the front door has the product's
-          name in the top left corner and nothing under it, so the first
-          thing they try when they want to go back is the thing every other
-          site on the internet has taught them to try. The href in the
-          markup is the loopback address a checkout serves the landing page
-          on, the same fallback convention the simulator links use; app.js
-          replaces it with the real one at boot. See bindHome there and
-          landingOrigin in origins.js.
-
-          It stays in this tab on purpose. Every other cross-origin link in
-          this masthead crosses to the simulator and names the simulator's
-          tab, because a pilot wants the board still open behind it. This one
-          is a way back, and a way back that leaves the page you are
-          leaving open behind it is not one.
+          The name is the way back to the front door, here and in the spine,
+          because that is where every visitor looks for it. The href is the
+          checkout's landing page until app.js (bindHome, with landingOrigin
+          from origins.js) puts the real one in. It opens in this tab: a way
+          back that leaves this page open behind it is not a way back. The
+          links to the simulator are the ones that name its tab.
         -->
         <h1><a class="home" id="brand-home" href="http://127.0.0.1:8080/" title="Back to the front page"><span class="lockup-slash" aria-hidden="true"></span><span class="lockup-over">Paraguayan</span> <span class="lockup-name">Drone Combat</span> <span class="lockup-under">Simulator</span></a></h1>
         <div class="eyebrow"><span data-str="html.tracks_and_statistics">Tracks and statistics</span></div>
-        <p class="invite">
-          <span data-str="html.every_published_track_and_the_times">Every published track, and the times flown on it. Open one, fly it in
-          the browser, and post a lap under your name.</span>
-        </p>
+        <p class="invite"><span data-str="html.every_published_track_and_the_times">Every published track, and the times flown on it. Open one, fly it in the browser, and post a lap under your name.</span></p>
       </div>
+
       <div class="mast-side">
         <dl class="stats" id="mast-stats" hidden>
           <div><dt><span data-str="html.tracks">Tracks</span></dt><dd id="stat-courses">0</dd></div>
           <div><dt><span data-str="html.times">Times</span></dt><dd id="stat-times">0</dd></div>
           <div><dt><span data-str="html.pilots">Pilots</span></dt><dd id="stat-pilots">0</dd></div>
         </dl>
-        <!-- target="fdfpv-sim" on every link that crosses to the
-             simulator: one simulator tab, reused, rather than one per
-             click. app.js sets the same target when it binds the real
-             origins; it is written here too so it still holds if the
-             config request fails and these fallback hrefs are what the
-             visitor clicks. Do not add rel="noopener", which would send
-             each click to a fresh tab. See src/share/windows.js in the
-             simulator. -->
+        <!--
+          Every link into the simulator names the fdfpv-sim tab, so a pilot
+          reuses one simulator rather than opening one per click. app.js
+          sets the same target when it binds the real addresses; it is in
+          the markup too for a board whose config request failed. Never add
+          rel="noopener": it turns the named target into a new tab each
+          time (see src/share/windows.js in the simulator).
+        -->
         <nav class="links">
           <a class="btn" id="builder-link" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
           <a class="text" id="sim-link" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
-          <a class="text" id="mast-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
-          <!--
-            ADMIN, AND IT IS THE QUIETEST THING IN THE MASTHEAD ON PURPOSE.
-
-            It is for the two or three people who look after the board and
-            it sits beside three links every visitor wants, so it wears the
-            plain text treatment rather than a button's border. A visitor
-            who presses it is told, in one sentence, that this is a short
-            list of addresses and theirs is not on it.
-
-            It goes mint once somebody is signed in, because from that
-            moment the track sheet has a control in it that destroys work,
-            and a page that can do that should say so where it can be seen
-            from anywhere on it.
-          -->
+          <a class="text" id="mast-credits" target="fdfpv-sim" href="http://127.0.0.1:8000/#credits"><span data-str="html.credits">Credits</span></a>
+          <!-- Plain text, the quietest control here: it is for the few who
+               look after the board. It turns amber once somebody signs in,
+               since the sheet then holds a control that destroys work. -->
           <button type="button" class="text admin-open" id="admin-open" aria-haspopup="dialog"><span data-str="app.admin">Admin</span></button>
         </nav>
       </div>
@@ -2322,70 +2385,44 @@
         <nav class="links">
           <a class="text" id="spine-build" target="fdfpv-sim" href="http://127.0.0.1:8000/src/trackbuilder/index.html"><span data-str="app.build_a_track">Build a track</span></a>
           <a class="text" href="#stats"><span data-str="html.statistics">Statistics</span></a>
-          <a class="text" id="spine-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
+          <a class="text" id="spine-credits" target="fdfpv-sim" href="http://127.0.0.1:8000/#credits"><span data-str="html.credits">Credits</span></a>
         </nav>
       </div>
     </div>
 
     <!--
-      WHICH AIRCRAFT, AND IT IS A PRIMARY CHOICE RATHER THAN A FILTER.
-
-      It is the first thing under the masthead, because it is the first
-      question. A track on this page is one of three things and they are not
-      alternatives to each other. A MultiGP field is 5 ft gates over sixty
-      metres flown on a five inch; a RaceGOW room is 28 inch gates inside
-      about 1.4 by 2.1 m flown on a 65 mm whoop; an airfield is five metre
-      gates over 400 by 300 m flown on a 1000 mm fixed wing. Offering a
-      whoop pilot a five inch track is offering them a track they cannot
-      fly: the simulator seats the aircraft from the track, so pressing Fly
-      on the wrong one changes their aircraft under them.
-
-      So it is three plates side by side rather than a select in the
-      toolbar, one of them always chosen. It is remembered, and the
-      simulator's own links carry ?craft= so a pilot arriving from a whoop
-      lands on the whoop side.
-
-      THE WHOOP PLATE IS NAMED AFTER THE AIRCRAFT, NOT AFTER RaceGOW. It
-      read "RaceGOW room" while every track on that side was one, and that
-      stopped being true the moment somebody built a room of their own: the
-      builder will make any micro track a whoop can fly, and a series' name
-      on the plate told a pilot their own track did not belong here. The
-      kicker still says which aircraft, the cards still say which series,
-      and the plate now says only what the side holds.
-
-      The section below lives inside <main> rather than beside it, because
-      setPageInert in app.js makes exactly four regions inert behind an open
-      dialog and a fifth would stay tabbable behind the modal.
+      Everything a dialog has to make inert sits in one of four regions
+      (setPageInert in app.js), so the tabs and the aircraft switch live
+      inside <main> rather than beside it.
     -->
     <main id="tracks">
       <!--
-        TWO TABS, AND EACH ONE IS AN ADDRESS.
-        This page holds two things now, and they are not filters of each
-        other: the tracks with their times, and a page of counters about the
-        site. A tab is a real anchor carrying a real hash, so both are
-        linkable, both survive a reload, and the back button walks between
-        them. #tracks is the address of this element and was already the
-        skip link's target, so the first tab costs no new vocabulary.
-        role="tablist" over anchors: a screen reader is told these are tabs
-        and which is chosen, and a pointer is still handed a link it can
-        open, copy or bookmark. route() in app.js is what actually swaps
-        them, driven by hashchange, so a pasted #stats works with no click.
-        Bound before the two early returns in start(), because the statistics
-        tab has to open on a board with no tracks and on a board whose list
-        request failed, which are exactly the two states somebody opens it in.
+        Two tabs, each a real link with its own hash: linkable, kept across a
+        reload, walked by the back button. route() in app.js swaps the views
+        on hashchange, so a pasted #stats needs no click. They are anchors
+        with role="tab", so a screen reader hears tabs and a pointer still
+        gets a link to copy.
       -->
       <nav class="tabs" id="tabs" role="tablist" aria-label="What this page shows">
-        <a class="tab is-on" id="tab-tracks" role="tab" href="#tracks"
-           aria-selected="true" aria-controls="view-tracks">
+        <a class="tab is-on" id="tab-tracks" role="tab" href="#tracks" aria-selected="true" aria-controls="view-tracks">
           <span class="tab-name"><span data-str="html.tracks_and_times">Tracks and times</span></span>
           <span class="tab-note"><span data-str="html.every_published_track_and_the_times_2">Every published track, and the times flown on it</span></span>
         </a>
-        <a class="tab" id="tab-stats" role="tab" href="#stats"
-           aria-selected="false" aria-controls="view-stats" tabindex="-1">
+        <a class="tab" id="tab-stats" role="tab" href="#stats" aria-selected="false" aria-controls="view-stats" tabindex="-1">
           <span class="tab-name"><span data-str="html.site_statistics">Site statistics</span></span>
           <span class="tab-note"><span data-str="html.who_is_flying_where_from_and">Who is flying, where from, and on what</span></span>
         </a>
       </nav>
+
+      <!--
+        Which aircraft: the first question, so the first control. A field, a
+        room and an airfield are flown on different aircraft, and the
+        simulator seats the aircraft from the track, so offering a whoop
+        pilot a field track would change their aircraft under them. Three
+        plates, one always chosen, remembered, and set by ?craft= from the
+        simulator's links. The whoop plate names the aircraft rather than a
+        series, because anybody can build a room.
+      -->
       <nav class="switch switch-craft" id="craftswitch" aria-label="Which aircraft">
         <button type="button" class="switch-btn is-on" id="craft-full" aria-pressed="true">
           <span class="switch-kicker"><span data-str="app.five_inch">Five inch</span></span>
@@ -2431,13 +2468,9 @@
                 </select>
               </div>
               <span class="count" id="count"></span>
-              <!--
-                The tags are a second row of the same toolbar rather than a
-                sidebar, because they filter the thing directly below them
-                and a sidebar would put them beside it. Each one is a real
-                button carrying aria-pressed, so a screen reader is told the
-                same thing the fill colour says.
-              -->
+              <!-- The tags filter what is directly below them, so they are a
+                   second row of this toolbar; each is a button with
+                   aria-pressed, filled when pressed. -->
               <div class="tagbar" id="tagbar"></div>
             </div>
             <div id="list" class="grid"></div>
@@ -2446,26 +2479,21 @@
           <aside class="rail" id="rail" hidden aria-label="Standings"></aside>
         </div>
       </section>
+
       <!--
-        THE STATISTICS TAB.
-        Almost all of it is painted by public/stats.js from one request, so
-        what is written here is the furniture that must exist without
-        JavaScript and the prose that must be readable whether the numbers
-        arrive or not. The plate at the foot is the important one: what this
-        counts, in plain words, with the switch that turns it off.
+        The statistics tab: stats.js paints the numbers from one request.
+        What is here must stand without it, above all the plate at the foot
+        that says in plain words what is counted and offers the switch that
+        stops it.
       -->
       <section id="view-stats" aria-label="Site statistics" hidden>
         <div class="stats-head">
           <div>
             <div class="kicker"><span data-str="html.the_site">The site</span></div>
             <h2 class="rule-after" id="stats-title"><span data-str="html.site_statistics">Site statistics</span></h2>
-            <p class="stats-lede">
-              <span data-str="html.counted_from_the_simulator_the_track">Counted from the simulator, the track builder and this page.
-              Every number here is a total.</span>
-            </p>
+            <p class="stats-lede"><span data-str="html.counted_from_the_simulator_the_track">Counted from the simulator, the track builder and this page. Every number here is a total.</span></p>
           </div>
-          <!-- role="status" rather than role="alert": it changes every
-               thirty seconds and nobody should be interrupted for it. -->
+          <!-- A status, not an alert: it changes every thirty seconds. -->
           <p class="stats-fresh" id="stats-fresh" role="status"></p>
         </div>
         <div class="tiles" id="stats-tiles"></div>
@@ -2480,43 +2508,26 @@
         <div class="panel stats-plate stats-privacy">
           <div class="kicker"><span data-str="html.what_this_counts">What this counts</span></div>
           <h3><span data-str="html.nothing_here_is_about_you">Nothing here is about you</span></h3>
-          <p>
-            <span data-str="html.every_number_on_this_page_is">Every number on this page is a count. The simulator tells this
-            board that a session started, that laps were flown, and which
-            aircraft and input were used. The board adds one to a daily total
-            and keeps nothing else.</span>
-          </p>
-          <p>
-            <span data-str="html.no_cookie_is_set_no_address">No cookie is set. No address is stored: the edge in front of the
-            site names a country from it, and only the two letter code
-            arrives here. New or returning is worked out by your browser from
-            a date it keeps for itself, and no identifier ever leaves it. A
-            sponsor link is remembered as one word for thirty days, so the
-            board can say which poster somebody walked past, never who they
-            are. Days are UTC.</span>
-          </p>
+          <p><span data-str="html.every_number_on_this_page_is">Every number on this page is a count. The simulator tells this board that a session started, that laps were flown, and which aircraft and input were used. The board adds one to a daily total and keeps nothing else.</span></p>
+          <p><span data-str="html.no_cookie_is_set_no_address">No cookie is set. No address is stored: the edge in front of the site names a country from it, and only the two letter code arrives here. New or returning is worked out by your browser from a date it keeps for itself, and no identifier ever leaves it. A sponsor link is remembered as one word for thirty days, so the board can say which poster somebody walked past, never who they are. Days are UTC.</span></p>
           <div class="stats-optout" id="stats-optout"></div>
         </div>
       </section>
     </main>
 
-
-
     <footer>
-      <p>
-        <span data-str="html.fdfpv_tracks_and_statistics_every_published">Paraguayan Drone Combat Simulator, tracks and statistics. Every published track and every named
-        time lives here. The simulator itself keeps nothing: a track you build stays
-        in your browser until you publish it. Free software under GPLv3.</span>
-      </p>
+      <p><span data-str="html.fdfpv_tracks_and_statistics_every_published">Paraguayan Drone Combat Simulator, tracks and statistics. Every published track and every named time lives here. The simulator itself keeps nothing: a track you build stays in your browser until you publish it. Free software under GPLv3.</span></p>
       <nav>
         <a id="foot-sim" target="fdfpv-sim" href="http://127.0.0.1:8000/"><span data-str="html.open_the_simulator">Open the simulator</span></a>
         <a href="#stats"><span data-str="html.site_statistics">Site statistics</span></a>
         <a href="bugs.html"><span data-str="html.bugs_and_feedback">Bugs and feedback</span></a>
-        <a id="foot-credits" href="http://127.0.0.1:8000/#credits" target="fdfpv-sim"><span data-str="html.credits">Credits</span></a>
+        <a id="foot-credits" target="fdfpv-sim" href="http://127.0.0.1:8000/#credits"><span data-str="html.credits">Credits</span></a>
         <a id="lang-toggle" href="#">Español</a>
       </nav>
     </footer>
 
+    <!-- One track: its picture, facts and every time. Routed by the hash
+         (#track=<id>), so it can be linked. -->
     <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <div class="chequer" aria-hidden="true"></div>
       <div class="sheet-inner">
@@ -2533,9 +2544,8 @@
             <div class="shot" id="sheet-shot"></div>
             <dl class="facts" id="sheet-facts"></dl>
             <div class="actions" id="sheet-actions"></div>
-            <!-- Empty and hidden until somebody is signed in. app.js fills
-                 it; see paintSheetAdmin there for why the confirm is a
-                 second press rather than a browser dialog. -->
+            <!-- Filled only for a signed in admin; paintSheetAdmin in
+                 app.js says why removal is a second press, not a dialog. -->
             <div class="admin-tools" id="sheet-admin" hidden></div>
           </div>
           <div class="sheet-times">
@@ -2547,20 +2557,11 @@
     </div>
 
     <!--
-      THE ADMIN PANEL.
-
-      A dialog rather than a page, and no address of its own: an admin
-      screen is not a thing to link to, and a #admin hash would be a link
-      somebody could send a stranger to a login form. It is the only sheet
-      here that is not routed by the hash for that reason, so app.js opens
-      and closes it directly and Escape is wired to it by hand.
-
-      Two states in the markup rather than one built in script, because a
-      real <form> with real labels and real autocomplete attributes is what
-      a password manager fills and what a screen reader reads. The form
-      posts nothing on its own: app.js takes the submit, asks the board, and
-      keeps the token it gets back in sessionStorage, which is this tab and
-      this tab only. Closing the tab signs out.
+      The admin panel. Not routed by the hash: an admin screen is not a
+      thing to send somebody a link to. Both faces are real markup, because
+      a real form with labels and autocomplete is what a password manager
+      fills and a screen reader reads. app.js takes the submit, asks the
+      board, and keeps the token in this tab's sessionStorage only.
     -->
     <div id="admin-sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
       <div class="chequer" aria-hidden="true"></div>
@@ -2574,29 +2575,21 @@
         </div>
 
         <form class="admin-panel panel" id="admin-signin">
-          <p class="admin-lede">
-            <span data-str="html.this_is_for_whoever_looks_after">This is for whoever looks after the board. It is a short list of
-            email addresses held on the server, and an address that is not on
-            it is refused whatever password it arrives with.</span>
-          </p>
+          <p class="admin-lede"><span data-str="html.this_is_for_whoever_looks_after">This is for whoever looks after the board. It is a short list of email addresses held on the server, and an address that is not on it is refused whatever password it arrives with.</span></p>
           <div class="admin-field">
             <label for="admin-email"><span data-str="html.email">Email</span></label>
-            <input id="admin-email" name="email" type="email" autocomplete="username"
-                   autocapitalize="off" autocorrect="off" spellcheck="false"
-                   inputmode="email" maxlength="254" required />
+            <input id="admin-email" name="email" type="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" maxlength="254" required />
           </div>
           <div class="admin-field">
             <label for="admin-password"><span data-str="html.password">Password</span></label>
-            <input id="admin-password" name="password" type="password"
-                   autocomplete="current-password" maxlength="200" required />
+            <input id="admin-password" name="password" type="password" autocomplete="current-password" maxlength="200" required />
           </div>
           <div class="admin-actions">
             <button type="submit" class="btn primary" id="admin-submit"><span data-str="html.sign_in">Sign in</span></button>
             <span class="admin-busy" id="admin-busy" hidden>Checking</span>
           </div>
-          <!-- role="alert" so a refusal is announced. It is the same sentence
-               for a wrong password and for an address that is not on the
-               list, which is the server's decision, not this page's. -->
+          <!-- Announced when it appears. One sentence for any refusal; the
+               server decides that, not this page. -->
           <p class="admin-error" id="admin-error" role="alert"></p>
         </form>
 
@@ -2607,15 +2600,10 @@
             <li><span data-str="html.open_any_track_and_take_it">Open any track and take it off the board, with every time flown on it.</span></li>
             <li><span data-str="html.read_the">Read the</span> <a href="bugs.html"><span data-str="html.bugs_and_feedback_2">bugs and feedback</span></a> inbox.</li>
           </ul>
-          <p class="admin-warn">
-            <span data-str="html.removing_a_track_cannot_be_undone">Removing a track cannot be undone. The times go with it.</span>
-          </p>
-          <!-- The sponsors and their links. Filled by app.js from the
-               signed in response, which is the only place the list travels:
-               the slugs are public the moment a poster is printed, but the
-               list of sponsors INCLUDING the ones with no traffic yet is a
-               commercial fact rather than a public one. The per sponsor
-               numbers on the statistics tab are public on purpose. -->
+          <p class="admin-warn"><span data-str="html.removing_a_track_cannot_be_undone">Removing a track cannot be undone. The times go with it.</span></p>
+          <!-- The sponsors and their links, from the signed in answer only:
+               each sponsor's numbers are public, the list of all of them is
+               not. -->
           <div class="admin-sponsors" id="admin-sponsors"></div>
           <div class="admin-actions">
             <button type="button" class="btn" id="admin-signout"><span data-str="html.sign_out">Sign out</span></button>

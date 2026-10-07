@@ -33,11 +33,19 @@
  * and a bug token typed into the inbox. */
 export const ADMIN_TOKEN_KEY = 'fdfpv.board.admin.v1';
 export const BUGS_TOKEN_KEY = 'fdfpv.bugs.token';
+/* localStorage: the aircraft the visitor last chose on the board. */
+export const CRAFT_KEY = 'fdfpv.board.craft.v1';
 
-export const RENAMED = [
-  ['webfpv.board.admin.v1', ADMIN_TOKEN_KEY],
-  ['webfpv.bugs.token', BUGS_TOKEN_KEY],
-];
+/* Old name to new, by the storage each lives in. */
+export const RENAMED = {
+  session: [
+    ['webfpv.board.admin.v1', ADMIN_TOKEN_KEY],
+    ['webfpv.bugs.token', BUGS_TOKEN_KEY],
+  ],
+  local: [
+    ['webfpv.board.craft.v1', CRAFT_KEY],
+  ],
+};
 
 /*
  * Move `from` to `to` in `storage`. A storage that refuses access (a
@@ -60,15 +68,15 @@ export function moveKey(storage, from, to) {
 }
 
 /* `openStorage` returns the storage, because merely naming sessionStorage
- * throws where storage is switched off. */
-export function moveRenamedKeys(openStorage) {
+ * throws where storage is switched off; `kind` is 'session' or 'local'. */
+export function moveRenamedKeys(openStorage, kind) {
   let storage;
   try {
     storage = openStorage();
   } catch {
     return;
   }
-  for (const [from, to] of RENAMED) {
+  for (const [from, to] of RENAMED[kind]) {
     moveKey(storage, from, to);
   }
 }
