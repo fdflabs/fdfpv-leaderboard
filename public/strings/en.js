@@ -275,5 +275,10 @@ export default {
   "stats.craft_zagi1219": "Zagi HP",
   "stats.craft_nrj1490": "NRJ DLG",
   "stats.craft_striker2500": "Striker",
+  "stats.craft_quickie1293": "Quickie 500",
+  "stats.craft_edge1524": "Edge 540",
+  "stats.craft_extra1308": "Extra 300 3D",
+  "stats.craft_pitts850": "Pitts S-1S",
+  "stats.craft_wot41334": "Wot 4",
   "stats.craft_other": "Other",
 };
