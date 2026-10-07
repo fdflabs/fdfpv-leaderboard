@@ -4,9 +4,9 @@
  *
  * The board shares its origin with the simulator on the VM (the simulator
  * at the root, the board under /board), so the two read one localStorage
- * and one sessionStorage. Keys only the board reads are named here; the
- * language and the statistics date are read by both and keep their names
- * until both repositories move together.
+ * and one sessionStorage. Keys only the board reads are named here, and
+ * so are the two both pages read on purpose, the language choice and the
+ * statistics memory (see readSharedKey below).
  *
  * A renamed key is moved once, when a page that uses it loads: the value
  * under the old name is copied to the new one unless the new one already
@@ -79,4 +79,42 @@ export function moveRenamedKeys(openStorage, kind) {
   for (const [from, to] of RENAMED[kind]) {
     moveKey(storage, from, to);
   }
+}
+
+/*
+ * THE TWO KEYS SHARED WITH THE SIMULATOR, moving from webfpv.* to fdfpv.*
+ * names. KEEP IN STEP WITH src/share/sharedkeys.js in the simulator, which
+ * holds the same table and rule.
+ *
+ * The board and the simulator deploy separately, so for a while one of
+ * them may run a build that knows only the old name. A build that knows
+ * both writes the value under both, the old name first; on reading, a
+ * value under the old name that differs from the new one wins, since only
+ * an old build writes it alone. Whatever order the two read and write in,
+ * each reads the value written last, so an opt out or a language chosen on
+ * either page is never lost. The old names go once both sites run this.
+ */
+export const LANG_KEY = 'fdfpv.lang';
+export const STATS_KEY = 'fdfpv.stats.v1';
+
+const SHARED_OLD_NAMES = {
+  [LANG_KEY]: 'webfpv.lang',
+  [STATS_KEY]: 'webfpv.stats.v1',
+};
+
+/* The value under a shared key, or null. Throws as localStorage does when
+ * storage is refused; callers already guard. */
+export function readSharedKey(key, storage = localStorage) {
+  const now = storage.getItem(key);
+  const before = storage.getItem(SHARED_OLD_NAMES[key]);
+  return before !== null && before !== now ? before : now;
+}
+
+/* Write under both names, the old first: if the second write is refused
+ * the old name holds the new value and wins on reading; if the first is,
+ * nothing changed. Throws as localStorage does. */
+export function writeSharedKey(key, value, storage = localStorage) {
+  const text = String(value);
+  storage.setItem(SHARED_OLD_NAMES[key], text);
+  storage.setItem(key, text);
 }

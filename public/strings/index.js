@@ -32,9 +32,11 @@
  */
 
 import en from './en.js';
+/* Shared with the simulator on purpose: one choice of language for both
+ * (keys.js says how the name moves). */
+import { LANG_KEY, readSharedKey, writeSharedKey } from '../keys.js';
 
-export const LANG_KEY = 'webfpv.lang';
-/* Shared with the simulator on purpose: one choice of language for both. */
+export { LANG_KEY };
 export const LOCALES = ['en', 'es'];
 export const LOCALE_NAMES = { en: 'English', es: 'Español' };
 
@@ -98,7 +100,7 @@ export async function useLocale(id) {
 
 export function rememberLocale(id) {
   try {
-    localStorage.setItem(LANG_KEY, id);
+    writeSharedKey(LANG_KEY, id);
   } catch (e) {
   }
 }
@@ -113,7 +115,7 @@ export function preferredLocale() {
   } catch (e) {
   }
   try {
-    const stored = localStorage.getItem(LANG_KEY);
+    const stored = readSharedKey(LANG_KEY);
     if (stored) {
       return stored;
     }
