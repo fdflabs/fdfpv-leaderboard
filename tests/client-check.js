@@ -4,6 +4,8 @@
  *   node tests/client-check.js                    this tree only
  *   node tests/client-check.js --against <ref>    and compare with <ref>'s page
  *   node tests/client-check.js --out <dir>        keep the screenshots and text
+ *   node tests/client-check.js --against <ref> --styles
+ *                                                 and compare every element's box and style
  *
  * A board is seeded once through the API (tests/client/seed.js), then the
  * page is walked through a fixed list of scenes: the track list per
@@ -92,6 +94,61 @@ const RULES_IN_USE = `(() => {
   return used;
 })()`;
 const outDir = arg('--out');
+/* --styles: also read every element's box and computed style in every
+ * scene, and with --against require them to match. A screenshot can hide
+ * a difference (a colour off by one, a hover rule, a box that overflows
+ * off screen); this cannot. */
+const readStyles = process.argv.includes('--styles');
+const STYLE_PROPS = [
+  'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'box-sizing',
+  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+  'outline-style', 'outline-width', 'outline-color', 'outline-offset',
+  'color', 'background-color', 'background-image', 'background-position', 'background-size', 'background-repeat', 'background-attachment',
+  'opacity', 'visibility', 'overflow-x', 'overflow-y', 'box-shadow', 'filter', 'backdrop-filter', 'transform', 'clip-path',
+  'font-family', 'font-size', 'font-weight', 'font-style', 'font-stretch', 'font-variant-numeric', 'line-height',
+  'letter-spacing', 'word-spacing', 'text-transform', 'text-align', 'text-decoration-line', 'text-decoration-color', 'text-shadow',
+  'text-overflow', 'white-space', 'vertical-align', 'cursor', 'pointer-events', 'user-select', 'list-style-type',
+  'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis', 'order', 'align-items', 'align-self', 'align-content',
+  'justify-content', 'justify-items', 'justify-self', 'row-gap', 'column-gap',
+  'grid-template-columns', 'grid-template-rows', 'grid-column-start', 'grid-column-end', 'grid-row-start', 'grid-row-end', 'grid-auto-flow',
+  'object-fit', 'aspect-ratio', 'transition-property', 'transition-duration', 'animation-name', 'animation-duration',
+  'content', 'appearance', 'accent-color', 'caret-color', 'mix-blend-mode', 'isolation', 'image-rendering', 'scroll-margin-top',
+];
+const STYLE_READ = `(() => {
+  const props = ${JSON.stringify(STYLE_PROPS)};
+  const out = [];
+  const pathOf = (n) => {
+    const parts = [];
+    for (let e = n; e && e.nodeType === 1; e = e.parentElement) {
+      const i = e.parentElement ? [...e.parentElement.children].indexOf(e) : 0;
+      parts.unshift(e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className ? '.' + e.className.trim().split(/\\s+/).join('.') : '') + ':' + i);
+    }
+    return parts.join('>');
+  };
+  for (const n of document.querySelectorAll('*')) {
+    const r = n.getBoundingClientRect();
+    const box = [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 4) / 4).join(',');
+    for (const pseudo of ['', '::before', '::after', '::placeholder', '::marker']) {
+      const cs = getComputedStyle(n, pseudo || null);
+      if (pseudo && (pseudo === '::before' || pseudo === '::after') && (cs.content === 'none' || cs.content === 'normal')) {
+        continue;
+      }
+      if (pseudo === '::placeholder' && !('placeholder' in n && n.placeholder)) {
+        continue;
+      }
+      if (pseudo === '::marker' && cs.display !== 'list-item' && getComputedStyle(n).display !== 'list-item') {
+        continue;
+      }
+      out.push(pathOf(n) + pseudo + ' [' + (pseudo ? '' : box) + '] ' + props.map((p) => p + ':' + cs.getPropertyValue(p)).join(';'));
+    }
+  }
+  return out.join('\\n');
+})()`;
 /* A screenshot may differ in this share of its pixels and still count as
  * the same page. Two walks of one tree differ in none; the clock readings
  * the text masks move about 0.002%. A plan line half a pixel wider moves
@@ -545,6 +602,7 @@ async function walk(tree, template, frozenMs, trackIds, fixtures) {
             /* A blob URL is new every time it is made. */
             .replace(/blob:<board>\/[0-9a-f-]{36}/g, 'blob:<board>/<blob>')),
         text: await tab.evaluate('document.body.innerText'),
+        styles: readStyles ? await tab.evaluate(STYLE_READ) : '',
         ids: await tab.evaluate('[...document.querySelectorAll("[id]")].map((n) => n.id).sort()'),
         png: await tab.screenshot(),
         errors: tab.errors.slice(errorsBefore),
@@ -665,6 +723,10 @@ if (against) {
       const cmp = comparePng(t.png, s.png);
       check(`${s.name}: same screenshot (${cmp.sameSize ? `${(cmp.share * 100).toFixed(3)}% of pixels differ` : `sizes ${cmp.sizes.join(' vs ')}`})`,
         cmp.sameSize && cmp.share <= PIXEL_SHARE);
+      if (readStyles) {
+        const diff = styleDifferences(t.styles, s.styles);
+        check(`${s.name}: every element has the same box and computed style`, diff.length === 0, diff.slice(0, 8).join('\n        '));
+      }
       const lost = t.ids.filter((id) => !s.ids.includes(id));
       if (lost.length) {
         console.log(`        note: ids only in ${against}: ${lost.join(', ')}`);
@@ -690,6 +752,36 @@ function serverClockFree(text) {
   return text
     .replace(/(tomorrow at |mañana a las )?\b\d{1,2}:\d{2}( [AP]M)?\b/g, '<clock>')
     .replace(/\b\d+ min\b/g, '<n> min');
+}
+
+/* The elements whose box or style differ between two readings, each as
+ * its path and the properties that moved. */
+function styleDifferences(was, now) {
+  const index = (text) => new Map(text.split('\n').filter(Boolean).map((line) => {
+    const cut = line.indexOf(' [');
+    return [line.slice(0, cut), line.slice(cut + 1)];
+  }));
+  const a = index(was);
+  const b = index(now);
+  const out = [];
+  for (const key of new Set([...a.keys(), ...b.keys()])) {
+    if (a.get(key) === b.get(key)) {
+      continue;
+    }
+    if (!a.has(key) || !b.has(key)) {
+      out.push(`${key}: only ${a.has(key) ? 'before' : 'now'}`);
+      continue;
+    }
+    const split = (v) => {
+      const [box, rest] = [v.slice(1, v.indexOf(']')), v.slice(v.indexOf(']') + 2)];
+      return new Map([['box', box], ...rest.split(';').map((kv) => [kv.slice(0, kv.indexOf(':')), kv.slice(kv.indexOf(':') + 1)])]);
+    };
+    const x = split(a.get(key));
+    const y = split(b.get(key));
+    const moved = [...x.keys()].filter((p) => x.get(p) !== y.get(p)).map((p) => `${p} ${x.get(p)} -> ${y.get(p)}`);
+    out.push(`${key.split('>').slice(-3).join('>')}: ${moved.join('; ')}`);
+  }
+  return out;
 }
 
 function firstDifference(a, b) {
