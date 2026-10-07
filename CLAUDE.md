@@ -33,7 +33,7 @@ along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.o
 
 A file that still holds upstream code keeps its existing header ("WebFPVLeaderboard", "the WebFPVSimulator leaderboard") untouched until that code is rewritten: GPLv3 sections 4 and 5 require those notices to travel with the code. Never copy upstream code into a new file; write it fresh. `~/Desktop/fdfpv-loop/upstream/board-share.sh` measures what is left. The README and NOTICE credit stays until it says none is.
 
-**One runtime dependency, `pg`, and it is the only one.** The page has none at all: no framework, no bundler, no build step. Adding one needs an argument first.
+**Two runtime dependencies, `pg` for the store and `ws` for the live rooms, and no more.** The page has none at all: no framework, no bundler, no build step. Adding one needs an argument first.
 
 **The page's styles are inline in the HTML.** Same reason as the simulator's: the styling must not depend on a server's MIME table.
 
