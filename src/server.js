@@ -48,7 +48,10 @@ import {
 } from './sponsors.js';
 import { openStore } from './store.js';
 import {
-  inspectAuth, inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectGif,
+  TIER_WEEKS, eventFrom, pickCourse, publicRow, standings, tierOf, weekOf,
+} from './events.js';
+import {
+  inspectAuth, usablePilotKey, inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectGif,
   inspectRun, inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
   BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_BUG_IMAGE_BYTES, MAX_BUG_IMAGES, MAX_GIF_BASE64_CHARS, RETIRED_RUN_MAPS, RUN_MAPS, TAGS,
@@ -892,6 +895,53 @@ async function ticket({ req, res, url, params }) {
 }
 
 /*
+ * THIS WEEK'S EVENT, fixed by the first read of the week (src/events.js).
+ * { event: null } when no published course carries medals. Standings are
+ * public rows: name, lap and medal, never a pilot key.
+ */
+async function thisWeek(now = Date.now()) {
+  const week = weekOf(now);
+  const held = await store.eventOfWeek(week.week);
+  if (held) {
+    return held;
+  }
+  const course = pickCourse(await store.medalCourses(), week.index);
+  return course ? store.fixEvent(eventFrom(week, course)) : null;
+}
+
+async function currentEvent({ res }) {
+  const event = await thisWeek();
+  if (!event) {
+    return reply(res, 200, { event: null });
+  }
+  const rows = standings(event, await store.eventTimes(event.trackId));
+  return reply(res, 200, { event: { ...event, standings: rows.map(publicRow) } });
+}
+
+/*
+ * The tier one pilot key reached in each of the last TIER_WEEKS events:
+ * what the accounts server pays (the simulator's tracks-api). A tier is
+ * absolute and final once posted, so this answers mid-week too. A key is
+ * public (it signs every time on the board), so asking costs nothing.
+ */
+async function eventTiers({ res, url }) {
+  const key = url.searchParams.get('key') || '';
+  if (!usablePilotKey(key)) {
+    return refuse(res, 400, 'That pilot key is not usable.');
+  }
+  await thisWeek();
+  const tiers = [];
+  for (const event of await store.recentEvents(TIER_WEEKS)) {
+    /* eslint-disable-next-line no-await-in-loop */
+    const tier = tierOf(event, await store.eventTimes(event.trackId), key);
+    if (tier) {
+      tiers.push({ id: event.id, tier });
+    }
+  }
+  return reply(res, 200, { tiers });
+}
+
+/*
  * The API, first match wins. A path is compared without trailing slashes;
  * `methods` lists what a route answers, and anything else falls through to
  * the 404 at the end, as an unknown path does.
@@ -914,6 +964,8 @@ const ROUTES = [
   [['POST'], /^\/api\/tracks\/([^/]+)\/times$/, postTime],
   [['GET'], /^\/api\/tracks\/([^/]+)\/times\/([^/]+)\/ghost$/, ghostOf],
   [['POST'], /^\/api\/pilots(\/link)?$/, pilotKeys],
+  [['GET'], '/api/events/current', currentEvent],
+  [['GET'], '/api/events/tiers', eventTiers],
   [['GET'], '/api/runs', listRuns],
   [['POST'], '/api/runs', postRun],
   [['GET'], '/api/bugs', listTickets],

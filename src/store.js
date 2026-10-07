@@ -31,6 +31,7 @@ import {
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { planesFor } from '../vendor/fdfpv/src/game/verify.js';
+import { medalsOf } from './events.js';
 import {
   creditOf, hashEditKey, mapOf, planFromDocument, trackClassOf, STATS_COUNTRY_UNKNOWN,
 } from './validate.js';
@@ -110,6 +111,13 @@ function currentPlan(track) {
   return track?.plan || { width: 60, depth: 40, marks: [], path: [] };
 }
 
+/* A course's medal times (the simulator's src/game/medals.js) when it has
+ * them; absent otherwise, so a listing without medals reads as before. */
+function medalsField(document) {
+  const medals = medalsOf(document);
+  return medals ? { medals } : {};
+}
+
 const tagList = (tags) => (Array.isArray(tags) ? tags : []);
 
 /*
@@ -132,6 +140,7 @@ export function summaryOf(track, times) {
     map: mapOf(track.document),
     ...planeBoardOf(track.document, planes.length, planes[0]),
     ...creditOf(track.document),
+    ...medalsField(track.document),
     plan: currentPlan(track),
     publishedUtc: track.publishedUtc,
     updatedUtc: track.updatedUtc,
@@ -162,6 +171,7 @@ export function rowToSummary(row) {
     map: mapOf(row.document),
     ...planeBoardOf(row.document, 0, null),
     ...creditOf(row.document),
+    ...medalsField(row.document),
     plan: planFromDocument(row.document),
     publishedUtc: row.published_utc,
     updatedUtc: row.updated_utc,
@@ -389,7 +399,7 @@ export function shapeStats({
  */
 function freshBoard() {
   return {
-    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {} }, pilots: {},
+    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {} }, pilots: {}, events: {},
   };
 }
 
@@ -407,6 +417,9 @@ function upgrade(board) {
   }
   if (!isMap(board.pilots)) {
     board.pilots = {};
+  }
+  if (!isMap(board.events)) {
+    board.events = {};
   }
   if (!isMap(board.stats)) {
     board.stats = { days: {}, dims: {} };
@@ -854,6 +867,41 @@ class FileStore {
    * than from counters: tracks, times, distinct pilots (by name, without
    * case) and how many of them posted on more than one UTC day.
    */
+  /* ---- weekly events (src/events.js has the rules) ---- */
+
+  async medalCourses() {
+    return Object.values(this.data.tracks)
+      .map((t) => ({ id: t.id, name: t.name, map: mapOf(t.document), medals: medalsOf(t.document) }))
+      .filter((c) => c.medals);
+  }
+
+  async eventOfWeek(week) {
+    return this.data.events[week] || null;
+  }
+
+  /* The week's event as stored: `event` when the week had none, else the
+   * one stored first, so two first readers agree. */
+  fixEvent(event) {
+    return this.serially(async () => {
+      if (!this.data.events[event.week]) {
+        this.data.events[event.week] = event;
+        await this.save();
+      }
+      return this.data.events[event.week];
+    });
+  }
+
+  async recentEvents(limit) {
+    return Object.values(this.data.events).sort((a, b) => b.week.localeCompare(a.week)).slice(0, limit);
+  }
+
+  async eventTimes(trackId) {
+    return this.timesOf(trackId).map((t) => ({
+      name: t.name, key: t.key || null, lapMs: t.lapMs, postedUtc: t.postedUtc, craft: t.craft || null,
+    }));
+  }
+
+
   async boardFacts() {
     const daysByPilot = new Map();
     const all = Object.values(this.data.times).flat();
@@ -886,6 +934,23 @@ const TICKET_COLUMNS = `id, status, kind, title, what, expected, steps, reporter
   resolution, submitted_utc AS "submittedUtc", updated_utc AS "updatedUtc"`;
 
 const UNIQUE_VIOLATION = '23505';
+
+const EVENT_COLUMNS = `id, week, track_id, name, map, gold_ms, wing, starts_utc, ends_utc`;
+
+/* An events row as src/events.js shapes an event. */
+function eventRow(r) {
+  return {
+    id: r.id,
+    week: r.week,
+    trackId: r.track_id,
+    name: r.name,
+    map: r.map,
+    goldMs: r.gold_ms,
+    wing: r.wing,
+    startsUtc: new Date(r.starts_utc).toISOString(),
+    endsUtc: new Date(r.ends_utc).toISOString(),
+  };
+}
 
 /* Random public ids can land on a taken one. Six collisions in a row on
  * four random bytes is not luck but a broken random source, and throws. */
@@ -1347,6 +1412,41 @@ class PgStore {
       countriesAllTime: countries.rows[0].n,
     });
   }
+
+  /* ---- weekly events ---- */
+
+  async medalCourses() {
+    const found = await this.pool.query("SELECT id, name, document FROM tracks WHERE document ? 'medals'");
+    return found.rows
+      .map((r) => ({ id: r.id, name: r.name, map: mapOf(r.document), medals: medalsOf(r.document) }))
+      .filter((c) => c.medals);
+  }
+
+  async eventOfWeek(week) {
+    const found = await this.pool.query(`SELECT ${EVENT_COLUMNS} FROM events WHERE week = $1`, [week]);
+    return found.rows[0] ? eventRow(found.rows[0]) : null;
+  }
+
+  async fixEvent(e) {
+    await this.pool.query(`
+      INSERT INTO events (id, week, track_id, name, map, gold_ms, wing, starts_utc, ends_utc)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (week) DO NOTHING`,
+    [e.id, e.week, e.trackId, e.name, e.map, e.goldMs, e.wing, e.startsUtc, e.endsUtc]);
+    return this.eventOfWeek(e.week);
+  }
+
+  async recentEvents(limit) {
+    const found = await this.pool.query(`SELECT ${EVENT_COLUMNS} FROM events ORDER BY week DESC LIMIT $1`, [limit]);
+    return found.rows.map(eventRow);
+  }
+
+  async eventTimes(trackId) {
+    const found = await this.pool.query(`
+      SELECT name, pilot_key AS key, lap_ms AS "lapMs", posted_utc AS "postedUtc", craft
+      FROM times WHERE track_id = $1`, [trackId]);
+    return found.rows.map((r) => ({ ...r, postedUtc: new Date(r.postedUtc).toISOString() }));
+  }
+
 
   async boardFacts() {
     const found = await this.pool.query(`
