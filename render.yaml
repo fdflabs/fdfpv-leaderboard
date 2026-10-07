@@ -1,28 +1,27 @@
-# This file is part of the WebFPVSimulator leaderboard.
+# This file is part of the Paraguayan Drone Combat Simulator.
 #
-# This program is free software: you can redistribute it and/or modify
+# The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or (at
 # your option) any later version.
 #
-# This program is distributed in the hope that it will be useful, but
+# The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY, without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
 
-# Render blueprint for the board: one Node web service and one Postgres.
+# A Render blueprint for the board on its own: a Node web service and a
+# Postgres beside it. The live board runs on the owner's VM instead (the
+# simulator's deploy/vm); this stays for anybody who wants the board alone.
 #
-# The simulator is a separate repo and a separate blueprint, a static site:
-# https://github.com/fdflabs/fdfpv
-# Deploy this one first, because the simulator has to be told this URL and
-# this service has to be told that one. See DEPLOY.md for the order.
-#
-# The region is written on both the service and the database and has to
-# match. DATABASE_URL below is Render's internal connection string, which
-# only resolves between resources in the same region.
+# The simulator is another repository and another blueprint
+# (https://github.com/fdflabs/fdfpv). Each has to be told the other's
+# address, so stand this one up first; the simulator's DEPLOY.md has the
+# order. The service and the database must share a region, because the
+# DATABASE_URL Render fills in only resolves inside one.
 
 services:
   - type: web
@@ -30,14 +29,12 @@ services:
     runtime: node
     plan: free
     region: singapore
-
-    # ci, not install: package-lock.json is committed, and install is free to
-    # quietly resolve a different pg than the one the tests ran against.
+    # From the committed lock file, so the pg that runs is the pg the tests
+    # ran against.
     buildCommand: npm ci
     startCommand: npm start
-
-    # The board answers this before the store is touched, so a failing health
-    # check means the process is down rather than the database being empty.
+    # Answered without touching the store: a failing check means the process
+    # is down, not that the database is empty.
     healthCheckPath: /api/health
 
     envVars:
@@ -46,64 +43,50 @@ services:
           name: fdfpv-board-db
           property: connectionString
 
-      # Where the Fly and Build buttons send people, no trailing slash. Set
-      # in the dashboard once the simulator exists. Every consumer treats it
-      # as a prefix and concatenates, so it may carry a mount path as well as
-      # a host: behind fdfpv.example it is https://fdfpv.example/sim.
+      # The simulator's address, no trailing slash, set once it exists. It is
+      # used as a prefix, so it may carry a path (https://fdfpv.example/sim).
       - key: SIM_ORIGIN
         sync: false
 
-      # Public address of THIS service, written into /api/config. Leave unset
-      # when the board is the whole site: the request origin plus
-      # BOARD_TRUST_PROXY below is then correct. Behind a mount prefix it is
-      # not, because a forwarded host cannot carry a path, so set it to
-      # https://fdfpv.example/board there. The board's page prefers its own
-      # document.baseURI over this either way, so a wrong value here no
-      # longer sends a pilot to the landing page; it only makes the JSON lie.
+      # This service's public address, as /api/config reports it. Leave it
+      # unset when the board is the whole site. Behind a path prefix, set it
+      # (https://fdfpv.example/board), since a forwarded host has no path.
+      # The page uses its own base URL either way; this only keeps the JSON
+      # honest.
       - key: BOARD_PUBLIC_ORIGIN
         sync: false
 
-      # Render terminates TLS in front of the app, so the request arrives
-      # over plain http and only x-forwarded-proto knows it was https.
-      # Without this the board writes http:// Fly links, which a browser on
-      # an https page refuses as mixed content. The server ignores the
-      # header unless this is set, so a directly exposed instance still
-      # cannot be told its own scheme by a client.
+      # Render ends TLS in front of the app, so only x-forwarded-proto says
+      # the request was https; without believing it the board would hand out
+      # http links an https page refuses. Unset, the headers are ignored, so
+      # a bare instance cannot be told its scheme by a client.
       - key: BOARD_TRUST_PROXY
         value: "1"
 
-      # Optional. When set, listing and updating tickets needs this token.
-      # Testers can still submit without it. Sync it from the Render dashboard.
+      # Optional: a token to list and update tickets. Filing one never needs it.
       - key: BUGS_TOKEN
         sync: false
 
-      # Optional. The browser that published a track can upload that track's
-      # card animation with the edit key it already holds, so this is only
-      # for the rooms published before animations existed. Sync it from the
-      # dashboard, and leave it unset if you do not need it.
+      # Optional: a way past an edit key for scripts (the simulator's
+      # boardgif.js uploads card animations for rooms whose publishing
+      # browser is gone). A signed in admin needs no token.
       - key: BOARD_ADMIN_TOKEN
         sync: false
 
-      # Who may sign in to the Admin panel on the board's own page. Unset
-      # uses the built-in list in src/admin.js, which is one address whose
-      # password is published with the source, so set this here. One entry
-      # per line or comma separated, each email:scrypt:N:r:p:saltHex:hashHex
-      # from `node scripts/admin-hash.js someone@example.com`. Setting it
-      # REPLACES the built-in list rather than adding to it.
+      # Who may sign in to the Admin panel: email:scrypt:N:r:p:saltHex:hashHex
+      # entries from `node scripts/admin-hash.js someone@example.com`, one per
+      # line or comma separated. It is the whole list; nothing ships, so
+      # until this is set nobody can sign in.
       - key: BOARD_ADMINS
         sync: false
 
-      # Optional. Mixed into the key that signs admin session tokens, so
-      # changing it signs every admin out at once. Leave unset unless that
-      # is wanted: changing a password already revokes its own sessions.
+      # Optional: mixed into the session signing key, so changing it signs
+      # every admin out. A changed password already ends its own sessions.
       - key: BOARD_SESSION_SECRET
         sync: false
 
-      # Optional. Who gets a sponsor link, slug:Display Name, one per line
-      # or comma separated. Unset means no sponsors and every arrival on the
-      # statistics tab is Direct or Other. A source this list does not name
-      # is folded into Other, so the table cannot be grown by inventing one.
-      # Sync it from the dashboard.
+      # Optional: sponsors as slug:Display Name, one per line or comma
+      # separated. Any other source is counted as Other.
       - key: BOARD_SPONSORS
         sync: false
 
@@ -112,9 +95,7 @@ databases:
     plan: free
     region: singapore
     postgresMajorVersion: "16"
-
-    # Empty means Render's private network only, which is everything the
-    # board needs. Open it in the dashboard, under the database's Access
-    # Control, when you want psql from a laptop; the external connection
-    # string Render hands you for that is a different one and carries SSL.
+    # Private network only, which is all the board needs. Open it under the
+    # database's Access Control for psql from a laptop; that external
+    # connection string is a different one, with SSL.
     ipAllowList: []
