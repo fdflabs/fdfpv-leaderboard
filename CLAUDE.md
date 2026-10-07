@@ -4,7 +4,7 @@ Project conventions. Read fully before any turn. These are decisions already mad
 
 ## What this is
 
-The public board for FDFPV, a GPLv3 fork of WebFPVSimulator. One Node service and one Postgres. It stores published courses and the times flown on them, and it serves a single static page that reads them back. It is not the simulator and it does not render anything: every course thumbnail on the board is the simulator's own `src/share/orbit.html`, in a cross origin iframe.
+The public board for FDFPV. One Node service and one Postgres. It stores published courses and the times flown on them, and it serves a single static page that reads them back. It is not the simulator and it does not render anything: every course thumbnail on the board is the simulator's own `src/share/orbit.html`, in a cross origin iframe.
 
 The three repositories are one product. `fdflabs/fdfpv` holds the simulator and the track builder and is the copy of record for anything shared; `fdflabs/fdfpv-landing` is the front door. Read the simulator's `CLAUDE.md` before changing anything that has to agree across the three, and `DEPLOY.md` there for how they are wired together.
 
@@ -12,7 +12,7 @@ The three repositories are one product. `fdflabs/fdfpv` holds the simulator and 
 
 **Licence is GPLv3.** Every file gets a header. Do not add a dependency with an incompatible licence.
 
-**The GPLv3 header names this project, never the upstream.** A new file, or a file rewritten so that none of WebFPVSimulator-LeaderBoard's code is left in it, carries the simulator's header, the one in its `CLAUDE.md`, in the file's own comment syntax:
+**The GPLv3 header names this project.** Every file carries the simulator's header, the one in its `CLAUDE.md`, in the file's own comment syntax:
 
 ```
 This file is part of the Paraguayan Drone Combat Simulator.
@@ -31,7 +31,7 @@ You should have received a copy of the GNU General Public License
 along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
 ```
 
-A file that still holds upstream code keeps its existing header ("WebFPVLeaderboard", "the WebFPVSimulator leaderboard") untouched until that code is rewritten: GPLv3 sections 4 and 5 require those notices to travel with the code. Never copy upstream code into a new file; write it fresh. `~/Desktop/fdfpv-loop/upstream/board-share.sh` measures what is left. The README and NOTICE credit stays until it says none is.
+`npm run lint:licence` (in CI) holds every shipped file to a GPLv3 notice.
 
 **Two runtime dependencies, `pg` for the store and `ws` for the live rooms, and no more.** The page has none at all: no framework, no bundler, no build step. Adding one needs an argument first.
 
