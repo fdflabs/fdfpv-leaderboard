@@ -1,27 +1,33 @@
-# This file is part of the WebFPVSimulator leaderboard.
+# This file is part of the Paraguayan Drone Combat Simulator.
 #
-# This program is free software: you can redistribute it and/or modify
+# The Paraguayan Drone Combat Simulator is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or (at
 # your option) any later version.
 #
-# This program is distributed in the hope that it will be useful, but
+# The Paraguayan Drone Combat Simulator is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY, without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# along with the Paraguayan Drone Combat Simulator. If not, see <https://www.gnu.org/licenses/>.
+
+# A local Postgres for working on the Postgres store:
+#   docker compose up -d
+#   DATABASE_URL=postgres://fdfpv:fdfpv@127.0.0.1:5432/fdfpvboard npm start
+# The board applies schema.sql itself at start; mounting it here as well only
+# means a fresh volume has the tables before the first start.
 
 services:
   db:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: fdfpv
-      POSTGRES_PASSWORD: fdfpv
-      POSTGRES_DB: fdfpvboard
     ports:
       - "5432:5432"
+    environment:
+      POSTGRES_DB: fdfpvboard
+      POSTGRES_USER: fdfpv
+      POSTGRES_PASSWORD: fdfpv
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
