@@ -295,7 +295,7 @@ function sponsorLogos(document) {
  * pilot who presses Fly loads, so it is a closed list. A world added there
  * is added here first and deployed first.
  */
-export const MAP_IDS = ['swiss2', 'alps'];
+export const MAP_IDS = ['swiss2', 'alps', 'itaipu'];
 
 /*
  * What the simulator's in-world builder can place (BUILD_TYPES in its
@@ -311,11 +311,14 @@ export const MAP_ELEMENT_TYPES = [
 ];
 
 /*
- * Where a schema 4 element may stand, metres from the world's centre. Both
- * worlds are 6000 m squares (FIELD in the simulator's src/maps/alps/
+ * Where a schema 4 element may stand, metres from the world's centre. The
+ * two valleys are 6000 m squares (FIELD in the simulator's src/maps/alps/
  * terrain.js), the floor is z 0 with the lake just under it and the peaks
- * about 1.4 km up. The vertical band is wide on purpose: it is there to
- * refuse a number that is not a place, not to second guess the builder.
+ * about 1.4 km up. Itaipu's detailed ground is wider (HERO_HALF 5120 in its
+ * src/maps/itaipu/terrain/frame.js), so a gate built past 3 km out there
+ * is refused; its own courses (docs/itaipu-courses) stand inside 2.5 km.
+ * The vertical band is wide on purpose: it is there to refuse a number
+ * that is not a place, not to second guess the builder.
  */
 const WORLD_HALF_M = 3000;
 const WORLD_FLOOR_M = -100;
@@ -364,7 +367,7 @@ function worldElementFault(el) {
 /* What a schema 4 track needs beyond what every track needs. */
 function worldTrackFault(document) {
   if (!MAP_IDS.includes(document.map)) {
-    return `A version 4 track names the world it stands in, and this board knows ${MAP_IDS.join(' and ')}.`;
+    return `A version 4 track names the world it stands in, and this board knows ${MAP_IDS.slice(0, -1).join(', ')} and ${MAP_IDS.at(-1)}.`;
   }
   if (Math.max(document.elements.length, document.sequence.length) > WORLD_STEPS_MAX) {
     return `A track built in a world carries at most ${WORLD_STEPS_MAX} gates.`;
@@ -998,7 +1001,12 @@ export const RUN_ID_RE = /^run-[0-9a-f]{8}$/;
 
 /* The simulator's freestyle worlds, its src/maps/registry.js entries with
  * `mode: 'freestyle'`; src/selftest.js holds the two together. */
-export const RUN_MAPS = ['alps', 'swiss2', 'yellowstone'];
+export const RUN_MAPS = ['alps', 'swiss2', 'itaipu', 'interior'];
+
+/* Worlds the simulator retired (its src/maps/retired.js) that runs were
+ * posted on while they were live. Those rows stay in the store and stay
+ * readable by ?map=, but no new run is taken on them. */
+export const RETIRED_RUN_MAPS = ['yellowstone'];
 
 /* Expert and arcade are different sports (arcade drops propwash, gyro
  * noise and build asymmetry), so a run records which and the board never

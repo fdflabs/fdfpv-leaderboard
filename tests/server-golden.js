@@ -379,9 +379,10 @@ async function fullBoard(port, walk) {
   await hit('time missing track', 'POST', '/api/tracks/trk-00000000/times', { body: await timeBody(bo, 'trk-00000000', 'Bo', lap) });
   await hit('time bad track id', 'POST', '/api/tracks/zzz/times', { body: await timeBody(bo, 'trk-1a2b3c4d', 'Bo', lap) });
   await hit('time second pilot', 'POST', T, { body: await timeBody(bo, 'trk-1a2b3c4d', 'Bo', lap) });
-  const roomLap = lapOf(room);
-  walk.lap(roomLap.lapMs, 'room');
-  await hit('time room', 'POST', '/api/tracks/trk-2b3c4d5e/times', { body: await timeBody(bo, 'trk-2b3c4d5e', 'Bo', roomLap) });
+  /* The simulator refuses any lap on a RaceGOW room, whose 65 mm whoop it
+   * removed, before it reads the ghost; the field's lap stands in, since a
+   * synthetic lap of a room no longer has a length to alias. */
+  await hit('time room', 'POST', '/api/tracks/trk-2b3c4d5e/times', { body: await timeBody(bo, 'trk-2b3c4d5e', 'Bo', lap) });
   const mapLap = lapOf(map);
   walk.lap(mapLap.lapMs, 'map');
   await hit('time map quad', 'POST', '/api/tracks/trk-3c4d5e6f/times', { body: await timeBody(ada, 'trk-3c4d5e6f', 'Ada Rook', mapLap) });

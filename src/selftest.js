@@ -482,7 +482,7 @@ function worldDocuments() {
     && out.plan.marks.every((m) => m.x >= 0 && m.y >= 0 && m.x <= out.plan.width && m.y <= out.plan.depth),
   JSON.stringify(out.plan).slice(0, 160));
   check('and every gate on it carries its badge', out.plan.numbers.map((n) => n.n).join() === '1,2,3');
-  check('the worlds are swiss2 and alps, in that order, and nothing else', MAP_IDS.join() === 'swiss2,alps', MAP_IDS.join());
+  check('the worlds are swiss2, alps and itaipu, in that order, and nothing else', MAP_IDS.join() === 'swiss2,alps,itaipu', MAP_IDS.join());
   check('the same ring publishes on alps', inspectDocument({ ...ring, map: 'alps' }).map === 'alps');
   const worldless = { ...ring };
   delete worldless.map;
@@ -1392,6 +1392,10 @@ async function runsOverHttp(board) {
   check('all nine implausible runs are refused with a 400', statuses.every((st) => st === 400), statuses.join());
   check('JSON that is not an object is a 400, not a 500', (await board.post('/api/runs', '7')).status === 400);
   check('a map in the query this board keeps no scores for is a 400', (await board.get('/api/runs?map=nowhere')).status === 400);
+  /* Runs posted on Yellowstone before the simulator retired it are still
+   * in the store; they stay readable, and no new one is taken. */
+  check('a run on a retired world is refused with a 400', (await board.post('/api/runs', run({ map: 'yellowstone' }))).status === 400);
+  check('but the retired world can still be read back', (await board.get('/api/runs?map=yellowstone')).status === 200);
   const tracks = await board.json('/api/tracks');
   check('and none of it touched the tracks', tracks.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
   check('the track list carries the tag vocabulary', Array.isArray(tracks.tags) && tracks.tags.some((t) => t.id === 'skills'));
@@ -1440,20 +1444,26 @@ async function animationsOverHttp(board, s) {
   check('so the image is a 404 again', (await board.get(G)).status === 404);
 }
 
-async function removalOverHttp(board, s) {
+async function removalOverHttp(board) {
   section('taking a track off the board');
   /* A time on it first: the point of the route is that times go with the
    * track, and the point of the gate is that its publisher alone may not
-   * throw other pilots' times away. The lap is flown through the room as
-   * it stands now, gate moved and all. */
-  const current = await board.json('/api/tracks/trk-2b3c4d5e/document');
-  const lap = flown(current.document, { speed: 6 });
-  const kite = await board.post('/api/tracks/trk-2b3c4d5e/times', await signedTime(boKey, 'trk-2b3c4d5e', 'Bo Kite', lap));
-  check('a lap of the room is taken', kite.status === 201, `${kite.status} ${(await kite.clone().text()).slice(0, 120)}`);
-  check('the room is on the board with one time on it', (await board.json('/api/tracks')).tracks.find((t) => t.id === 'trk-2b3c4d5e')?.times === 1);
-  const R = '/api/tracks/trk-2b3c4d5e/remove';
+   * throw other pilots' times away. A field track of its own: a room is
+   * a RaceGOW class no aircraft flies since the 65 mm whoop went, so the
+   * simulator's verify.js refuses every lap on one. */
+  const roomLap = await board.post('/api/tracks/trk-2b3c4d5e/times', await signedTime(boKey, 'trk-2b3c4d5e', 'Bo Kite', flown(lapField('trk-2b3c4d5e'))));
+  check('a lap on a room is refused, and told why', roomLap.status === 422 && /RaceGOW room/.test((await roomLap.json()).error || ''));
+  check('and the room stays on the board', (await board.json('/api/tracks')).tracks.some((t) => t.id === 'trk-2b3c4d5e'));
+  const T = 'trk-4e5f6a7b';
+  const pub = await board.post('/api/tracks', { author: 'Ada Rook', document: lapField(T) });
+  const { editKey } = await pub.json();
+  check('a field track publishes for it, with its edit key', pub.status === 201 && Boolean(editKey));
+  const kite = await board.post(`/api/tracks/${T}/times`, await signedTime(boKey, T, 'Bo Kite', flown(lapField(T))));
+  check('a lap of the track is taken', kite.status === 201, `${kite.status} ${(await kite.clone().text()).slice(0, 120)}`);
+  check('the track is on the board with one time on it', (await board.json('/api/tracks')).tracks.find((t) => t.id === T)?.times === 1);
+  const R = `/api/tracks/${T}/remove`;
   check('a stranger cannot remove a track', (await fetch(`${board.base}${R}`, { method: 'POST' })).status === 403);
-  check('nor can the browser that published it, with its edit key', (await board.post(R, { editKey: s.roomKey })).status === 403);
+  check('nor can the browser that published it, with its edit key', (await board.post(R, { editKey })).status === 403);
   /* Authority is checked before the id, so ids cannot be probed. */
   check('and a made up id answers a stranger the same way', (await fetch(`${board.base}/api/tracks/trk-00000000/remove`, { method: 'POST' })).status === 403);
   const asScript = { authorization: `Bearer ${SCRIPT_TOKEN}` };
@@ -1463,13 +1473,13 @@ async function removalOverHttp(board, s) {
   check('the board\'s token takes it off, with its time', removed.status === 200 && removedBody.times === 1, JSON.stringify(removedBody));
   check('and says what went rather than echoing the id', removedBody.name === 'Ladder Loop' && removedBody.author === 'Ada Rook', JSON.stringify(removedBody));
   const after = await board.json('/api/tracks');
-  check('the listing no longer carries it', !after.tracks.some((t) => t.id === 'trk-2b3c4d5e'));
+  check('the listing no longer carries it', !after.tracks.some((t) => t.id === T));
   check('and the field track beside it is untouched', after.tracks.some((t) => t.id === 'trk-1a2b3c4d'));
-  check('its sheet is a 404', (await board.get('/api/tracks/trk-2b3c4d5e')).status === 404);
-  check('and so is its document', (await board.get('/api/tracks/trk-2b3c4d5e/document')).status === 404);
+  check('its sheet is a 404', (await board.get(`/api/tracks/${T}`)).status === 404);
+  check('and so is its document', (await board.get(`/api/tracks/${T}/document`)).status === 404);
   /* The id is free: the way to replace a track published from a browser
    * nobody still has. */
-  check('and the id can be published again', (await board.post('/api/tracks', { author: 'Ada Rook', document: room('trk-2b3c4d5e', { flyable: true }) })).status === 201);
+  check('and the id can be published again', (await board.post('/api/tracks', { author: 'Ada Rook', document: lapField(T) })).status === 201);
 }
 
 async function signingIn(board, s) {
@@ -1638,7 +1648,7 @@ async function httpSuite(databaseUrl = '') {
     await tagsOverHttp(board);
     await runsOverHttp(board);
     await animationsOverHttp(board, state);
-    await removalOverHttp(board, state);
+    await removalOverHttp(board);
     await signingIn(board, state);
     await statisticsOverHttp(board, state);
     await callsigns(board);

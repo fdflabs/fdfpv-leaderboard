@@ -51,7 +51,7 @@ import {
   inspectAuth, inspectBugCreate, inspectBugPatch, inspectCraft, inspectDocument, inspectGhost, inspectGif,
   inspectRun, inspectStatsEvent, inspectTags, normaliseCountry, normaliseLapMs, normaliseName,
   normaliseThreeMs, statsDay,
-  BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_BUG_IMAGE_BYTES, MAX_BUG_IMAGES, MAX_GIF_BASE64_CHARS, RUN_MAPS, TAGS,
+  BUG_ID_RE, BUG_KINDS, BUG_STATUSES, MAX_BUG_IMAGE_BYTES, MAX_BUG_IMAGES, MAX_GIF_BASE64_CHARS, RETIRED_RUN_MAPS, RUN_MAPS, TAGS,
   TIME_ID_RE, TRACK_ID_RE,
 } from './validate.js';
 
@@ -780,7 +780,7 @@ async function linkKeys(res, json) {
 
 async function listRuns({ res, url }) {
   const map = url.searchParams.get('map') || '';
-  if (map && !RUN_MAPS.includes(map)) {
+  if (map && !RUN_MAPS.includes(map) && !RETIRED_RUN_MAPS.includes(map)) {
     return refuse(res, 400, 'That is not a map this board keeps scores for.');
   }
   return reply(res, 200, { runs: await store.listRuns({ map }), tags: TAGS, maps: RUN_MAPS });

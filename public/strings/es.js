@@ -96,6 +96,7 @@ export default {
   "app.tracks_built_by": "pistas construidas por {author}",
   "app.world": "Mundo",
   "app.world_alps": "Los Alpes",
+  "app.world_itaipu": "Itaipú",
   "app.world_swiss2": "Valle suizo",
   "app.you_are_looking_at_the_tracks": "Estás viendo las pistas {v1}.",
   "bugs.back_to_tracks_and_statistics": "Volver a Pistas y estadísticas",

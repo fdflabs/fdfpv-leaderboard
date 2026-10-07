@@ -3,7 +3,7 @@
  *
  * Tracks of every class (a field with a logo and tags, a field of mixed
  * furniture, a room with a designer credit, a fixed wing airfield, a
- * plane ring in a world), times on them flown by three pilots with real
+ * plane ring in a world), times on all but the room flown by three pilots with real
  * signatures and ghosts from the simulator's own lap generator, freestyle
  * runs, bug tickets and statistics events. Everything goes in through the
  * public API, so the board on disk is one the server itself wrote.
@@ -130,9 +130,8 @@ export async function seedBoard(origin) {
   await time(costanera, 'Lapacho', lap(costanera));
   await time(costanera, 'Tatu', lap(costanera, { speed: 15 }));
   await time(costanera, 'Carpincho', lap(costanera, { speed: 12 }));
-  const roomLap = lap(room);
-  await time(room, 'Carpincho', roomLap, null, { threeMs: roomLap.lapMs * 3 + 250 });
-  await time(room, 'Tatu', lap(room, { speed: 2 }));
+  /* No time on the room: the simulator refuses every lap on a RaceGOW
+   * room since its 65 mm whoop went, so the API can no longer take one. */
   await time(airfield, 'Tatu', lap(airfield, { speed: 20 }));
   await time(ring, 'Lapacho', lap(ring, { speed: 18 }), 'sky1800');
   await time(ring, 'Tatu', lap(ring, { speed: 24 }), 'timber1500f');
