@@ -127,6 +127,8 @@ export function inspectCraft(raw) {
 const PILOT_KEY = /^[A-Za-z0-9+/]{87}=$/;
 const PILOT_SIG = /^[A-Za-z0-9+/]{86}==$/;
 
+export const usablePilotKey = (key) => typeof key === 'string' && PILOT_KEY.test(key);
+
 export function inspectAuth(body) {
   const key = typeof body.key === 'string' ? body.key : '';
   const sig = typeof body.sig === 'string' ? body.sig : '';

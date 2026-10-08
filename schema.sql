@@ -208,3 +208,18 @@ CREATE TABLE IF NOT EXISTS stats_dims (
   laps INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, dim, key)
 );
+
+-- Flight Club's weekly events (src/events.js): one row per week, written
+-- by the first read of that week, the course and its gold as they were
+-- then. No foreign key: a course removed mid-week leaves its week's event.
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  week TEXT NOT NULL UNIQUE,
+  track_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  map TEXT,
+  gold_ms INTEGER NOT NULL,
+  wing BOOLEAN NOT NULL DEFAULT FALSE,
+  starts_utc TIMESTAMPTZ NOT NULL,
+  ends_utc TIMESTAMPTZ NOT NULL
+);
