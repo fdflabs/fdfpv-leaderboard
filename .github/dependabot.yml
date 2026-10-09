@@ -1,0 +1,51 @@
+# This file is part of the FDFPV leaderboard.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY, without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+
+# Dependabot: one grouped pull request a week per ecosystem, gated by
+# checks.yml like every pull request. How the lead merges them, and what is
+# left out on purpose (vendor/fdfpv, pinned for deploy-board.sh), is in the
+# simulator repository: fdflabs/fdfpv docs/DEPENDENCIES.md.
+
+version: 2
+updates:
+  # pg and ws: the VM's board. A merged bump reaches it only with the next
+  # deploy/vm/deploy-board.sh, run from the simulator repository.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Asuncion
+    groups:
+      npm:
+        patterns: ["*"]
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: deps
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Asuncion
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: deps
