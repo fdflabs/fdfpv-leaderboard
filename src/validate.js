@@ -1111,7 +1111,7 @@ export function inspectRun(body) {
  * deltas a flush may carry are a minute's worth with room; a claim past
  * that is refused, never clamped to a number nobody sent.
  */
-export const STATS_KINDS = ['visit', 'session', 'flush'];
+export const STATS_KINDS = ['visit', 'session', 'flush', 'error', 'frames'];
 
 /* The landing page is listed ahead of it sending anything: the board
  * deploys before the pages that talk to it (DEPLOY.md in the simulator). */
@@ -1184,6 +1184,12 @@ export function inspectStatsEvent(body, sourceKey) {
   if (!STATS_KINDS.includes(kind)) {
     return refuse('That is not a kind of event this board counts.');
   }
+  if (kind === 'error') {
+    return inspectErrorReport(body);
+  }
+  if (kind === 'frames') {
+    return inspectFramesReport(body);
+  }
   const source = (typeof sourceKey === 'function' ? sourceKey : plainSource)(body.source);
   if (kind === 'session') {
     return {
@@ -1227,6 +1233,87 @@ export function inspectStatsEvent(body, sourceKey) {
       map: oneOf(STATS_MAPS, body.map),
       ...counts,
       source,
+    },
+  };
+}
+
+/*
+ * Client reports (Foundations #10, the simulator's src/share/clientreport.js
+ * builds them; KEEP IN STEP): a page error and a minute of frame times.
+ * Counted per day like everything above, with no source, no country and
+ * nothing about the browser. The simulator reduces an error before it is
+ * sent; the board does not take that on trust and refuses a message that
+ * still holds what the reduction removes (an address, a path, a long
+ * number), rather than storing it. Refused, never repaired: a board that
+ * rewrote messages would hide a simulator that stopped reducing them.
+ */
+export const ERROR_MESSAGE_CHARS = 120;
+export const ERROR_FRAMES = 3;
+const ERROR_FRAME_CHARS = 64;
+const ERROR_COUNT_MAX = 999;
+const REPO_FRAME = /^(?:src|dist|vendor)\/[\w./-]+\.(?:m?js|wasm):\d+(?::\d+)?$/;
+/* What a reduced message cannot hold: a scheme, an email's at sign, a
+ * path, or a run of digits longer than a line number. */
+const UNREDUCED = /:\/\/|@|\/\w|\d{6,}/;
+
+export const FRAME_BUCKETS = 10;
+const FRAME_BUCKET_MAX = 15000;
+export const FRAME_GPUS = ['software', 'integrated', 'discrete', 'hidden'];
+export const FRAME_CAPS = [0, 30, 60, 90, 120, 144, 240];
+export const FRAME_SCALES = [0.25, 0.5, 0.75, 1];
+
+/* FNV-1a over the reduced message and its frames, as the simulator signs
+ * them: a name to count one kind of error by, recomputed here so a client
+ * cannot file one message under another's count. */
+export function errorSignature(msg, where) {
+  const text = `${msg}|${where.join('|')}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+function inspectErrorReport(body) {
+  const { msg, where } = body;
+  if (typeof msg !== 'string' || msg.length > ERROR_MESSAGE_CHARS || !/^[\x20-\x7e]*$/.test(msg) || UNREDUCED.test(msg)) {
+    return refuse('That error message was not reduced.');
+  }
+  const framesOk = Array.isArray(where) && where.length <= ERROR_FRAMES
+    && where.every((f) => typeof f === 'string' && f.length <= ERROR_FRAME_CHARS && REPO_FRAME.test(f));
+  if (!framesOk) {
+    return refuse('Those are not frames from the simulator.');
+  }
+  if (!msg && where.length === 0) {
+    return refuse('That error says nothing.');
+  }
+  const count = wholeUpTo(body.count, ERROR_COUNT_MAX);
+  if (count === null || count < 1) {
+    return refuse('That is not a count of errors.');
+  }
+  const sig = errorSignature(msg, where);
+  if (body.sig !== sig) {
+    return refuse('That signature does not match its error.');
+  }
+  return { event: { kind: 'error', sig, msg, where: [...where], count } };
+}
+
+function inspectFramesReport(body) {
+  const { b } = body;
+  const counts = Array.isArray(b) && b.length === FRAME_BUCKETS ? b.map((n) => wholeUpTo(n, FRAME_BUCKET_MAX)) : null;
+  if (!counts || counts.includes(null)) {
+    return refuse('That is more than a minute of frames can hold.');
+  }
+  if (counts.every((n) => n === 0)) {
+    return refuse('That minute held no frames.');
+  }
+  if (!FRAME_GPUS.includes(body.gpu) || !FRAME_CAPS.includes(body.cap) || !FRAME_SCALES.includes(body.scale)) {
+    return refuse('That is not a GPU class, frame cap or scale this board counts.');
+  }
+  return {
+    event: {
+      kind: 'frames', b: counts, gpu: body.gpu, cap: body.cap, scale: body.scale,
     },
   };
 }

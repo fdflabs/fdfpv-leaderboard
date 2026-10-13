@@ -46,9 +46,11 @@ import { createIdentity, memoryStorage } from '../vendor/fdfpv/src/share/identit
 import { mapTrackDocument } from '../vendor/fdfpv/tests/lib/maptrack.js';
 import { syntheticLapBytes } from '../vendor/fdfpv/tests/lib/synthlap.js';
 import { sourceKey } from './sponsors.js';
-import { openStore, rowToSummary, summaryOf } from './store.js';
 import {
-  creditOf, inspectBugCreate, inspectBugImages, inspectBugPatch, inspectDocument, inspectGhost, inspectStatsEvent,
+  ERROR_OTHER, ERROR_SIGS_PER_DAY, openStore, rowToSummary, summaryOf,
+} from './store.js';
+import {
+  creditOf, errorSignature, inspectBugCreate, inspectBugImages, inspectBugPatch, inspectDocument, inspectGhost, inspectStatsEvent,
   layoutHash, normaliseCountry, normaliseLapMs, normaliseName, normaliseThreeMs, planFromDocument, statsDay,
   trackClassOf, MAP_ELEMENT_TYPES, MAP_IDS, MAX_BUG_IMAGE_BYTES, RUN_MAPS, STATS_CRAFT, TRACK_CLASSES,
 } from './validate.js';
@@ -841,7 +843,51 @@ function statsWireFormat() {
   check('the two ids older clients send are still counted as themselves', ['5inch', 'whoop65'].every((id) => take({
     v: 1, kind: 'session', craft: id, map: 'custom', input: 'gamepad',
   }).event.craft === id));
+  clientReportWireFormat(take);
   return take;
+}
+
+/* An error report as the simulator's clientreport.js builds one. */
+function errorReport(msg, where = ['src/main.js:120:7'], count = 1) {
+  return {
+    v: 1, kind: 'error', msg, where, count, sig: errorSignature(msg, where),
+  };
+}
+
+const FRAMES = [0, 0, 40, 3000, 400, 90, 12, 3, 1, 0];
+
+/*
+ * Foundations #10: what is left of a page error and a minute of frames.
+ * The board re-checks the simulator's reduction instead of trusting it,
+ * and refuses rather than repairs.
+ */
+function clientReportWireFormat(take) {
+  const error = take(errorReport('Cannot read properties of undefined (reading <q>)'));
+  check('a reduced error is taken', !error.error);
+  check('and only its reduced fields are kept', JSON.stringify(Object.keys(error.event)) === '["kind","sig","msg","where","count"]');
+  check('an error with an address left in it is refused', Boolean(take(errorReport('fetch https://example.com/x failed')).error));
+  check('and one with an email', Boolean(take(errorReport('no pilot ada@example.com')).error));
+  check('and one with a home folder', Boolean(take(errorReport('cannot open /home/ada/track')).error));
+  check('and one with a long number', Boolean(take(errorReport('room 4815162342 gone')).error));
+  check('and one with a byte outside plain text', Boolean(take(errorReport('caf\u00e9 closed')).error));
+  check('and one longer than the simulator ever sends', Boolean(take(errorReport('x'.repeat(121))).error));
+  check('a frame on another host is refused', Boolean(take(errorReport('x', ['https://evil.example/a.js:1:1'])).error));
+  check('and four frames are one too many', Boolean(take(errorReport('x', Array(4).fill('src/main.js:1:1'))).error));
+  check('an error filed under another error\'s signature is refused', Boolean(take({ ...errorReport('a'), sig: errorSignature('b', ['src/main.js:120:7']) }).error));
+  check('a count of nought is refused', Boolean(take(errorReport('x', undefined, 0)).error));
+  check('an error with no words and no frames is refused', Boolean(take(errorReport('', [])).error));
+
+  const frames = (extra) => take({
+    v: 1, kind: 'frames', b: FRAMES, gpu: 'integrated', cap: 60, scale: 0.75, ...extra,
+  });
+  check('a minute of frames is taken', !frames().error);
+  check('and only its buckets and classes are kept', JSON.stringify(Object.keys(frames().event)) === '["kind","b","gpu","cap","scale"]');
+  check('a renderer string in place of a GPU class is refused', Boolean(frames({ gpu: 'ANGLE (NVIDIA GeForce RTX 3060 Ti)' }).error));
+  check('a cap off the list is refused', Boolean(frames({ cap: 75 }).error));
+  check('and a scale off the list', Boolean(frames({ scale: 0.6 }).error));
+  check('nine buckets are refused', Boolean(frames({ b: FRAMES.slice(1) }).error));
+  check('and more frames than a minute holds', Boolean(frames({ b: [...FRAMES.slice(1), 15001] }).error));
+  check('and a minute with none', Boolean(frames({ b: new Array(10).fill(0) }).error));
 }
 
 async function statsAirframes(take) {
@@ -967,6 +1013,33 @@ async function statsCounters(take) {
     check('and no dimension row', JSON.stringify(after.craft) === craftRows);
     check('all time is every day there has been', after.allTime.laps === 9);
     check('and knows when counting started', after.firstDay === yesterday);
+
+    /* Client reports: an error counted per signature per day, a minute of
+     * frames summed per class, and the day's signatures capped. */
+    const report = (body, day = today) => store.recordClientReport(take(body).event, { day });
+    await report(errorReport('x is not a function', ['src/main.js:120:7'], 1));
+    await report(errorReport('x is not a function', ['src/main.js:120:7'], 4));
+    await report(errorReport('x is not a function', ['src/main.js:120:7'], 2), yesterday);
+    await report({ v: 1, kind: 'frames', b: FRAMES, gpu: 'integrated', cap: 60, scale: 0.75 });
+    await report({ v: 1, kind: 'frames', b: FRAMES, gpu: 'integrated', cap: 60, scale: 0.75 });
+    await report({ v: 1, kind: 'frames', b: FRAMES, gpu: 'discrete', cap: 0, scale: 1 }, yesterday);
+    const client = await store.readClientReports({ days: 7, now });
+    const sig = errorSignature('x is not a function', ['src/main.js:120:7']);
+    check('an error is counted across its days', client.errors.length === 1 && client.errors[0].count === 7 && client.errors[0].days === 2);
+    check('with its reduced words and frames', client.errors[0].sig === sig && client.errors[0].msg === 'x is not a function');
+    const integrated = client.frames.find((r) => r.gpu === 'integrated') || {};
+    check('two minutes of frames on one class add up', integrated.minutes === 2 && integrated.b[3] === 6000);
+    check('and another class keeps its own row', client.frames.length === 2);
+    const yesterdayOnly = await store.readClientReports({ days: 1, now });
+    check('a one day window leaves yesterday out', yesterdayOnly.errors[0].count === 5 && yesterdayOnly.frames.length === 1);
+    check('client reports never reach the public counters', JSON.stringify(await store.readStats({ days: 7, now })).indexOf('not a function') < 0);
+    for (let i = 0; i < ERROR_SIGS_PER_DAY + 5; i += 1) {
+      await report(errorReport(`flood ${i}`, []), '2026-09-19');
+    }
+    const flooded = Object.values(store.data.stats.errors).filter((r) => r.day === '2026-09-19');
+    check('a day holds no more signatures than the cap', flooded.length === ERROR_SIGS_PER_DAY + 1);
+    const other = flooded.find((r) => r.sig === ERROR_OTHER) || {};
+    check('the rest are counted under other, with no words', other.count === 5 && other.msg === '' && other.where.length === 0);
 
     /* The board's own tables, which are not counters and never were. */
     await store.publish({ inspected: inspectDocument(field()), author: 'Ada Rook', editKey: 'k' });
@@ -1531,6 +1604,12 @@ async function statisticsOverHttp(board, s) {
   check('a kind of event the board does not count is refused', (await send({ v: 1, kind: 'pageview' })).status === 400);
   check('and so is more than a minute of laps', (await send({ v: 1, kind: 'flush', tab: 'tab-11112222', craft: '5inch', laps: 900 })).status === 400);
   check('and so is text that is not JSON', (await fetch(`${board.base}/api/stats/events`, { method: 'POST', body: 'not json at all' })).status === 400);
+  check('a reduced error is taken over the wire', (await send(errorReport('x is not a function'))).status === 204);
+  check('and a minute of frames', (await send({ v: 1, kind: 'frames', b: FRAMES, gpu: 'discrete', cap: 0, scale: 1 })).status === 204);
+  check('an error with an address left in it is refused over the wire', (await send(errorReport('see https://example.com/a'))).status === 400);
+  check('the client reports are not public', (await board.get('/api/stats/client')).status === 403);
+  const client = await board.json('/api/stats/client', s.session);
+  check('an admin reads them', client.days === 7 && client.errors[0].msg === 'x is not a function' && client.frames[0].b[3] === 3000);
 
   const read = await board.get('/api/stats');
   const stats = await read.json();
@@ -1569,9 +1648,9 @@ async function statisticsOverHttp(board, s) {
   check('and at least every pilot holding a record', stats.board.pilots >= recordHolders.size);
   check('and nobody back on another day within one run of this suite', stats.board.pilotsOnMoreThanOneDay === 0);
 
-  /* The flood gate: 600 accepted events per address per window, fifty
+  /* The flood gate: 1200 accepted events per address per window, fifty
    * pilots on one connection; this spends the rest and then some. */
-  const ATTEMPTS = 660;
+  const ATTEMPTS = 1260;
   let shut = 0;
   for (let i = 0; i < ATTEMPTS; i += 1) {
     if ((await send({ v: 1, kind: 'flush', tab: `tab-flood-${i}`, craft: '5inch', flightS: 1 })).status === 429) {
@@ -1581,7 +1660,7 @@ async function statisticsOverHttp(board, s) {
   check('an address posting hundreds of events is shut off', shut > 0);
   /* After a room's worth, not before: refused events never spent any of
    * it, which is why the junk above did not bring the gate forward. */
-  check('and only after the allowance went through', ATTEMPTS - shut >= 500);
+  check('and only after the allowance went through', ATTEMPTS - shut >= 1100);
 
   const panel = await board.json('/api/admin/session', s.session);
   check('a signed in admin is handed the sponsor links', Array.isArray(panel.sponsors) && panel.sponsors.length === 1);

@@ -385,6 +385,26 @@ export function shapeStats({
   };
 }
 
+/*
+ * Client reports (validate.js inspectErrorReport and inspectFramesReport):
+ * an error is counted per day per signature, a minute of frames per day
+ * per GPU class, cap and scale. The frame dimensions are closed lists; a
+ * signature is not, so a day holds at most ERROR_SIGS_PER_DAY of them and
+ * the rest are counted under one `other` row with no message, which keeps
+ * a stranger with curl from growing the table. Read only by an admin.
+ */
+export const ERROR_SIGS_PER_DAY = 200;
+export const ERROR_OTHER = 'other';
+const FRAME_BUCKET_COLUMNS = Array.from({ length: 10 }, (_, i) => `b${i}`);
+
+/* The window's errors, most counted first, and its frames per class. */
+function shapeClientReports({ errorRows, frameRows }) {
+  const errors = [...errorRows].sort((a, b) => (b.count - a.count) || String(a.sig).localeCompare(String(b.sig)));
+  const frames = [...frameRows].sort((a, b) => (b.minutes - a.minutes)
+    || `${a.gpu}|${a.cap}|${a.scale}`.localeCompare(`${b.gpu}|${b.cap}|${b.scale}`));
+  return { errors, frames };
+}
+
 /* ================================================================== */
 /* The JSON file                                                        */
 /* ================================================================== */
@@ -399,7 +419,7 @@ export function shapeStats({
  */
 function freshBoard() {
   return {
-    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {} }, pilots: {}, events: {},
+    tracks: {}, times: {}, bugs: {}, runs: [], stats: { days: {}, dims: {}, errors: {}, frames: {} }, pilots: {}, events: {},
   };
 }
 
@@ -424,7 +444,7 @@ function upgrade(board) {
   if (!isMap(board.stats)) {
     board.stats = { days: {}, dims: {} };
   }
-  for (const part of ['days', 'dims']) {
+  for (const part of ['days', 'dims', 'errors', 'frames']) {
     if (!isMap(board.stats[part])) {
       board.stats[part] = {};
     }
@@ -823,6 +843,53 @@ class FileStore {
       }
       await this.save();
     });
+  }
+
+  recordClientReport(event, { day }) {
+    return this.serially(async () => {
+      const { errors, frames } = this.data.stats;
+      if (event.kind === 'error') {
+        const known = Boolean(errors[`${day}|${event.sig}`]);
+        const today = Object.values(errors).filter((row) => row.day === day).length;
+        const full = !known && today >= ERROR_SIGS_PER_DAY;
+        const sig = full ? ERROR_OTHER : event.sig;
+        const row = (errors[`${day}|${sig}`] ??= {
+          day, sig, msg: full ? '' : event.msg, where: full ? [] : event.where, count: 0,
+        });
+        row.count += event.count;
+      } else {
+        const row = (frames[`${day}|${event.gpu}|${event.cap}|${event.scale}`] ??= {
+          day, gpu: event.gpu, cap: event.cap, scale: event.scale, minutes: 0, b: new Array(event.b.length).fill(0),
+        });
+        row.minutes += 1;
+        event.b.forEach((n, i) => { row.b[i] += n; });
+      }
+      await this.save();
+    });
+  }
+
+  async readClientReports({ days = 7, now = Date.now() } = {}) {
+    const inWindow = new Set(statsDayKeys(now, days));
+    const errors = new Map();
+    for (const row of Object.values(this.data.stats.errors).filter((r) => inWindow.has(r.day))) {
+      const total = errors.get(row.sig) ?? {
+        sig: row.sig, msg: row.msg, where: row.where, count: 0, days: 0,
+      };
+      total.count += row.count;
+      total.days += 1;
+      errors.set(row.sig, total);
+    }
+    const frames = new Map();
+    for (const row of Object.values(this.data.stats.frames).filter((r) => inWindow.has(r.day))) {
+      const key = `${row.gpu}|${row.cap}|${row.scale}`;
+      const total = frames.get(key) ?? {
+        gpu: row.gpu, cap: row.cap, scale: row.scale, minutes: 0, b: new Array(row.b.length).fill(0),
+      };
+      total.minutes += row.minutes;
+      row.b.forEach((n, i) => { total.b[i] += n; });
+      frames.set(key, total);
+    }
+    return shapeClientReports({ errorRows: [...errors.values()], frameRows: [...frames.values()] });
   }
 
   async readStats({ days = 30, now = Date.now() } = {}) {
@@ -1381,6 +1448,49 @@ class PgStore {
    * exceed what a double holds exactly) and are made numbers before they
    * are added to anything.
    */
+  /*
+   * The day's signature count is read inside the transaction, so two
+   * new signatures at once can take the day one or two past the cap; the
+   * cap bounds growth, it is not an exact number.
+   */
+  recordClientReport(event, { day }) {
+    if (event.kind === 'frames') {
+      const sums = FRAME_BUCKET_COLUMNS.map((c) => `${c} = stats_frames.${c} + EXCLUDED.${c}`).join(', ');
+      return this.pool.query(`
+        INSERT INTO stats_frames (day, gpu, cap, scale, minutes, ${FRAME_BUCKET_COLUMNS.join(', ')})
+        VALUES ($1::date, $2, $3, $4, 1, ${FRAME_BUCKET_COLUMNS.map((_, i) => `$${i + 5}`).join(', ')})
+        ON CONFLICT (day, gpu, cap, scale) DO UPDATE SET minutes = stats_frames.minutes + 1, ${sums}`,
+      [day, event.gpu, event.cap, event.scale, ...event.b]);
+    }
+    return this.transaction(async (db) => {
+      const found = await db.query(`
+        SELECT COUNT(*)::int AS n, BOOL_OR(sig = $2) AS known FROM stats_errors WHERE day = $1::date`, [day, event.sig]);
+      const full = !found.rows[0].known && found.rows[0].n >= ERROR_SIGS_PER_DAY;
+      await db.query(`
+        INSERT INTO stats_errors (day, sig, msg, where_at, count)
+        VALUES ($1::date, $2, $3, $4, $5)
+        ON CONFLICT (day, sig) DO UPDATE SET count = stats_errors.count + EXCLUDED.count`,
+      [day, full ? ERROR_OTHER : event.sig, full ? '' : event.msg, full ? [] : event.where, event.count]);
+    });
+  }
+
+  async readClientReports({ days = 7, now = Date.now() } = {}) {
+    const from = statsDayKeys(now, days)[0];
+    const [errors, frames] = await Promise.all([
+      this.pool.query(`
+        SELECT sig, MIN(msg) AS msg, MIN(where_at) AS "where", SUM(count)::int AS count, COUNT(*)::int AS days
+        FROM stats_errors WHERE day >= $1::date GROUP BY sig`, [from]),
+      this.pool.query(`
+        SELECT gpu, cap, scale, SUM(minutes)::int AS minutes,
+               ARRAY[${FRAME_BUCKET_COLUMNS.map((c) => `SUM(${c})::bigint`).join(', ')}] AS b
+        FROM stats_frames WHERE day >= $1::date GROUP BY gpu, cap, scale`, [from]),
+    ]);
+    return shapeClientReports({
+      errorRows: errors.rows,
+      frameRows: frames.rows.map((row) => ({ ...row, scale: Number(row.scale), b: row.b.map(Number) })),
+    });
+  }
+
   async readStats({ days = 30, now = Date.now() } = {}) {
     const from = statsDayKeys(now, days)[0];
     const [series, dims, totals, countries] = await Promise.all([
