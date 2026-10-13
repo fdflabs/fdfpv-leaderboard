@@ -209,6 +209,41 @@ CREATE TABLE IF NOT EXISTS stats_dims (
   PRIMARY KEY (day, dim, key)
 );
 
+-- Client reports (src/validate.js inspectErrorReport): a page error
+-- reduced by the simulator, counted per day per signature. A signature is
+-- not a closed list, so src/store.js keeps at most ERROR_SIGS_PER_DAY a
+-- day and counts the rest under 'other'. Nothing in a row names a browser.
+CREATE TABLE IF NOT EXISTS stats_errors (
+  day DATE NOT NULL,
+  sig TEXT NOT NULL,
+  msg TEXT NOT NULL,
+  where_at TEXT[] NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, sig)
+);
+
+-- A minute of frame block times (inspectFramesReport), summed per day per
+-- GPU class, fps cap and render scale, all closed lists. b0 to b9 are the
+-- simulator's fixed buckets (clientreport.js FRAME_EDGES_MS).
+CREATE TABLE IF NOT EXISTS stats_frames (
+  day DATE NOT NULL,
+  gpu TEXT NOT NULL,
+  cap SMALLINT NOT NULL,
+  scale REAL NOT NULL,
+  minutes INTEGER NOT NULL DEFAULT 0,
+  b0 BIGINT NOT NULL DEFAULT 0,
+  b1 BIGINT NOT NULL DEFAULT 0,
+  b2 BIGINT NOT NULL DEFAULT 0,
+  b3 BIGINT NOT NULL DEFAULT 0,
+  b4 BIGINT NOT NULL DEFAULT 0,
+  b5 BIGINT NOT NULL DEFAULT 0,
+  b6 BIGINT NOT NULL DEFAULT 0,
+  b7 BIGINT NOT NULL DEFAULT 0,
+  b8 BIGINT NOT NULL DEFAULT 0,
+  b9 BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, gpu, cap, scale)
+);
+
 -- Flight Club's weekly events (src/events.js): one row per week, written
 -- by the first read of that week, the course and its gold as they were
 -- then. No foreign key: a course removed mid-week leaves its week's event.

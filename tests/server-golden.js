@@ -518,7 +518,7 @@ async function fullBoard(port, walk) {
   await hit('bug at the limit', 'POST', '/api/bugs', { body: { ...report, images: undefined, title: 'The eighth report' } });
   await hit('bugs flooded', 'POST', '/api/bugs', { body: { ...report, images: undefined } });
   await hit('another forwarded address is not', 'POST', '/api/bugs', { body: { ...report, images: undefined }, headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1' } });
-  for (let i = 0; i < 600; i += 1) {
+  for (let i = 0; i < 1200; i += 1) {
     await call(port, 'POST', S, { body: { v: 1, kind: 'flush', tab: 'tab-00000002' } });
   }
   await hit('events flooded', 'POST', S, { body: { v: 1, kind: 'flush', tab: 'tab-00000002' } });

@@ -388,10 +388,11 @@ const STATS_CACHE_MS = 20_000;
 const STATS_DAYS = 30;
 let statsCache = { at: 0, body: '' };
 
-/* A club night is thirty pilots behind one address, each flushing once a
- * minute; this allows fifty. It stops a script hammering the database,
- * nothing more. */
-const STATS_EVENTS_PER_WINDOW = 600;
+/* A club night is thirty pilots behind one address. Each sends a flush
+ * and a minute of frames a minute, twenty events in the ten minute window,
+ * plus the odd visit, session or error; this allows fifty. It stops a
+ * script hammering the database, nothing more. */
+const STATS_EVENTS_PER_WINDOW = 1200;
 
 /* ================================================================== */
 /* Routes                                                              */
@@ -492,12 +493,28 @@ async function countEvent({ req, res }) {
     return refuse(res, 400, checked.error);
   }
   spend(gate);
+  if (checked.event.kind === 'error' || checked.event.kind === 'frames') {
+    await store.recordClientReport(checked.event, { day: statsDay() });
+    return noContent(res);
+  }
   if (checked.event.kind === 'flush') {
     sawFlying(checked.event.tab);
   }
   const edge = trustProxy() ? (req.headers['x-fdfpv-country'] || req.headers['cf-ipcountry']) : '';
   await store.recordStats(checked.event, { day: statsDay(), country: normaliseCountry(edge) });
   return noContent(res);
+}
+
+/* The client reports, for an admin: an error's reduced words are not
+ * secret, but they are not the public page's business either. A week by
+ * default, at most the thirty days the counters show. */
+async function readClientReports({ req, res, url }) {
+  if (!adminOf(req)) {
+    return refuse(res, 403, 'Client reports are for an admin.');
+  }
+  const asked = Number(url.searchParams.get('days') || 7);
+  const days = Number.isInteger(asked) && asked >= 1 && asked <= STATS_DAYS ? asked : 7;
+  return reply(res, 200, { days, ...(await store.readClientReports({ days })) });
 }
 
 async function readCounters({ res }) {
@@ -954,6 +971,7 @@ const ROUTES = [
   [['GET'], '/api/admin/session', whoAmI],
   [['POST'], '/api/stats/events', countEvent],
   [['GET'], '/api/stats', readCounters],
+  [['GET'], '/api/stats/client', readClientReports],
   [['GET'], '/api/tracks', listTracks],
   [['GET'], /^\/api\/tracks\/([^/]+)$/, (ctx) => trackGet(ctx, (id) => store.getTrack(id))],
   [['GET'], /^\/api\/tracks\/([^/]+)\/document$/, (ctx) => trackGet(ctx, (id) => store.getDocument(id))],
