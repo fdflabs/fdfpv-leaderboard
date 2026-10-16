@@ -3,11 +3,23 @@
 This repository is distributed under the GNU General Public License
 version 3 or later. See LICENSE.
 
+## Origin of this fork
+
+    Upstream    https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard
+    Commit      the head of main on 2026-09-23, full history retained here
+    Licence     GPLv3, Copyright (C) 2026 Mathew Harvey and contributors
+    Forked      2026-09-23 as the FDFPV leaderboard,
+                https://github.com/fdflabs/fdfpv-leaderboard
+
+Upstream code remains in this repository. It stays Copyright (C) 2026
+Mathew Harvey and contributors, under GPLv3, wherever it is, and a file
+that still carries the upstream's own GPLv3 header keeps it.
+
 On 2026-09-30 the game was renamed the Paraguayan Drone Combat Simulator.
 The repository, its URLs and the code keep the name fdfpv.
 
-## Maker
+## Maker of this fork
 
-This leaderboard, and everything built on it, is made by
+This leaderboard, the fork and everything built on it, is made by
 fdflabs.com, https://fdflabs.com. Everything above keeps its own credit,
 copyright and licence exactly as recorded.
