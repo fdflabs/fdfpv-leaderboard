@@ -194,6 +194,12 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
     node('p', 'credits-lede', str('credits.a_browser_fpv_racing_simulator_the')),
   );
 
+  /* The upstream's GPLv3 attribution, the same notice as the
+   * simulator's roll: this board began as a fork of it. */
+  host.append(block(str('credits.forked_from'), '',
+    node('div', 'credit-rooms', node('p', 'credit-room', str('credits.webfpvsimulator_notice'),
+      outLink('https://github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard', 'github.com/Mathew-Harvey/WebFPVSimulator-LeaderBoard')))));
+
   host.append(block(str('credits.beta_test_pilots'), str('credits.they_flew_it_until_it_felt'),
     node('div', 'credit-row pilots', ...BETA_PILOTS.map(([slot, name, face, handle]) => personCard({
       kind: 'pilot',
@@ -227,7 +233,7 @@ export function fillCredits(host, { assetBase = 'assets/credits' } = {}) {
     node('b', null, r.designer), str('credits.text', { v1: r.tracks.join(', ') })));
   host.append(block(str('credits.the_racegow5_rooms'), str('credits.eight_tracks_six_builders_read_off'),
     node('div', 'credit-rooms', ...rooms, node('p', 'credit-room-note', str('credits.series_and_animations_by'),
-      outLink('https://racegow.com/tracks', 'RaceGOW'), '.'))));
+      outLink('https://racegow.com/tracks', 'RaceGOW'), str('credits.brought_into_this_simulator_by_andagainfpv')))));
 
   host.append(block(str('credits.the_horde'), str('credits.written_with_grok_built_with_claude'),
     node('div', 'credit-row pair',
